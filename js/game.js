@@ -77,6 +77,7 @@ function startBattle(stage, endless, mapIdx) {
     ghost: ghostMode ? arguments[3] : null,
     ghostIdx: 0, ghostDone: false,
     heroRespawns: [],
+    mapEventT: (MAPS[mapIdx || 0].effect || {}).iv || 0,
   };
   // 永久主将：每局开场自动放入合成栏，仍需由玩家拖至战场部署。
   if (G.P.side > 0 && SAVE.leadHero && SAVE.ownedHeroes[SAVE.leadHero]) {
@@ -192,10 +193,25 @@ function sideIncome(S, dt) {
   }
 }
 
+function tickMapEffect(dt) {
+  if (!G || G.mode || !G.mapEventT) return;
+  const e = MAPS[G.mapIdx].effect; if (!e) return;
+  G.mapEventT -= dt; if (G.mapEventT > 0) return;
+  G.mapEventT = e.iv;
+  if (G.mapIdx === 0) {
+    G.P.mantou += 6; G.E.mantou += 6;
+    G.banner = { txt: '长坂补给：双方馒头 +6', t: 1.5 };
+  } else if (G.mapIdx === 1) {
+    G.P.slowT = Math.max(G.P.slowT, 3); G.E.slowT = Math.max(G.E.slowT, 3);
+    G.banner = { txt: '江风水势：敌军减速 3 秒', t: 1.5 };
+  }
+}
+
 function update(dt) {
   G.time += dt;
   // P2-2 统计：累计游戏时长（仅玩家正常对局，不含 ghostMode 回放）
   if (!G.ghostMode && SAVE.stats) SAVE.stats.playTime += dt;
+  tickMapEffect(dt);
   if (G.mode && typeof modeTick === 'function') modeTick(dt);
   if (G.state !== 'play') return;
   // 永久主将阵亡后整备 12 秒，以半血回到合成栏；栏满时延后返场。

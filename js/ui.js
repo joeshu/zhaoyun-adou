@@ -71,6 +71,8 @@ function drawMenu() {
   txt('第 ' + selStage + ' 关 · ' + ch + (selStage % 10 === 0 ? ' · BOSS' : ''), W / 2, 215, 16, ink, 'center', true);
   MAPS.forEach((m, i) => btn(40 + i * 150, 243, 145, 27, m.name, () => { selMap = i; },
     { size: 12, bg: selMap === i ? red : slate }));
+  const mapEffect = MAPS[selMap].effect;
+  if (mapEffect) txt('战场机制 · ' + mapEffect.name + '：' + mapEffect.tip, W / 2, 284, 10, '#8a7e6c', 'center');
   btn(30, 301, 315, 45, '开 战', () => { startBattle(selStage, false, selMap); scr = 'game'; }, { size: 20, bg: red });
   btn(30, 352, 315, 30, SAVE.endless ? '无尽模式 · 最高 ' + SAVE.bestWave + ' 波' : '无尽模式（通关 30 关解锁）',
     () => { startBattle(STAGE_MAX, true, selMap); scr = 'game'; }, { size: 12, bg: '#6850ba', disabled: !(SAVE.endless || SAVE.endlessOn) });
