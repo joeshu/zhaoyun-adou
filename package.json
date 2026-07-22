@@ -1,0 +1,20 @@
+{
+  "name": "zhaoyun-adou",
+  "version": "1.0.0",
+  "description": "赵云与阿斗 · 文字合成塔防（纯 JS / Canvas，Capacitor 包装为 iOS 应用）",
+  "private": true,
+  "scripts": {
+    "prepare:www": "node scripts/prepare-www.js",
+    "cap:copy": "npm run prepare:www && npx cap copy ios",
+    "cap:add:ios": "npx cap add ios",
+    "build:ios:no-sign": "npm run prepare:www && npx cap copy ios && cd ios && xcodebuild -workspace App.xcworkspace -scheme App -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO build",
+    "package:ipa": "node scripts/package-ipa.js"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/ios": "^6.1.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2"
+  }
+}

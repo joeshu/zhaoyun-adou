@@ -1,0 +1,19 @@
+# 本地存档（运行时生成，不入版本库）
+saves/
+
+# 备份快照目录
+.bak_*/
+
+# Capacitor / iOS 构建产物（本地构建时生成，CI 上动态创建）
+node_modules/
+www/
+ios/
+artifacts/
+*.ipa
+DerivedData/
+build/
+
+# 项目打包快照（开发期临时产物）
+*.rar
+*.zip
+

@@ -1,0 +1,109 @@
+name: iOS Unsigned IPA (LiveContainer)
+# 把纯 JS Canvas 游戏用 Capacitor 包装为 iOS 应用，无签名打包成 IPA
+# 用于 LiveContainer / Sideloadly / AltStore 等工具侧载，非 App Store 正式分发
+# 参考实现：https://github.com/joeshu/ai-wrong-notebook/blob/main/.github/workflows/ios-no-codesign.yml
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - '.github/workflows/ios-no-codesign.yml'
+      - 'index.html'
+      - 'js/**'
+      - 'capacitor.config.json'
+      - 'package.json'
+      - 'scripts/**'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - '.github/workflows/ios-no-codesign.yml'
+      - 'index.html'
+      - 'js/**'
+      - 'capacitor.config.json'
+      - 'package.json'
+      - 'scripts/**'
+
+jobs:
+  build-ios-no-codesign:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install npm dependencies (Capacitor)
+        run: npm install --no-audit --no-fund
+
+      - name: Prepare www/ (复制静态资源)
+        run: node scripts/prepare-www.js
+
+      - name: Add iOS platform (if not exists)
+        run: |
+          if [ ! -d ios ]; then
+            npx cap add ios
+          fi
+          npx cap copy ios
+
+      - name: Install CocoaPods dependencies
+        run: |
+          cd ios/App
+          pod install
+
+      - name: Build unsigned .app (no codesign)
+        run: |
+          set -e
+          cd ios/App
+          xcodebuild -workspace App.xcworkspace -scheme App -sdk iphoneos \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            build \
+            | tail -30
+
+      - name: Locate built App.app
+        id: locate
+        run: |
+          # xcodebuild 默认输出到 DerivedData，用 -showBuildSettings 找路径
+          APP=$(find ~/Library/Developer/Xcode/DerivedData/App-*/Build/Products/Release-iphoneos/App.app -maxdepth 0 2>/dev/null | head -1)
+          if [ -z "$APP" ]; then
+            APP=$(find ios/App/build/Release-iphoneos/App.app -maxdepth 0 2>/dev/null | head -1)
+          fi
+          if [ -z "$APP" ]; then
+            echo "App.app not found"; exit 1
+          fi
+          echo "app_path=$APP" >> $GITHUB_OUTPUT
+          echo "Found: $APP"
+
+      - name: Package unsigned IPA (ditto + zip -Xqr)
+        run: |
+          set -e
+          APP="${{ steps.locate.outputs.app_path }}"
+          WORK=$(mktemp -d)
+          cd "$WORK"
+          mkdir -p Payload
+          # ditto 保留 .app bundle 的元数据/资源 fork/符号链接结构
+          ditto "$APP" Payload/App.app
+          # -X 排除 macOS 扩展属性（__MACOSX 目录与 ._ 文件），否则 LiveContainer 解析失败
+          # 不使用 -y：让 zip 解引用符号链接，避免无效链接导致解压失败
+          /usr/bin/zip -Xqr App.ipa Payload
+          rm -rf Payload
+          # 诊断输出：确认 IPA 顶层就是 Payload/App.app
+          echo "=== IPA 顶层结构 ==="
+          /usr/bin/unzip -l App.ipa | head -20
+          echo "=== IPA 大小 ==="
+          ls -lh App.ipa
+          # 移动到 artifact 输出目录
+          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+          mv App.ipa "$GITHUB_WORKSPACE/artifacts/赵云与阿斗-unsigned.ipa"
+
+      - name: Upload unsigned IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zhaoyun-adou-ios-unsigned-ipa
+          path: artifacts/赵云与阿斗-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 30

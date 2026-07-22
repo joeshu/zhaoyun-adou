@@ -1,0 +1,17 @@
+{
+  "appId": "com.zhaoyun.adou",
+  "appName": "赵云与阿斗",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https",
+    "iosScheme": "capacitor",
+    "hostname": "zhaoyun.local"
+  },
+  "ios": {
+    "contentInset": "always",
+    "limitsNavigationsToAppBoundDomains": true,
+    "backgroundColor": "#e9e4d8"
+  },
+  "backgroundColor": "#e9e4d8",
+  "loggingBehavior": "none"
+}
