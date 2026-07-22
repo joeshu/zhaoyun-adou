@@ -226,6 +226,30 @@ function recycleUnit(S, area, idx) {
 }
 
 /* ---------- 主动道具 ---------- */
+function canTargetItem(id, u) {
+  if (!u) return false;
+  if (id === 'shenbing') return u.t === 'hero' && u.lvl < 5;
+  if (id === 'gongsu') return u.t === 'hero';
+  if (id === 'maobi') return u.t === 'char';
+  if (id === 'juexing') return !!SAVE.awaken && u.t === 'hero' && u.awaken < 3;
+  return false;
+}
+function bestTarget(id) {
+  const all = [...G.P.cells.map((s, i) => ({ area: 'board', idx: i, s })), ...G.P.bar.map((s, i) => ({ area: 'bar', idx: i, s }))]
+    .filter(x => canTargetItem(id, x.s.unit));
+  if (!all.length) return null;
+  if (id === 'shenbing') all.sort((a, b) => a.s.unit.lvl - b.s.unit.lvl || (HEROES[b.s.unit.name].grade - HEROES[a.s.unit.name].grade));
+  else if (id === 'gongsu' || id === 'juexing') all.sort((a, b) => HEROES[b.s.unit.name].dmg - HEROES[a.s.unit.name].dmg);
+  else if (id === 'maobi') all.sort((a, b) => (a.s.unit.wish ? -1 : 0));
+  return all[0];
+}
+function autoTargetActive() {
+  if (!G || !G.targeting) return false;
+  const t = bestTarget(G.targeting);
+  if (!t) { G.banner = { txt: '暂无可用目标', t: 1.2 }; return false; }
+  return applyTarget(G.targeting, t.area, t.idx);
+}
+
 function useActive(id) {
   if (!G.itemUses[id]) return false;
   const P = G.P;
@@ -242,7 +266,9 @@ function useActive(id) {
     P.slowT = 5;
     G.banner = { txt: '淤泥! 全场减速', t: 1 };
   } else if (id === 'shenbing' || id === 'gongsu' || id === 'maobi' || id === 'juexing') {
-    G.targeting = id;                                       // 进入选目标模式，applyTarget 时扣次数
+    if (!bestTarget(id)) { G.banner = { txt: '暂无可用目标', t: 1.2 }; return false; }
+    G.targeting = id;
+    G.banner = { txt: '点选高亮目标，或点「自动施放」', t: 2 };
     return true;
   } else return false;
   G.itemUses[id]--;
@@ -251,8 +277,10 @@ function useActive(id) {
 }
 function applyTarget(id, area, idx) {
   const P = G.P, s = slotArr(P, area)[idx];
-  G.targeting = null;
-  if (!s || !s.unit || !G.itemUses[id]) return false;
+  if (!s || !s.unit || !G.itemUses[id] || !canTargetItem(id, s.unit)) {
+    G.banner = { txt: '目标不符合条件，请点高亮单位', t: 1.2 };
+    return false;
+  }
   const u = s.unit;
   if (id === 'shenbing') {
     if (u.t !== 'hero' || u.lvl >= 5) return false;
@@ -273,6 +301,7 @@ function applyTarget(id, area, idx) {
     fl(s.x, s.y - 24, u.name + ' 觉醒' + u.awaken + '!', '#e8590c'); boom(s.x, s.y, '#e8590c');
   } else return false;
   G.itemUses[id]--;
+  G.targeting = null;
   recOp({ op: 'target', id, area, idx });                   // 录像（P1-4）
   return true;
 }

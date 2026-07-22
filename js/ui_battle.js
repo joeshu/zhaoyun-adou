@@ -66,6 +66,9 @@ function drawCell(c, S, hide) {
   ctx.strokeStyle = !c.unit ? '#dee2e6' : unitCol(c.unit);
   ctx.stroke();
   if (c.unit && !hide) drawUnitAt(c.unit, c.x, c.y, S);
+  if (S && S.side > 0 && G && G.targeting && typeof canTargetItem === 'function' && canTargetItem(G.targeting, c.unit)) {
+    ctx.strokeStyle = '#e8a005'; ctx.lineWidth = 3; ctx.setLineDash([3, 2]); ctx.strokeRect(x - 2, y - 2, CELL + 4, CELL + 4); ctx.setLineDash([]);
+  }
 }
 function drawBarSlot(s, hide) {
   const x = s.x - CELL / 2, y = s.y - CELL / 2;
@@ -76,6 +79,9 @@ function drawBarSlot(s, hide) {
   if (s.unit && noDeploy(s.unit)) ctx.setLineDash([3, 3]);
   ctx.stroke(); ctx.setLineDash([]);
   if (s.unit && !hide) drawUnitAt(s.unit, s.x, s.y, null);
+  if (G && G.targeting && typeof canTargetItem === 'function' && canTargetItem(G.targeting, s.unit)) {
+    ctx.strokeStyle = '#e8a005'; ctx.lineWidth = 3; ctx.setLineDash([3, 2]); ctx.strokeRect(x - 2, y - 2, CELL + 4, CELL + 4); ctx.setLineDash([]);
+  }
 }
 function drawPath(S) {
   ctx.strokeStyle = '#e3ded2'; ctx.lineWidth = 18; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
@@ -259,7 +265,12 @@ function drawGame() {
   txt('回收♻', RECYCLE.x + RECYCLE.w / 2, RECYCLE.y + 19, 12, '#868e96', 'center', true);
   txt('拖单位到此回收', RECYCLE.x + RECYCLE.w / 2, RECYCLE.y + RECYCLE.h - 4, 9, '#adb5bd', 'center');
   txt('敌馒 ' + G.E.mantou, 258, 652, 9, '#adb5bd', 'center');
-  if (G.targeting) txt('点选目标（武将/将字）…', W / 2, 550, 12, '#e8a005', 'center', true);
+  if (G.targeting) {
+    const label = ITEMS[G.targeting] ? ITEMS[G.targeting].name : '道具';
+    btn(200, 634, 84, 28, '自动施放', () => autoTargetActive(), { size: 10, bg: '#e8a005' });
+    btn(200, 602, 84, 24, '取消', () => { G.targeting = null; }, { size: 10, bg: '#868e96' });
+    txt(label + '：点金色虚线单位，或用自动施放', W / 2, 550, 11, '#b78324', 'center', true);
+  }
   // 拖拽跟随：单位 + 提示标签 + 半透明预览产物
   if (drag) {
     const u = (drag.area === 'bar' ? G.P.bar : G.P.cells)[drag.from].unit;

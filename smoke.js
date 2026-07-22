@@ -127,6 +127,8 @@ eval(src + `
   A(P.mobs.find(m => m.boss).hp > 0, '张梁200血扛住150');
   A(useActive('shenbing') && G.targeting === 'shenbing', '神兵符进入选目标');
   A(applyTarget('shenbing', 'board', 6) && P.cells[6].unit.lvl === 2, '神兵符升级赵云');
+  G.itemUses.gongsu = 1; G.targeting = 'gongsu';
+  A(autoTargetActive() && !G.targeting, '主动道具自动施放并退出选目标');
   console.log('主动道具 OK');
 
   // —— 彩蛋 ——
