@@ -16,13 +16,13 @@ function startWave() {
     G.P.shield = Math.min(2, G.P.shield + 1);
     G.P.noHit = true;
   }
-  const st = stageOf(), cfg = stageCfg(st);
+  const st = stageOf(), modeCfg = typeof modeWaveConfig === 'function' ? modeWaveConfig() : null, cfg = modeCfg || stageCfg(st);
   const [waves, per, mix, boss] = cfg;
   G.hpAdd = cfg[4];                                          // 敌HP加成 = 表值（文档 5.1 加成列）
   G.atkMul = 1 + cfg[5] * 0.12;                              // ATK档 1-8 → 乘区
   G.goldAdd = (st / 3) | 0;                                  // 击杀奖励 = 基础 + floor(关卡/3)
   const DM = { easy: [0.8, 0.85], normal: [1, 1], hard: [1.25, 1.15] }[SAVE.difficulty] || [1, 1];
-  G.hpMul = (G.endless ? 1 + (G.wave - 1) * 0.12 : 1 + (G.wave - 1) * 0.05) * DM[0];
+  G.hpMul = (modeCfg ? modeCfg.hp : (G.endless ? 1 + (G.wave - 1) * 0.12 : 1 + (G.wave - 1) * 0.05)) * DM[0];
   G.atkMul *= DM[1];
   // 类型映射：步→兵 弓→弩 骑→骑 甲→斧
   const types = ['兵', '弩', '骑', '斧'];

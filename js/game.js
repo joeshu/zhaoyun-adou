@@ -26,7 +26,7 @@ function mkSide(side, mapIdx) {
   const cum = pathCum(pathP);
   const S = {
     side, cells, bar, mobs: [], snakes: [],
-    hp, maxhp: hp, mantou: 30, summons: 0, killCnt: 0,
+    hp, maxhp: hp, mantou: 30, summons: 0, killCnt: 0, totalKills: 0,
     pity: 0, unlocked: 0, zhaoxian: false,
     incomeT: 0, luoyangT: 0, slowT: 0, xumingUsed: false,
     shield: 0, noHit: true,            // 阿斗护盾：每波+1、无伤+1，上限2（仅玩家侧有意义）
@@ -43,6 +43,7 @@ function mkSide(side, mapIdx) {
 }
 
 function startBattle(stage, endless, mapIdx) {
+  const modeOpt = arguments[4] || null;
   const uses = {};
   for (const id of SAVE.loadout) if (ITEMS[id].act) uses[id] = ITEMS[id].uses;
   // 教学模式：SAVE.tutorial<99 且未通关第1关时启动（stage==1 且未无尽）
@@ -51,8 +52,9 @@ function startBattle(stage, endless, mapIdx) {
   const ghostMode = !!(arguments[3]);
   G = {
     stage, endless: !!endless, mapIdx: mapIdx || 0,
+    mode: modeOpt && modeOpt.mode || null,
     P: mkSide(1, mapIdx), E: mkSide(-1, mapIdx),
-    wave: 0, spawnQ: [], spawnT: 0, betweenT: 2.5, hpMul: 1, hpAdd: 0, atkMul: 1, goldAdd: 0,
+    wave: 0, spawnQ: [], spawnT: 0, betweenT: 20, prepT: 20, hpMul: 1, hpAdd: 0, atkMul: 1, goldAdd: 0,
     time: 0, speed: 1, paused: false, state: 'play',
     // AI 行动间隔：困难档加快 25%，简单档放慢 50%，普通档沿用关卡缩放
     aiT: 2,
@@ -73,8 +75,15 @@ function startBattle(stage, endless, mapIdx) {
     ghostMode,
     ghost: ghostMode ? arguments[3] : null,
     ghostIdx: 0, ghostDone: false,
+    heroRespawns: [],
   };
+  // 永久主将：每局开场自动放入合成栏，仍需由玩家拖至战场部署。
+  if (G.P.side > 0 && SAVE.leadHero && SAVE.ownedHeroes[SAVE.leadHero]) {
+    const i = barFree(G.P);
+    if (i >= 0) G.P.bar[i].unit = mkHero(SAVE.leadHero, G.P, true);
+  }
   if (ghostMode) G.banner = { txt: '【录像回放】自动重现玩家操作', t: 3 };
+  if (G.mode && typeof modeSetup === 'function') modeSetup();
   if (tut) {
     G.banner = { txt: '【教学1/3】点底部"抽卡"按钮获得兵种', t: 999 };
     // 教学模式：玩家馒头足，但只让抽 1 次
@@ -122,11 +131,15 @@ function endBattle(win) {
     const reward = 20 + G.stage * 2 + G.goldEarn;
     SAVE.gold += reward;
     G.rewardTxt = '金币 +' + reward;
-    if (!G.endless) {
+    if (!G.endless && !G.mode) {
       if (G.stage % 10 === 0) { SAVE.mat += 2; G.rewardTxt += ' · 材料 +2'; }
       if (G.stage === 30) SAVE.endless = true;
       SAVE.stage = Math.max(SAVE.stage, Math.min(G.stage + 1, STAGE_MAX));
     }
+    // 永久招募碎片：主线每胜 1 片，Boss 关额外 2 片；特别玩法首胜/通关给 3 片。
+    const shardN = G.mode ? 3 : (!G.endless ? 1 + (stageCfg(G.stage)[3] ? 2 : 0) : 1);
+    const shard = grantHeroShard(rollHeroShard(true), shardN);
+    if (shard) G.rewardTxt += ' · ' + shard.name + '碎片 +' + shardN + (shard.unlocked ? '（武将招募！）' : '');
     // P1-4 保存录像到 SAVE.ghosts（仅非无尽非 ghostMode，且有 ops）
     if (G.rec && G.rec.ops.length && !G.endless && !G.ghostMode) {
       if (!Array.isArray(SAVE.ghosts)) SAVE.ghosts = [];
@@ -181,21 +194,46 @@ function update(dt) {
   G.time += dt;
   // P2-2 统计：累计游戏时长（仅玩家正常对局，不含 ghostMode 回放）
   if (!G.ghostMode && SAVE.stats) SAVE.stats.playTime += dt;
+  if (G.mode && typeof modeTick === 'function') modeTick(dt);
+  if (G.state !== 'play') return;
+  // 永久主将阵亡后整备 12 秒，以半血回到合成栏；栏满时延后返场。
+  if (G.heroRespawns && G.heroRespawns.length) {
+    for (const r of G.heroRespawns) r.t -= dt;
+    for (let i = G.heroRespawns.length - 1; i >= 0; i--) {
+      const r = G.heroRespawns[i];
+      if (r.t > 0) continue;
+      const bi = barFree(G.P);
+      if (bi < 0) { r.t = 1; continue; }
+      const h = mkHero(r.name, G.P, true); h.hp *= 0.5; h.animT = 0.3;
+      G.P.bar[bi].unit = h; G.heroRespawns.splice(i, 1);
+      fl(G.P.bar[bi].x, G.P.bar[bi].y - 20, r.name + '归队！', '#7250b8');
+    }
+  }
   // P1-4 ghost 回放：按时间戳触发玩家操作（在 wave/ai 之前）
   if (G.ghostMode && typeof tickGhost === 'function') tickGhost(dt);
-  // 波次投放（双方同刷）
-  if (G.spawnQ.length) {
+  // 备战阶段：首轮固定 20 秒，之后沿用正常波次间隔。
+  if (G.wave === 0 && G.betweenT > 0) {
+    G.prepT = G.betweenT;
+    if (!G.mode) G.banner = { txt: '【首轮备战】还有 ' + Math.ceil(G.prepT) + ' 秒，抓紧抽卡、合成与布阵', t: 999 };
+  }
+  if (G.mode === 'raid') {
+    // 讨伐模式只生成阶段 Boss，由 modeTick 处理。
+  } else if (G.spawnQ.length) {
     G.spawnT += dt;
     while (G.spawnQ.length && G.spawnQ[0].t <= G.spawnT) {
       const s = G.spawnQ.shift();
       spawnMob(G.P, s.type, s.hpMul);
       spawnMob(G.E, s.type, s.hpMul);
     }
-  } else if (!G.endless && G.wave >= stageCfg(G.stage)[0]) {
-    if (!G.P.mobs.length) endBattle(true);                  // 打完全部波次且清场 → 通关
+  } else if (!G.mode && !G.endless && G.wave >= stageCfg(G.stage)[0]) {
+    if (!G.P.mobs.length) endBattle(true);
+  } else if (G.mode === 'rogue' && G.wave >= 1 && !G.P.mobs.length && !G.E.mobs.length && !G.rogueChoices) {
+    rogueOffer();
   } else {
     G.betweenT -= dt;
-    if (G.betweenT <= 0) { G.betweenT = 5; startWave(); if (G.wave > 1) G.goldEarn += 2; }
+    // 首轮主线固定 20 秒备战；特别玩法保持更紧凑的 5 秒节奏。
+    const nextDelay = G.mode === 'fire' ? 3 : 5;
+    if (G.betweenT <= 0) { G.betweenT = nextDelay; startWave(); if (G.wave > 1) G.goldEarn += 2; }
   }
   // AI 行动
   G.aiT -= dt;

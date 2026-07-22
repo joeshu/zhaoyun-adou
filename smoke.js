@@ -1,7 +1,7 @@
 // v2.1 无头冒烟测试：node smoke.js（仅逻辑模拟，无渲染）
 'use strict';
 const fs = require('fs');
-const FILES = ['data', 'save', 'audio', 'merge', 'battle', 'waves', 'actions', 'game'];
+const FILES = ['data', 'save', 'audio', 'merge', 'battle', 'waves', 'modes', 'actions', 'game'];
 const src = FILES.map(f => fs.readFileSync(__dirname + '/js/' + f + '.js', 'utf8')).join('\n;\n');
 eval(src + `
 ;(function () {
@@ -32,8 +32,8 @@ eval(src + `
   const t5 = mkTroop('刀'); t5.tier = 5;
   A(mergeUnit(t5, { ...t5 }).type === 'swap', '橙级封顶');
   A(mergeUnit({ t: 'char', ch: '赵' }, { t: 'char', ch: '云' }).name === '赵云', '赵+云=赵云');
-  A(mergeUnit({ t: 'char', ch: '云' }, { t: 'char', ch: '赵' }).type === 'swap', '云+赵 顺序错误不成将');
-  A(mergeUnit({ t: 'char', ch: '关' }, { t: 'char', ch: '平' }).name === '关平', '关+平=关平(紫)');
+  A(mergeUnit({ t: 'char', ch: '云' }, { t: 'char', ch: '赵' }).name === '赵云', '云+赵 反向拖拽也可合成赵云');
+  A(mergeUnit({ t: 'char', ch: '布' }, { t: 'char', ch: '吕' }).name === '吕布', '布+吕 反向拖拽可合成吕布');
   o = mergeUnit({ t: 'ifrag', ch: '速', n: 1 }, { t: 'ifrag', ch: '速', n: 1 });
   A(o.type === 'upgrade' && o.unit.n === 2, '速×2 仍是碎片');
   A(mergeUnit({ t: 'ifrag', ch: '速', n: 2 }, { t: 'ifrag', ch: '速', n: 1 }).type === 'item', '速×3 合成攻速符');
@@ -57,7 +57,7 @@ eval(src + `
   P.mantou = 999;
   const cards = doSummon(P);
   A(cards && cards.length >= 5 && cards.length <= 7, '一次抽5-7张');
-  A(P.bar.filter(s => s.unit).length === cards.length, '全部入合成栏');
+  A(P.bar.filter(s => s.unit).length === cards.length + 1, '主将占位后抽卡全部入栏');
   A(P.mantou === 999 - DRAW.cost, '固定10馒头');
 
   // —— 对局基本操作 ——
@@ -216,13 +216,34 @@ eval(src + `
   A(SAVE.stats.heroes > 0, 'P2-2 武将已累计 (' + SAVE.stats.heroes + ')');
   A(SAVE.stats.playTime > 0, 'P2-2 时长已累计 (' + SAVE.stats.playTime.toFixed(1) + 's)');
   A(SAVE.stats.goldEarned > 0, 'P2-2 金币收益已累计 (' + SAVE.stats.goldEarned + ')');
-  // 旧档迁移：构造 v3 存档验证 migrate 到 v4
+  // 旧档迁移：构造 v3 存档验证迁移到最新版
   const v3 = { ver: 3, gold: 100, stage: 1, eggs: { flag: false, vine: false, acc: false, all: false } };
-  const v4 = migrateSave(JSON.parse(JSON.stringify(v3)));
-  A(v4 && v4.ver === 4, 'P2-2 v3→v4 migrate 升版');
-  A(v4.skins && typeof v4.skins === 'object', 'P2-2 v3→v4 补 skins');
-  A(v4.stats && v4.stats.kills === 0 && v4.stats.wins === 0, 'P2-2 v3→v4 补 stats 默认值');
-  console.log('统计系统 OK: wins=' + SAVE.stats.wins + ' kills=' + SAVE.stats.kills + ' merges=' + SAVE.stats.merges + ' heroes=' + SAVE.stats.heroes + ' migrate v3→v4 通过');
+  const v5 = migrateSave(JSON.parse(JSON.stringify(v3)));
+  A(v5 && v5.ver === 5, '永久主将系统 v3→v5 migrate 升版');
+  A(v5.skins && typeof v5.skins === 'object', '迁移补 skins');
+  A(v5.stats && v5.stats.kills === 0 && v5.stats.wins === 0, '迁移补 stats 默认值');
+  A(v5.ownedHeroes['赵云'] && v5.leadHero === '赵云', '迁移赠送赵云初始主将');
+  console.log('统计系统 OK: wins=' + SAVE.stats.wins + ' kills=' + SAVE.stats.kills + ' merges=' + SAVE.stats.merges + ' heroes=' + SAVE.stats.heroes + ' migrate v3→v5 通过');
+
+  // —— 永久主将：20 碎片招募 / 开局携带 / 升星 ——
+  SAVE.ownedHeroes = { '赵云': true }; SAVE.heroStars = { '赵云': 1 }; SAVE.heroShards = { '吕布': 19 }; SAVE.leadHero = '赵云';
+  const unlock = grantHeroShard('吕布');
+  A(unlock.unlocked && SAVE.ownedHeroes['吕布'] && heroStar('吕布') === 1, '20 碎片解锁永久吕布');
+  setLeadHero('吕布'); startBattle(1);
+  A(G.P.bar.some(s => s.unit && s.unit.permanent && s.unit.name === '吕布'), '主将开局进入合成栏');
+  console.log('永久主将 OK: 20碎片招募、主将开局携带');
+
+  // —— 特别玩法：模式状态与独立胜利条件 ——
+  SAVE.stage = 37;
+  ['fire', 'rogue', 'escort', 'puzzle', 'raid'].forEach(id => {
+    startBattle(12, false, id === 'fire' ? 1 : 0, null, { mode: id });
+    A(G.mode === id, id + ' 模式初始化');
+    A(G.modeLabel === specialMode(id).name, id + ' 模式标签');
+  });
+  startBattle(12, false, 0, null, { mode: 'puzzle' });
+  G.P.totalKills = G.puzzle.target; modeTick(0.1);
+  A(G.state === 'win', '残局挑战达到击杀目标结算');
+  console.log('特别玩法 OK: 火攻/试炼/护送/残局/讨伐');
 
   console.log('冒烟测试全部通过');
 })();

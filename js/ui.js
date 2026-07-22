@@ -23,6 +23,19 @@ function rr(x, y, w, h, r) {
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
 }
+function panel(x, y, w, h, opt = {}) {
+  const r = opt.r || 12;
+  ctx.save();
+  ctx.shadowColor = opt.shadow || 'rgba(48,39,25,.10)';
+  ctx.shadowBlur = opt.blur === undefined ? 10 : opt.blur;
+  ctx.shadowOffsetY = opt.offsetY === undefined ? 3 : opt.offsetY;
+  rr(x, y, w, h, r); ctx.fillStyle = opt.bg || '#fffdf8'; ctx.fill();
+  ctx.restore();
+  if (opt.stroke) { rr(x, y, w, h, r); ctx.strokeStyle = opt.stroke; ctx.lineWidth = 1; ctx.stroke(); }
+}
+function sectionLabel(label, x, y) {
+  txt(label.toUpperCase(), x, y, 9, '#a48b63', 'left', true);
+}
 function hpBar(x, y, w, p, col) {
   ctx.fillStyle = '#e9ecef'; ctx.fillRect(x, y, w, 3);
   ctx.fillStyle = col || (p > 0.5 ? '#2f9e44' : p > 0.25 ? '#f59f00' : '#e03131');
@@ -40,86 +53,53 @@ function btn(x, y, w, h, label, fn, opt = {}) {
 
 /* ---------- 菜单 ---------- */
 function drawMenu() {
-  txt('赵云与阿斗', W / 2, 96, 38, SAVE.eggs.all ? '#e8a005' : '#343a40', 'center', true);
-  txt('文字合成塔防 · 全量复刻版', W / 2, 124, 12, '#868e96', 'center');
-  txt('金 ' + SAVE.gold + '   材料 ' + SAVE.mat, W / 2, 158, 15, '#b0801f', 'center', true);
+  // 温暖纸张底色 + 宫廷红金的层级，将原来密集按钮分成清晰功能区。
+  const gold = '#b78324', ink = '#2f3540', slate = '#4b5563', red = '#bf3b2d';
+  ctx.fillStyle = '#f4efe5'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#eadfcb'; ctx.fillRect(0, 0, W, 6);
+  txt('赵云与阿斗', W / 2, 66, 32, SAVE.eggs.all ? '#d29a22' : ink, 'center', true);
+  txt('文字合成塔防 · 全量复刻版', W / 2, 90, 12, '#90949a', 'center');
+  panel(64, 105, 247, 35, { bg: '#fffaf0', stroke: '#eadfcb', r: 17, blur: 4 });
+  txt('金 ' + SAVE.gold + '     材料 ' + SAVE.mat, W / 2, 128, 15, gold, 'center', true);
+
   selStage = clamp(selStage, 1, SAVE.stage);
-  rr(48, 175, 279, 50, 10); ctx.fillStyle = '#f1f3f5'; ctx.fill();   // 关卡选择底卡
   const ch = CHAPTERS[Math.min(3, ((selStage - 1) / 10) | 0)];
-  btn(58, 190, 40, 40, '◀', () => selStage--, { disabled: selStage <= 1, bg: '#868e96', size: 16 });
-  btn(277, 190, 40, 40, '▶', () => selStage++, { disabled: selStage >= SAVE.stage, bg: '#868e96', size: 16 });
-  txt('第 ' + selStage + ' 关 · ' + ch + (selStage % 10 === 0 ? ' · BOSS关' : ''), W / 2, 215, 16, '#495057', 'center', true);
-  // 战场选择（多套地图可选）
-  txt('战场', 60, 240, 12, '#868e96', 'center');
-  MAPS.forEach((m, i) => {
-    btn(96 + i * 96, 228, 88, 24, m.name, () => { selMap = i; },
-      { size: 12, bg: selMap === i ? '#c0392b' : '#495057' });
-  });
-  btn(88, 258, 200, 44, '开 战', () => { startBattle(selStage, false, selMap); scr = 'game'; }, { size: 20, bg: '#c0392b' });
-  btn(88, 306, 200, 34, SAVE.endless ? '无尽模式 · 最高' + SAVE.bestWave + '波' : '无尽模式（通关30关解锁）',
-    () => { startBattle(STAGE_MAX, true, selMap); scr = 'game'; }, { size: 13, bg: '#5f3dc4', disabled: !(SAVE.endless || SAVE.endlessOn) });
-  // 难度选择（循环：简单→普通→困难）
+  sectionLabel('关卡与战场', 30, 164);
+  panel(20, 174, 335, 115, { bg: '#fffdf9', stroke: '#ebe3d6' });
+  btn(34, 190, 42, 42, '◀', () => selStage--, { disabled: selStage <= 1, bg: '#8e98a3', size: 15 });
+  btn(299, 190, 42, 42, '▶', () => selStage++, { disabled: selStage >= SAVE.stage, bg: '#8e98a3', size: 15 });
+  txt('第 ' + selStage + ' 关 · ' + ch + (selStage % 10 === 0 ? ' · BOSS' : ''), W / 2, 215, 16, ink, 'center', true);
+  MAPS.forEach((m, i) => btn(40 + i * 150, 243, 145, 27, m.name, () => { selMap = i; },
+    { size: 12, bg: selMap === i ? red : slate }));
+  btn(30, 301, 315, 45, '开 战', () => { startBattle(selStage, false, selMap); scr = 'game'; }, { size: 20, bg: red });
+  btn(30, 352, 315, 30, SAVE.endless ? '无尽模式 · 最高 ' + SAVE.bestWave + ' 波' : '无尽模式（通关 30 关解锁）',
+    () => { startBattle(STAGE_MAX, true, selMap); scr = 'game'; }, { size: 12, bg: '#6850ba', disabled: !(SAVE.endless || SAVE.endlessOn) });
+
+  sectionLabel('对局设置', 30, 407);
   const DIFF_NAMES = { easy: '简单', normal: '普通', hard: '困难' };
-  btn(30, 345, 98, 28, '难度·' + (DIFF_NAMES[SAVE.difficulty] || '普通'),
-    () => { const c = ['easy', 'normal', 'hard']; SAVE.difficulty = c[(c.indexOf(SAVE.difficulty) + 1) % 3]; saveSave(); },
-    { size: 10, bg: '#2b8a3e' });
-  btn(132, 345, 98, 28, 'AI·' + (DIFF_NAMES[SAVE.aiLevel] || '普通'),
-    () => { const c = ['easy', 'normal', 'hard']; SAVE.aiLevel = c[(c.indexOf(SAVE.aiLevel) + 1) % 3]; saveSave(); },
-    { size: 10, bg: '#5f3dc4' });
-  btn(234, 345, 70, 28, '说明', () => { scr = 'help'; }, { size: 11, bg: '#495057' });
-  // 静音切换（P1-3）：开灰关绿
-  btn(308, 345, 62, 28, SAVE.mute ? '🔇静音' : '🔊有声',
-    () => { SAVE.mute = !SAVE.mute; saveSave(); sfx('click'); },
-    { size: 10, bg: SAVE.mute ? '#495057' : '#2f9e44' });
-  // 功能开关：2行×3列，统一配色（关灰 / 开绿）
-  const sw = (x, y, label, on, fn) =>
-    btn(x, y, 110, 28, label + (on ? '：开 ✓' : '：关'), fn, { size: 12, bg: on ? '#2f9e44' : '#495057' });
-  sw(30, 378, '兵种无敌', SAVE.invincible, () => { SAVE.invincible = !SAVE.invincible; saveSave(); });
-  sw(145, 378, '动态路径', SAVE.dynPath, () => { SAVE.dynPath = !SAVE.dynPath; saveSave(); });
-  sw(260, 378, 'BOSS阶段', SAVE.bossPhase, () => { SAVE.bossPhase = !SAVE.bossPhase; saveSave(); });
-  sw(30, 410, '无尽快捷', SAVE.endlessOn, () => { SAVE.endlessOn = !SAVE.endlessOn; saveSave(); });
-  sw(145, 410, '新橙将', SAVE.newHeros, () => { SAVE.newHeros = !SAVE.newHeros; saveSave(); });
-  sw(260, 410, '武将觉醒', SAVE.awaken, () => { SAVE.awaken = !SAVE.awaken; saveSave(); });
-  btn(30, 442, 225, 28, SAVE.gearOn ? '装备扩展：开 ✓' : '装备扩展：关',
-    () => { SAVE.gearOn = !SAVE.gearOn; saveSave(); }, { size: 12, bg: SAVE.gearOn ? '#2f9e44' : '#495057' });
-  btn(260, 442, 110, 28, '一键全开(重型)', () => {
-    SAVE.dynPath = SAVE.bossPhase = SAVE.endlessOn = SAVE.newHeros = SAVE.awaken = SAVE.gearOn = true;
-    saveSave();
-  }, { size: 12, bg: '#2f9e44' });
-  // 装备轮换（仅在装备扩展开启时显示，避免常驻杂乱）
-  if (SAVE.gearOn) {
-    btn(30, 474, 170, 28, '防具：' + (SAVE.equipArmor ? ARMORS[SAVE.equipArmor].name : '无'),
-      () => { const ks = Object.keys(ARMORS); SAVE.equipArmor = SAVE.equipArmor ? ks[(ks.indexOf(SAVE.equipArmor) + 1) % ks.length] : ks[0]; saveSave(); }, { size: 12, bg: '#495057' });
-    btn(205, 474, 170, 28, '饰品：' + (SAVE.equipAcc ? ACCESSORIES[SAVE.equipAcc].name : '无'),
-      () => { const ks = Object.keys(ACCESSORIES); SAVE.equipAcc = SAVE.equipAcc ? ks[(ks.indexOf(SAVE.equipAcc) + 1) % ks.length] : ks[0]; saveSave(); }, { size: 12, bg: '#495057' });
-  }
-  // 入口工具栏（统一灰底）
-  btn(30, 506, 98, 34, '道具商店', () => { scr = 'shop'; }, { bg: '#495057', size: 13 });
-  btn(138, 506, 98, 34, '锻造装备', () => { scr = 'forge'; forgeMsg = ''; }, { bg: '#495057', size: 13 });
-  btn(246, 506, 98, 34, '武将装备', () => { scr = 'equip'; }, { bg: '#495057', size: 13 });
-  // 签到入口：可签到时高亮（红色提示）
+  btn(30, 417, 100, 29, '难度 · ' + (DIFF_NAMES[SAVE.difficulty] || '普通'), () => { const c = ['easy', 'normal', 'hard']; SAVE.difficulty = c[(c.indexOf(SAVE.difficulty) + 1) % 3]; saveSave(); }, { size: 10, bg: '#318c4a' });
+  btn(138, 417, 100, 29, 'AI · ' + (DIFF_NAMES[SAVE.aiLevel] || '普通'), () => { const c = ['easy', 'normal', 'hard']; SAVE.aiLevel = c[(c.indexOf(SAVE.aiLevel) + 1) % 3]; saveSave(); }, { size: 10, bg: '#6850ba' });
+  btn(246, 417, 99, 29, SAVE.mute ? '🔇 静音' : '🔊 有声', () => { SAVE.mute = !SAVE.mute; saveSave(); sfx('click'); }, { size: 10, bg: SAVE.mute ? '#7c8792' : '#318c4a' });
+  const sw = (x, y, label, on, fn) => btn(x, y, 100, 27, label + (on ? ' · 开' : ' · 关'), fn, { size: 10, bg: on ? '#318c4a' : slate });
+  sw(30, 453, '兵种无敌', SAVE.invincible, () => { SAVE.invincible = !SAVE.invincible; saveSave(); });
+  sw(138, 453, '动态路径', SAVE.dynPath, () => { SAVE.dynPath = !SAVE.dynPath; saveSave(); });
+  sw(246, 453, 'BOSS阶段', SAVE.bossPhase, () => { SAVE.bossPhase = !SAVE.bossPhase; saveSave(); });
+  sw(30, 486, '无尽快捷', SAVE.endlessOn, () => { SAVE.endlessOn = !SAVE.endlessOn; saveSave(); });
+  sw(138, 486, '新橙将', SAVE.newHeros, () => { SAVE.newHeros = !SAVE.newHeros; saveSave(); });
+  sw(246, 486, '武将觉醒', SAVE.awaken, () => { SAVE.awaken = !SAVE.awaken; saveSave(); });
+
+  sectionLabel('养成与管理', 30, 536);
+  btn(30, 546, 100, 34, '道具商店', () => { scr = 'shop'; }, { bg: slate, size: 12 });
+  btn(138, 546, 100, 34, '锻造装备', () => { scr = 'forge'; forgeMsg = ''; }, { bg: slate, size: 12 });
+  btn(246, 546, 99, 34, '武将营', () => { scr = 'camp'; }, { bg: '#7250b8', size: 12 });
   const canSign = canDaily();
-  btn(30, 540, 225, 24, (canSign ? '【!】' : '') + '每日签到' + (canSign ? '（可签到）' : '（已签到）'),
-    () => { scr = 'daily'; dailyMsg = ''; },
-    { size: 11, bg: canSign ? '#2f9e44' : '#495057' });
-  const lo = SAVE.loadout.map(id => ITEMS[id].name).join(' · ');
-  txt('携带道具：' + (lo || '无（商店购买后点选携带）'), W / 2, 562, 11, '#868e96', 'center');
-  const e = SAVE.eggs, en = (e.flag ? 1 : 0) + (e.vine ? 1 : 0) + (e.acc ? 1 : 0);
-  txt('隐藏彩蛋 ' + en + '/3' + (e.all ? ' · 限定皮肤已解锁' : ''), W / 2, 580, 11, '#adb5bd', 'center');
-  // 核心提示（精简3行，其余见玩法说明）
-  const tips = [
-    '· 抽卡得将字→按序拖合成将；碎片集齐成道具',
-    '· 拖上棋盘才参战；铲子/荒地开荒；回收站换馒头',
-    '· 桃园/五虎/父子羁绊；专武锻造穿戴；BOSS掉材料',
-  ];
-  tips.forEach((t, i) => txt(t, 26, 600 + i * 18, 11, '#999'));
-  btn(30, 632, 100, 28, '心愿单', () => scr = 'wish', { size: 11, bg: '#495057' });   // 1.2.4 心愿单入口（仅玩家侧生效）
-  btn(138, 632, 100, 28, '成就', () => { scr = 'ach'; }, { size: 11, bg: '#495057' });   // P1-1 成就入口
-  btn(246, 632, 100, 28, '存档管理', () => { scr = 'save'; saveMsg = ''; }, { size: 11, bg: '#495057' });
-  btn(30, 666, 100, 28, '录像', () => { scr = 'ghost'; ghostMsg = ''; loadGhostList(); }, { size: 11, bg: '#5f3dc4' });   // P1-4 录像入口
-  btn(138, 666, 100, 28, '统计', () => { scr = 'stats'; }, { size: 11, bg: '#1c7ed6' });   // P2-2 统计入口
-  btn(246, 666, 100, 28, '玩法说明', () => { scr = 'help'; }, { size: 11, bg: '#495057' });   // 玩法说明下移
+  btn(30, 587, 154, 30, (canSign ? '✓ ' : '') + '每日签到', () => { scr = 'daily'; dailyMsg = ''; }, { size: 11, bg: canSign ? '#318c4a' : slate });
+  btn(191, 587, 154, 30, '心愿单 · 成就', () => { scr = 'wish'; }, { size: 11, bg: '#6850ba' });
+  btn(30, 624, 100, 28, '特别玩法', () => { scr = 'modes'; }, { size: 10, bg: '#bd4a31' });
+  btn(138, 624, 100, 28, '对战录像', () => { scr = 'ghost'; ghostMsg = ''; loadGhostList(); }, { size: 10, bg: '#6850ba' });
+  btn(246, 624, 99, 28, '玩法说明', () => { scr = 'help'; }, { size: 10, bg: slate });
 }
+
 
 /* ---------- 玩法说明 ---------- */
 function drawHelp() {
@@ -406,16 +386,60 @@ function drawEquip() {
   btn(128, 604, 120, 34, '返回', () => { scr = 'menu'; }, { bg: '#868e96' });
 }
 
-/* ---------- 主绘制 ---------- */
+/* ---------- 武将营：永久招募、心愿与主将选择 ---------- */
+let campMsg = '';
+function drawCamp() {
+  txt('武将营', W / 2, 44, 24, '#2f3540', 'center', true);
+  txt('碎片招募 · 20 碎片解锁 · 每局仅携带 1 名主将', W / 2, 66, 10, '#8a7e6c', 'center');
+  const lead = SAVE.leadHero || '未选择';
+  panel(20, 76, 335, 42, { bg: '#fff9ed', stroke: '#ead7ad', r: 10, blur: 4 });
+  txt('当前主将：' + lead + (SAVE.ownedHeroes[lead] ? '  ★' + heroStar(lead) : ''), 32, 101, 14, '#b78324', 'left', true);
+  txt('心愿：' + (SAVE.heroWish || '未设置'), 340, 101, 11, '#8a7e6c', 'right');
+  HERO_LIST.forEach((name, i) => {
+    const col = i % 2, row = (i / 2) | 0;
+    const x = 18 + col * 171, y = 128 + row * 48;
+    const own = !!SAVE.ownedHeroes[name], star = heroStar(name), n = shardCount(name);
+    rr(x, y, 168, 42, 8); ctx.fillStyle = own ? '#fffdf9' : '#f0ece4'; ctx.fill(); ctx.strokeStyle = own ? '#dfc98d' : '#ded8ce'; ctx.stroke();
+    const c = HEROES[name].grade === 4 ? '#b78324' : '#8050a0';
+    txt(name, x + 10, y + 18, 14, own ? c : '#8f969c', 'left', true);
+    txt(own ? '★'.repeat(star) : n + '/' + HERO_UNLOCK_SHARDS + '碎片', x + 10, y + 33, 9, own ? '#b78324' : '#8f969c');
+    if (own) {
+      btn(x + 88, y + 7, 34, 27, SAVE.leadHero === name ? '出战' : '携带', () => { setLeadHero(name); campMsg = '已选择 ' + name + ' 为主将'; }, { size: 9, bg: SAVE.leadHero === name ? '#318c4a' : '#7250b8' });
+      const need = HERO_STAR_COST[star + 1];
+      btn(x + 126, y + 7, 34, 27, need ? '升星' : '满星', () => { campMsg = upgradeHeroStar(name) ? name + ' 升至 ★' + heroStar(name) : '碎片不足（需要 ' + (need || 0) + '）'; }, { size: 8, bg: need ? '#b78324' : '#9099a1', disabled: !need });
+    } else btn(x + 110, y + 7, 48, 27, SAVE.heroWish === name ? '心愿中' : '设心愿', () => { SAVE.heroWish = SAVE.heroWish === name ? '' : name; saveSave(); campMsg = SAVE.heroWish ? '已设定心愿：' + name : '已取消心愿'; }, { size: 9, bg: SAVE.heroWish === name ? '#bd4a31' : '#7c8792' });
+  });
+  if (campMsg) txt(campMsg, W / 2, 570, 11, campMsg.includes('不足') ? '#bd4a31' : '#318c4a', 'center', true);
+  btn(128, 600, 120, 34, '返回', () => { scr = 'menu'; }, { bg: '#7c8792' });
+}
+
+
+function drawModes() {
+  txt('特别玩法', W / 2, 54, 25, '#2f3540', 'center', true);
+  txt('改变胜利目标，而不是单纯增加波次', W / 2, 76, 11, '#90949a', 'center');
+  SPECIAL_MODES.forEach((m, i) => {
+    const y = 96 + i * 92, open = modeUnlocked(m);
+    panel(20, y, 335, 78, { bg: open ? '#fffdf9' : '#eee9df', stroke: open ? '#e7dccb' : '#ddd5c7', r: 11, blur: 5 });
+    txt(m.icon, 45, y + 48, 25, m.col, 'center', true);
+    txt(m.name, 72, y + 30, 16, open ? '#2f3540' : '#9ca3aa', 'left', true);
+    txt(m.sub, 72, y + 51, 11, open ? '#777d84' : '#a6a9ac', 'left');
+    btn(268, y + 22, 70, 33, open ? '进入' : '第' + m.unlock + '关解锁', () => { if (open) startSpecialMode(m.id); }, { size: open ? 12 : 9, bg: open ? m.col : '#aab0b6', disabled: !open });
+  });
+  btn(128, 586, 120, 34, '返回', () => { scr = 'menu'; }, { bg: '#7c8792' });
+}
+
+
 function draw() {
   const dpr = (typeof devicePixelRatio === 'number' ? devicePixelRatio : 1);
   ctx.setTransform(scaleF * dpr, 0, 0, scaleF * dpr, 0, 0);
-  ctx.fillStyle = '#f4f1ea'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#f3eee3'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#e1d4bf'; ctx.fillRect(0, 0, W, 4);
   btns = [];
   if (scr === 'menu') drawMenu();
   else if (scr === 'shop') drawShop();
   else if (scr === 'forge') drawForge();
   else if (scr === 'equip') drawEquip();
+  else if (scr === 'camp') drawCamp();
   else if (scr === 'help') drawHelp();
   else if (scr === 'save') drawSave();
   else if (scr === 'wish') drawWish();
@@ -423,6 +447,7 @@ function draw() {
   else if (scr === 'daily') drawDaily();
   else if (scr === 'ghost') drawGhost();
   else if (scr === 'stats') drawStats();
+  else if (scr === 'modes') drawModes();
   else drawGame();
 }
 

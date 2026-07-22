@@ -101,11 +101,11 @@ function drawAdou(S) {
 }
 
 function drawGame() {
-  // 三段背景
-  ctx.fillStyle = '#fdf4f0'; ctx.fillRect(0, TOP, W, 296 - TOP);          // 敌方
-  ctx.fillStyle = '#fbf7ef'; ctx.fillRect(0, 300, W, 532 - 300);          // 我方
-  ctx.fillStyle = '#f1f3f5'; ctx.fillRect(0, 532, W, H - 532);            // 底部
-  ctx.fillStyle = '#adb5bd'; ctx.fillRect(0, 296, W, 4);
+  // 战场采用羊皮纸、敌我阵营与操作区三层配色，降低格子/按钮间的视觉噪声。
+  ctx.fillStyle = '#fff5f0'; ctx.fillRect(0, TOP, W, 296 - TOP);
+  ctx.fillStyle = '#fbf7ed'; ctx.fillRect(0, 300, W, 532 - 300);
+  ctx.fillStyle = '#edf0f2'; ctx.fillRect(0, 532, W, H - 532);
+  ctx.fillStyle = '#b9a995'; ctx.fillRect(0, 296, W, 3);
   drawPath(G.E); drawPath(G.P);
   drawAdou(G.E); drawAdou(G.P);
   G.E.cells.forEach(c => drawCell(c, G.E, false));
@@ -179,14 +179,27 @@ function drawGame() {
   }
   ctx.globalAlpha = 1;
   G.floats = G.floats.filter(f => f.t > 0);
-  // 顶栏
-  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, TOP);
-  ctx.fillStyle = 'rgba(0,0,0,.06)'; ctx.fillRect(0, TOP - 4, W, 4);   // 顶栏底分隔条
+  // 顶栏：资源、关卡与快捷控制保持同一阅读基线
+  ctx.fillStyle = '#fffdf9'; ctx.fillRect(0, 0, W, TOP);
+  ctx.fillStyle = '#e4d9c8'; ctx.fillRect(0, TOP - 3, W, 3);
   txt('馒 ' + G.P.mantou, 8, 22, 14, '#8b5e3c', 'left', true);
   txt('金 ' + SAVE.gold, 78, 22, 12, '#b0801f', 'left', true);
-  txt((G.endless ? '无尽' : '第' + G.stage + '关') + '·第' + G.wave + '波', 175, 22, 12, '#495057', 'center');
+  txt((G.mode ? G.modeLabel : (G.endless ? '无尽' : '第' + G.stage + '关')) + '·第' + G.wave + '波', 175, 22, 12, '#495057', 'center');
   if (SAVE.invincible) txt('无敌', 200, 22, 12, '#2f9e44', 'center', true);
-  // 右下实时信息面板
+  // 特别玩法状态条：保留战斗视野，不弹出额外常驻面板。
+  if (G.mode === 'fire') {
+    txt('🔥 ' + G.wind + ' · 守城 ' + Math.ceil(Math.max(0, G.modeTime)) + ' 秒', W / 2, 48, 11, '#bd4a31', 'center', true);
+    for (const f of G.fireCells) { ctx.globalAlpha = .22 + Math.sin(G.time * 8) * .08; ctx.fillStyle = '#e8590c'; ctx.beginPath(); ctx.arc(f.x, f.y, 30, 0, 7); ctx.fill(); ctx.globalAlpha = 1; txt('🔥', f.x, f.y + 7, 18, '#e8590c', 'center'); }
+  } else if (G.mode === 'escort') {
+    txt('🐎 护送进度 ' + Math.floor(G.escort.progress) + '%', W / 2, 48, 11, '#2f7f9d', 'center', true);
+    ctx.fillStyle = '#d9e8ec'; ctx.fillRect(112, 53, 151, 4); ctx.fillStyle = '#2f7f9d'; ctx.fillRect(112, 53, 151 * G.escort.progress / 100, 4);
+  } else if (G.mode === 'puzzle') {
+    txt('♟ 歼敌 ' + G.P.totalKills + '/' + G.puzzle.target + ' · ' + Math.ceil(Math.max(0, G.puzzle.limit)) + ' 秒', W / 2, 48, 11, '#b78324', 'center', true);
+  } else if (G.mode === 'raid') {
+    txt('👑 讨伐剩余 ' + Math.ceil(Math.max(0, G.raid.limit)) + ' 秒', W / 2, 48, 11, '#8d3543', 'center', true);
+  } else if (G.mode === 'rogue') {
+    txt('⚔ 五虎试炼 · 第 ' + G.rogue.floor + '/' + G.rogue.maxFloor + ' 战 · 军略 ' + G.rogue.picks, W / 2, 48, 11, '#7250b8', 'center', true);
+  }
   rr(248, 468, 124, 88, 8); ctx.fillStyle = 'rgba(255,255,255,.82)'; ctx.fill();
   ctx.strokeStyle = '#e9ecef'; ctx.lineWidth = 1; ctx.stroke();
   txt('阿斗 ' + Math.ceil(Math.max(0, G.P.hp)) + '/' + G.P.maxhp, 256, 488, 10, '#e03131', 'left', true);
@@ -292,6 +305,16 @@ function drawGame() {
     s.t -= DT60; if (s.t <= 0) G.summonFx = null;
   }
   // 结算 / 暂停
+  if (G.mode === 'rogue' && G.rogueChoices) {
+    ctx.fillStyle = 'rgba(26,24,35,.72)'; ctx.fillRect(0, 0, W, H);
+    panel(24, 210, 327, 190, { bg: '#fffdf9', stroke: '#dacdf0', r: 14 });
+    txt('选择一条军略', W / 2, 244, 21, '#503b83', 'center', true);
+    txt('本局生效 · 选择后继续远征', W / 2, 264, 10, '#8f8a9c', 'center');
+    G.rogueChoices.forEach((c, i) => {
+      const y = 279 + i * 35;
+      btn(42, y, 291, 29, c.n + ' · ' + c.d, () => chooseRogue(i), { size: 11, bg: '#7250b8' });
+    });
+  }
   if (G.state === 'win') {
     const acts2 = [];
     if (!G.endless && G.stage < STAGE_MAX) acts2.push(['下一关', () => { startBattle(G.stage + 1, false, G.mapIdx); }]);

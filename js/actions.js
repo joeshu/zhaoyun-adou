@@ -187,6 +187,14 @@ function dropUnit(S, a1, i1, a2, i2) {
     return 'item';
   }
   if (o.type === 'hero') {
+    // 永久主将与局内同名拼字发生将魂共鸣：不生成重复将，主将升 1 级并回复生命。
+    const lead = S.side > 0 ? [...S.cells, ...S.bar].map(x => x.unit).find(x => x && x.t === 'hero' && x.permanent && x.name === o.name) : null;
+    if (lead) {
+      lead.lvl = Math.min(5, lead.lvl + 1); lead.hp = Math.min(HEROES[lead.name].hp * HERO_LVL_HP(lead.lvl) * heroStarMul(lead.name), lead.hp + HEROES[lead.name].hp * .5);
+      dst.unit = null; src.unit = null; G.banner = { txt: o.name + '·将魂共鸣！等级提升', t: 1.8 }; boom(dst.x, dst.y, '#e8a005');
+      if (S.side > 0) recOp({ op: 'drop', a1, i1, a2, i2 });
+      return 'hero';
+    }
     const h = mkHero(o.name, S);
     dst.unit = h; dst.unit.animT = 0.25; src.unit = null;
     if (h.weapon === 'shemao') { addSnake(S); addSnake(S); }

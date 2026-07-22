@@ -33,6 +33,8 @@ function dealDmg(S, m, dmg, byUnit, cell) {
   const gain = m.gold + (G.goldAdd || 0);                   // 击杀奖励 = 基础 + floor(关卡/3)
   S.mantou += gain;
   S.killCnt++;
+  S.totalKills = (S.totalKills || 0) + 1;
+  if (S.side > 0 && G && G.mode === 'fire') G.modeScore = (G.modeScore || 0) + 1;
   if (S.side > 0) {                          // 连杀：5秒内3杀→攻速+20%（独立计数，不干扰压力怪killCnt）
     S.combo++; S.comboT = 5;
     if (S.combo === 3) { G.banner = { txt: '连杀! 攻速+20%', t: 1.2 }; fl(m.x, m.y - 30, '连杀 x' + S.combo, '#ffd43b'); }
@@ -75,6 +77,10 @@ function damageUnit(S, holder, atk) {         // holder: cell 或 snake
   if (u.hp > 0) return;
   if (holder.unit) {
     if (S.side > 0) { fl(holder.x, holder.y, (u.t === 'hero' ? u.name : u.type || '') + '阵亡', '#868e96'); boom(holder.x, holder.y, '#868e96'); }
+    if (u.permanent && S.side > 0 && G && Array.isArray(G.heroRespawns)) {
+      G.heroRespawns.push({ name: u.name, t: 12 });
+      fl(holder.x, holder.y - 14, u.name + '撤回整备·12秒', '#7250b8');
+    }
     holder.unit = null;
     S.fate = fateBuff(S);
   } else holder.dead = true;

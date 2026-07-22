@@ -10,13 +10,16 @@
 function mkTroop(type) {
   return { t: 'troop', type, tier: 1, hp: TROOPS[type].hp, acc: 0 };
 }
-function mkHero(name, side) {
+function mkHero(name, side, permanent = false) {
   const b = HEROES[name];
   const weapon = (side && side.side > 0 && SAVE.equips[name]) || null;
-  return { t: 'hero', name, lvl: 1, kills: 0, hp: b.hp, acc: 0, cd: b.skill ? b.skill.cd : 0, buffN: 0, rateMul: 1, weapon, stun: 0, awaken: 0 };
+  const isPermanent = permanent && side && side.side > 0;
+  const star = isPermanent ? heroStar(name) : 0;
+  return { t: 'hero', name, lvl: 1, kills: 0, hp: b.hp * (isPermanent ? heroStarMul(name) : 1), acc: 0, cd: b.skill ? b.skill.cd : 0, buffN: 0, rateMul: 1, weapon, stun: 0, awaken: 0, permanent: isPermanent, star };
 }
 
-/* 拖 src 到 dst：upgrade | hero | item | swap（武将拼字需 dst字+src字 按正确顺序） */
+/* 拖 src 到 dst：升级 | 成将 | 道具 | 互换。
+   将字合成自动识别正反拖拽方向：无论“吕→布”还是“布→吕”，都会合成吕布。 */
 function mergeUnit(dst, src) {
   if (dst.t === 'troop' && src.t === 'troop' && dst.type === src.type && dst.tier === src.tier && dst.tier < 5) {
     const u = mkTroop(dst.type);
@@ -24,8 +27,11 @@ function mergeUnit(dst, src) {
     u.hp = TROOPS[dst.type].hp * TIER_MUL[u.tier - 1];
     return { type: 'upgrade', unit: u };
   }
-  if (dst.t === 'char' && src.t === 'char' && HEROES[dst.ch + src.ch])
-    return { type: 'hero', name: dst.ch + src.ch };
+  if (dst.t === 'char' && src.t === 'char') {
+    const forward = dst.ch + src.ch, backward = src.ch + dst.ch;
+    if (HEROES[forward]) return { type: 'hero', name: forward };
+    if (HEROES[backward]) return { type: 'hero', name: backward };
+  }
   if (dst.t === 'ifrag' && src.t === 'ifrag' && dst.ch === src.ch) {   // 道具碎片：集齐 need 合成整件
     const n = dst.n + src.n;
     if (n >= IFRAGS[dst.ch].need) return { type: 'item', id: IFRAGS[dst.ch].item };
@@ -53,13 +59,16 @@ function fateBuff(S) {
 function unitStats(u, S) {
   const fb = S.fate || { dmg: 1, rate: 1 };
   const comboMul = (S && S.side > 0 && S.combo >= 3) ? 1.2 : 1;   // 连杀攻速buff（p5：5秒内3杀→攻速+20%）
+  const modeDmg = (typeof G !== 'undefined' && G && G.mode === 'rogue' && G.rogue) ? G.rogue.dmg : 1;
+  const modeRate = (typeof G !== 'undefined' && G && G.mode === 'rogue' && G.rogue) ? G.rogue.hp : 1;
   if (u.t === 'troop') {
     const b = TROOPS[u.type];
-    return { ...b, dmg: b.dmg * TIER_MUL[u.tier - 1] * fb.dmg, rate: b.rate * fb.rate * comboMul, maxhp: b.hp * TIER_MUL[u.tier - 1] };
+    return { ...b, dmg: b.dmg * TIER_MUL[u.tier - 1] * fb.dmg * modeDmg, rate: b.rate * fb.rate * comboMul * modeRate, maxhp: b.hp * TIER_MUL[u.tier - 1] };
   }
   const b = HEROES[u.name];
   const aw = u.awaken || 0, awMul = aw ? Math.pow(1.3, aw) : 1;
   let dmg = b.dmg * HERO_LVL_DMG(u.lvl) * awMul, rng = b.rng * awMul, rate = b.rate * u.rateMul * HERO_LVL_RATE(u.lvl) * awMul, splash = b.splash || 0;
+  if (u.permanent) { const sm = heroStarMul(u.name); dmg *= sm; rate *= 1 + (sm - 1) * 0.5; }
   if (SAVE.gearOn && SAVE.equipAcc && ACCESSORIES[SAVE.equipAcc]) rate *= ACCESSORIES[SAVE.equipAcc].spd;
   const w = u.weapon;
   if (w === 'b_dao' || w === 'b_qng' || w === 'b_gong' || w === 'b_jian') dmg *= 1.12;
@@ -78,7 +87,7 @@ function unitStats(u, S) {
   // 刘备光环：全队增伤
   let aura = 1;
   for (const c of S.cells) if (c.unit && c.unit.t === 'hero' && HEROES[c.unit.name].aura && c.unit !== u) aura += HEROES[c.unit.name].aura;
-  return { ...b, dmg: dmg * fb.dmg * aura, rng, rate: rate * fb.rate * comboMul, splash, maxhp: b.hp * HERO_LVL_HP(u.lvl) * awMul };
+  return { ...b, dmg: dmg * fb.dmg * aura * modeDmg, rng, rate: rate * fb.rate * comboMul * modeRate, splash, maxhp: b.hp * HERO_LVL_HP(u.lvl) * awMul };
 }
 function skillCd(u) {
   const cd = HEROES[u.name].skill.cd;
