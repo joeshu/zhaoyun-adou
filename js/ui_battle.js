@@ -206,70 +206,57 @@ function drawGame() {
   } else if (G.mode === 'rogue') {
     txt('⚔ 五虎试炼 · 第 ' + G.rogue.floor + '/' + G.rogue.maxFloor + ' 战 · 军略 ' + G.rogue.picks, W / 2, 48, 11, '#7250b8', 'center', true);
   }
-  rr(248, 468, 124, 88, 8); ctx.fillStyle = 'rgba(255,255,255,.82)'; ctx.fill();
-  ctx.strokeStyle = '#e9ecef'; ctx.lineWidth = 1; ctx.stroke();
-  txt('阿斗 ' + Math.ceil(Math.max(0, G.P.hp)) + '/' + G.P.maxhp, 256, 488, 10, '#e03131', 'left', true);
-  txt('击杀 ' + G.P.killCnt + '   馒 ' + G.P.mantou, 256, 504, 10, '#495057', 'left');
-  txt('难度 ' + (SAVE.difficulty || 'normal') + '   速×' + G.speed, 256, 520, 10, '#495057', 'left');
-  txt((G.endless ? '无尽' : '第' + G.stage + '关') + ' 波' + G.wave, 256, 536, 10, '#495057', 'left');
   btn(234, 4, 33, 24, '×' + G.speed, () => { G.speed = G.speed === 1 ? 2 : 1; }, { bg: '#495057', size: 11 });
   btn(269, 4, 33, 24, G.paused ? '▶' : 'Ⅱ', () => { G.paused = !G.paused; }, { bg: '#495057', size: 11 });
   // 静音切换（P1-3）
   btn(304, 4, 33, 24, SAVE.mute ? '🔇' : '🔊', () => { SAVE.mute = !SAVE.mute; saveSave(); sfx('click'); },
     { bg: SAVE.mute ? '#e03131' : '#2f9e44', size: 12 });
   btn(339, 4, 33, 24, '菜单', () => { scr = 'menu'; }, { bg: '#868e96', size: 9 });
-  // 底部合成栏已在上方统一绘制（含拖拽高亮）
-  // 临时背包（仅玩家侧）：合成栏上方 3 格虚线区，溢出卡牌暂存
-  if (G.P.tempBag) {
-    const bx = [8, 56, 104], by = 512, bs = 44;
-    for (let i = 0; i < 3; i++) {
-      const u = G.P.tempBag[i];
-      ctx.save();
-      ctx.setLineDash([4, 3]); ctx.strokeStyle = '#868e96'; ctx.lineWidth = 1.5;
-      ctx.strokeRect(bx[i], by, bs, bs); ctx.setLineDash([]);
-      if (u) {
-        const pop = u.animT > 0 ? 1 + u.animT * 0.6 : 1;
-        ctx.save(); ctx.translate(bx[i] + bs / 2, by + bs / 2); ctx.scale(pop, pop);
-        txt(unitGlyph(u), 0, 7, 22, unitCol(u), 'center', true);
-        ctx.restore();
-      } else txt('暂存', bx[i] + bs / 2, by + bs / 2 + 4, 9, '#adb5bd', 'center');
-      ctx.restore();
-      const idx = i;
-      btns.push({ x: bx[i], y: by, w: bs, h: bs, fn: () => {
-        const u = G.P.tempBag[idx]; if (!u) return;
-        const fi = barFree(G.P);
-        if (fi < 0) { fl(60, 480, '合成栏已满', '#e03131'); return; }
-        G.P.tempBag.splice(idx, 1); u.animT = 0.25; G.P.bar[fi].unit = u;
-      } });
+  // 临时背包：空时完全隐藏；有溢出卡时用右下「包」打开抽屉，避免常驻挤占手牌区。
+  if (G.P.tempBag && G.P.tempBag.length > 0) {
+    btn(256, 638, 28, 26, '包' + G.P.tempBag.length, () => { G.tempOpen = !G.tempOpen; }, { size: 8, bg: '#7250b8' });
+    if (G.tempOpen) {
+      panel(8, 510, 272, 66, { bg: '#fffdf9', stroke: '#cfc4af', r: 9, blur: 5 });
+      txt('临时背包 · 点卡牌放回合成栏', 18, 525, 10, '#6f6556', 'left', true);
+      const bx = [16, 68, 120], by = 532, bs = 40;
+      for (let i = 0; i < 3; i++) {
+        const u = G.P.tempBag[i];
+        rr(bx[i], by, bs, bs, 6); ctx.fillStyle = '#f5f2eb'; ctx.fill(); ctx.setLineDash([3, 2]); ctx.strokeStyle = '#8d96a0'; ctx.stroke(); ctx.setLineDash([]);
+        if (u) { txt(unitGlyph(u), bx[i] + bs / 2, by + 25, 20, unitCol(u), 'center', true); }
+        const idx = i;
+        btns.push({ x: bx[i], y: by, w: bs, h: bs, fn: () => {
+          const card = G.P.tempBag[idx], fi = barFree(G.P); if (!card) return;
+          if (fi < 0) { fl(60, 505, '合成栏已满', '#e03131'); return; }
+          G.P.tempBag.splice(idx, 1); card.animT = .25; G.P.bar[fi].unit = card;
+          if (!G.P.tempBag.length) G.tempOpen = false;
+        }});
+      }
+      btn(174, 534, 46, 28, '折现', () => { const n = G.P.tempBag.length; G.P.tempBag = []; G.P.mantou += n * 2; G.tempOpen = false; fl(120, 505, '背包折现 +' + n * 2, '#8b5e3c'); }, { size: 10, bg: '#8e98a3' });
+      btn(226, 534, 42, 28, '收起', () => { G.tempOpen = false; }, { size: 9, bg: '#7c8792' });
     }
-    btn(152, 512, 40, 24, '清', () => {
-      if (!G.P.tempBag || !G.P.tempBag.length) return;
-      const n = G.P.tempBag.length; G.P.tempBag = []; G.P.mantou += n * 2;
-      fl(60, 480, '背包折现 +' + n * 2, '#8b5e3c');
-    }, { size: 10, bg: '#868e96' });
-  }
-  btn(8, 634, 62, 28, '抽卡 馒' + DRAW.cost, () => doSummon(G.P),
-    { size: 12, bg: '#c0392b', disabled: G.P.mantou < DRAW.cost || barFree(G.P) < 0 });
+  } else G.tempOpen = false;
+  btn(8, 638, 62, 26, '抽卡 馒' + DRAW.cost, () => doSummon(G.P),
+    { size: 11, bg: '#c0392b', disabled: G.P.mantou < DRAW.cost || barFree(G.P) < 0 });
   const tenCostNow = SAVE.firstTen ? (DRAW.tenCost / 2 | 0) : DRAW.tenCost;
-  btn(74, 634, 62, 28, '十连 ' + tenCostNow, () => drawTen(G.P),
-    { size: 12, bg: '#a61e4e', disabled: G.P.mantou < tenCostNow || barFree(G.P) < 0 });
+  btn(74, 638, 62, 26, '十连 ' + tenCostNow, () => drawTen(G.P),
+    { size: 11, bg: '#a61e4e', disabled: G.P.mantou < tenCostNow || barFree(G.P) < 0 });
   const acts = Object.keys(ITEMS).filter(id => ITEMS[id].act && (G.itemUses[id] || SAVE.loadout.includes(id)));
   acts.slice(0, 2).forEach((id, i) => {
     const n = G.itemUses[id] || 0;
-    btn(140 + i * 58, 634, 54, 28, ITEMS[id].name + '×' + n, () => useActive(id),
-      { size: 10, bg: G.targeting === id ? '#e8a005' : '#5f3dc4', disabled: !n });
+    btn(140 + i * 58, 638, 54, 26, ITEMS[id].name + '×' + n, () => useActive(id),
+      { size: 9, bg: G.targeting === id ? '#e8a005' : '#5f3dc4', disabled: !n });
   });
   rr(RECYCLE.x, RECYCLE.y, RECYCLE.w, RECYCLE.h, 6);
   ctx.fillStyle = '#e9ecef'; ctx.fill();
   ctx.setLineDash([4, 3]); ctx.strokeStyle = '#868e96'; ctx.stroke(); ctx.setLineDash([]);
   txt('回收♻', RECYCLE.x + RECYCLE.w / 2, RECYCLE.y + 19, 12, '#868e96', 'center', true);
   txt('拖单位到此回收', RECYCLE.x + RECYCLE.w / 2, RECYCLE.y + RECYCLE.h - 4, 9, '#adb5bd', 'center');
-  txt('敌馒 ' + G.E.mantou, 258, 652, 9, '#adb5bd', 'center');
   if (G.targeting) {
     const label = ITEMS[G.targeting] ? ITEMS[G.targeting].name : '道具';
-    btn(200, 634, 84, 28, '自动施放', () => autoTargetActive(), { size: 10, bg: '#e8a005' });
-    btn(200, 602, 84, 24, '取消', () => { G.targeting = null; }, { size: 10, bg: '#868e96' });
-    txt(label + '：点金色虚线单位，或用自动施放', W / 2, 550, 11, '#b78324', 'center', true);
+    // 道具上下文操作移至敌我战场分隔带，不再侵占底部手牌与回收区。
+    txt(label + '：点金色虚线目标', W / 2, 282, 10, '#b78324', 'center', true);
+    btn(86, 292, 96, 22, '自动施放', () => autoTargetActive(), { size: 10, bg: '#e8a005' });
+    btn(194, 292, 96, 22, '取消', () => { G.targeting = null; }, { size: 10, bg: '#868e96' });
   }
   // 拖拽跟随：单位 + 提示标签 + 半透明预览产物
   if (drag) {

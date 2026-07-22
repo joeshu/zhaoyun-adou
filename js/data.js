@@ -4,8 +4,8 @@
 /* ---------- 布局 ---------- */
 const W = 375, H = 667, TOP = 32, CELL = 48;
 // 底部合成栏 2×5 + 操作行（不随战场变）
-const BAR_ROWS = [560, 612], BAR_COLS = [45, 113, 181, 249, 317], BAR_N = 10;
-const RECYCLE = { x: 288, y: 636, w: 80, h: 28 };
+const BAR_ROWS = [552, 600], BAR_COLS = [45, 113, 181, 249, 317], BAR_N = 10;
+const RECYCLE = { x: 288, y: 638, w: 80, h: 26 };
 
 function pathCum(pts) {
   const c = [0];
