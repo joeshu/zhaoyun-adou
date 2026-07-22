@@ -51,8 +51,11 @@ function dealDmg(S, m, dmg, byUnit, cell) {
   if (S.killCnt >= pk) {
     S.killCnt = 0;
     const opp = S === G.P ? G.E : G.P;
-    spawnMob(opp, '卒', G.hpMul * 2, true);
-    if (opp.side > 0) fl(opp.path[0][0] + 20, opp.path[0][1], '压力怪!', '#c0392b');
+    const cap = G && G.mode === 'fire' ? 10 : G && (G.mode === 'escort' || G.mode === 'puzzle') ? 12 : 999;
+    if (opp.mobs.length < cap) {
+      spawnMob(opp, '卒', G.hpMul * 2, true);
+      if (opp.side > 0) fl(opp.path[0][0] + 20, opp.path[0][1], '压力怪!', '#c0392b');
+    }
   }
   // 武将击杀升级
   if (byUnit && byUnit.t === 'hero' && byUnit.lvl < 5) {

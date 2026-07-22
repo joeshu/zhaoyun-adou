@@ -221,17 +221,20 @@ function update(dt) {
   } else if (G.spawnQ.length) {
     G.spawnT += dt;
     while (G.spawnQ.length && G.spawnQ[0].t <= G.spawnT) {
+      const cap = G.mode === 'fire' ? 10 : G.mode === 'escort' || G.mode === 'puzzle' ? 12 : 999;
+      if (G.mode && Math.max(G.P.mobs.length, G.E.mobs.length) >= cap) break;
       const s = G.spawnQ.shift();
       spawnMob(G.P, s.type, s.hpMul);
       spawnMob(G.E, s.type, s.hpMul);
     }
   } else if (!G.mode && !G.endless && G.wave >= stageCfg(G.stage)[0]) {
     if (!G.P.mobs.length) endBattle(true);
-  } else if (G.mode === 'rogue' && G.wave >= 1 && !G.P.mobs.length && !G.E.mobs.length && !G.rogueChoices) {
+  } else if (G.mode === 'rogue' && G.wave >= 1 && !G.P.mobs.length && !G.rogueChoices) {
     rogueOffer();
   } else {
-    // 赤壁火攻将任一战场的敌人上限锁为 10；清掉一部分后才继续登陆，避免长时间战斗堆积卡顿。
-    if (G.mode === 'fire' && Math.max(G.P.mobs.length, G.E.mobs.length) >= 10) {
+    // 特别玩法的镜像对抗也需要敌军上限，避免长局堆怪拖慢 Canvas。
+    const mobCap = G.mode === 'fire' ? 10 : G.mode === 'escort' ? 12 : G.mode === 'puzzle' ? 12 : 999;
+    if (G.mode && Math.max(G.P.mobs.length, G.E.mobs.length) >= mobCap) {
       G.betweenT = Math.max(G.betweenT, 2);
     } else {
       G.betweenT -= dt;
@@ -258,5 +261,5 @@ function update(dt) {
     S.mobs = S.mobs.filter(m => !m.dead && m.hp > 0);
   }
   if (G.P.hp <= 0) endBattle(false);
-  else if (G.E.hp <= 0) endBattle(true);
+  else if (G.E.hp <= 0 && !G.mode) endBattle(true);
 }
