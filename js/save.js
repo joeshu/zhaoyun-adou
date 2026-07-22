@@ -1,7 +1,7 @@
 /* v2 存档：金币/材料/主线/武器/穿戴/道具/彩蛋/无尽（多槽 + 导出导入 + 版本/校验） */
 'use strict';
 
-const SAVE_VER = 5;                                // v5：永久武将/碎片/主将养成
+const SAVE_VER = 6;                                // v6：军师选择
 
 let curSlot = 0;                                  // 当前存档槽 0/1/2
 const SLOT_KEY = n => (n === 0 ? 'zyad2' : 'zyad2_slot' + n);   // 槽0兼容旧档 key
@@ -40,6 +40,7 @@ function defaultSave() {
     heroStars: { '赵云': 1 },
     leadHero: '赵云',             // 当前携带的永久主将
     heroWish: '',                 // 定向招募心愿将
+    adviser: 'zhuge',             // 当前军师
     stats: {                      // P2-2 累计统计
       kills: 0,                   // 累计击杀
       summons: 0,                 // 累计抽卡次数（含十连算10）
@@ -90,6 +91,11 @@ function migrateSave(s) {
     if (!Object.keys(s.ownedHeroes).length) { s.ownedHeroes['赵云'] = true; s.heroStars['赵云'] = 1; s.leadHero = '赵云'; }
     s.ver = 5;
   }
+  // v5 → v6：军师选择
+  if (v < 6) {
+    if (typeof s.adviser !== 'string') s.adviser = 'zhuge';
+    s.ver = 6;
+  }
   return s;
 }
 
@@ -115,6 +121,7 @@ function validateSave(s) {
   if (s.heroStars !== undefined && typeof s.heroStars !== 'object') return false;
   if (s.leadHero !== undefined && typeof s.leadHero !== 'string') return false;
   if (s.heroWish !== undefined && typeof s.heroWish !== 'string') return false;
+  if (s.adviser !== undefined && typeof s.adviser !== 'string') return false;
   if (s.stats !== undefined && typeof s.stats !== 'object') return false;
   return true;
 }

@@ -82,6 +82,7 @@ function startBattle(stage, endless, mapIdx) {
     const i = barFree(G.P);
     if (i >= 0) G.P.bar[i].unit = mkHero(SAVE.leadHero, G.P, true);
   }
+  if (typeof initBattleMeta === 'function') initBattleMeta();
   if (ghostMode) G.banner = { txt: '【录像回放】自动重现玩家操作', t: 3 };
   if (G.mode && typeof modeSetup === 'function') modeSetup();
   if (tut) {

@@ -44,7 +44,8 @@ function dealDmg(S, m, dmg, byUnit, cell) {
     fl(m.x, m.y, '+' + gain, '#8b5e3c'); boom(m.x, m.y, '#e03131');
     sfx(m.boss ? 'boss' : 'kill');                          // 音效（P1-3）
     if (m.boss) { G.goldEarn += m.gold; SAVE.mat++; fl(m.x, m.y - 16, '材料+1', '#e8a005'); }
-    if (SAVE.stats) SAVE.stats.kills++;                     // P2-2 统计
+    if (SAVE.stats) SAVE.stats.kills++;
+    if (typeof orderProgress === 'function') orderProgress('kills');
   }
   // 压力怪：每满阈值给对方生成（阈值随关卡/难度缩放）
   const pk = pressureKills(G.stage || 1, SAVE.difficulty || 'normal');

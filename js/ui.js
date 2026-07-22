@@ -94,7 +94,7 @@ function drawMenu() {
   btn(246, 546, 99, 34, '武将营', () => { scr = 'camp'; }, { bg: '#7250b8', size: 12 });
   const canSign = canDaily();
   btn(30, 587, 154, 30, (canSign ? '✓ ' : '') + '每日签到', () => { scr = 'daily'; dailyMsg = ''; }, { size: 11, bg: canSign ? '#318c4a' : slate });
-  btn(191, 587, 154, 30, '心愿单 · 成就', () => { scr = 'wish'; }, { size: 11, bg: '#6850ba' });
+  btn(191, 587, 154, 30, '军师 · 军令', () => { scr = 'command'; }, { size: 11, bg: '#7250b8' });
   btn(30, 624, 100, 28, '特别玩法', () => { scr = 'modes'; }, { size: 10, bg: '#bd4a31' });
   btn(138, 624, 100, 28, '对战录像', () => { scr = 'ghost'; ghostMsg = ''; loadGhostList(); }, { size: 10, bg: '#6850ba' });
   btn(246, 624, 99, 28, '玩法说明', () => { scr = 'help'; }, { size: 10, bg: slate });
@@ -414,6 +414,22 @@ function drawCamp() {
 }
 
 
+function drawCommand() {
+  txt('军师与军令', W / 2, 48, 23, '#2f3540', 'center', true);
+  txt('选择军师后，下局战斗立即生效', W / 2, 70, 11, '#8a7e6c', 'center');
+  Object.entries(ADVISERS).forEach(([id, a], i) => {
+    const y = 96 + i * 70, on = SAVE.adviser === id;
+    panel(20, y, 335, 58, { bg: on ? '#fff8e8' : '#fffdf9', stroke: on ? a.col : '#e5ddd0', r: 10, blur: 3 });
+    txt(a.name, 34, y + 24, 16, a.col, 'left', true); txt(a.tip, 34, y + 43, 10, '#656d76', 'left');
+    btn(282, y + 15, 58, 28, on ? '已选择' : '选择', () => { SAVE.adviser = id; saveSave(); }, { size: 10, bg: on ? '#318c4a' : a.col });
+  });
+  panel(20, 326, 335, 126, { bg: '#f8f5ef', stroke: '#e5ddd0', r: 10, blur: 2 });
+  txt('局内军令', 34, 352, 15, '#2f3540', 'left', true);
+  txt('每局随机两条军令；达成后即时获得馒头奖励。', 34, 374, 10, '#656d76', 'left');
+  ORDERS.forEach((o, i) => txt('· ' + o.name + '：' + o.desc + '（+' + o.reward + '馒）', 36, 398 + i * 18, 11, '#7250b8', 'left'));
+  btn(128, 590, 120, 34, '返回', () => { scr = 'menu'; }, { bg: '#7c8792' });
+}
+
 function drawModes() {
   txt('特别玩法', W / 2, 54, 25, '#2f3540', 'center', true);
   txt('改变胜利目标，而不是单纯增加波次', W / 2, 76, 11, '#90949a', 'center');
@@ -447,6 +463,7 @@ function draw() {
   else if (scr === 'daily') drawDaily();
   else if (scr === 'ghost') drawGhost();
   else if (scr === 'stats') drawStats();
+  else if (scr === 'command') drawCommand();
   else if (scr === 'modes') drawModes();
   else drawGame();
 }

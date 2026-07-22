@@ -167,7 +167,8 @@ function dropUnit(S, a1, i1, a2, i2) {
     dst.unit = o.unit; dst.unit.animT = 0.25; src.unit = null;
     if (S.side > 0) {
       sfx('upgrade');                                // 音效（P1-3）
-      if (SAVE.stats) SAVE.stats.merges++;            // P2-2 统计
+      if (SAVE.stats) SAVE.stats.merges++;
+      if (typeof orderProgress === 'function') orderProgress('merges');
     }
     // 新手引导：合成完成 → step 2
     if (S.side > 0 && typeof G !== 'undefined' && G && G.tutorial && G.tutStep === 1) {
@@ -182,7 +183,8 @@ function dropUnit(S, a1, i1, a2, i2) {
     gainItem(S, o.id);
     if (S.side > 0) {
       recOp({ op: 'drop', a1, i1, a2, i2 });
-      if (SAVE.stats) SAVE.stats.merges++;            // P2-2 统计
+      if (SAVE.stats) SAVE.stats.merges++;
+      if (typeof orderProgress === 'function') orderProgress('merges');
     }
     return 'item';
   }
@@ -201,7 +203,8 @@ function dropUnit(S, a1, i1, a2, i2) {
     if (S.side > 0 && typeof G !== 'undefined' && G) {
       G.summonFx = { name: o.name, t: 1.4 }; G.flash = 0.7; sfx('hero');
       recOp({ op: 'drop', a1, i1, a2, i2 });
-      if (SAVE.stats) { SAVE.stats.merges++; SAVE.stats.heroes++; }   // P2-2 统计
+      if (SAVE.stats) { SAVE.stats.merges++; SAVE.stats.heroes++; }
+      if (typeof orderProgress === 'function') { orderProgress('merges'); orderProgress('heroes'); }
     }
     S.fate = fateBuff(S);
     return 'hero';
@@ -254,7 +257,7 @@ function useActive(id) {
   if (!G.itemUses[id]) return false;
   const P = G.P;
   if (id === 'yunshi') {
-    for (const m of P.mobs) if (m.hp > 0) dealDmg(P, m, 150);
+    for (const m of P.mobs) if (m.hp > 0) dealDmg(P, m, 150 * (typeof adviserDamageMul === 'function' ? adviserDamageMul('meteor') : 1));
     G.flash = 0.8; G.banner = { txt: '陨石天降!', t: 1.2 };
   } else if (id === 'xiangyao') {
     let hit = false;
