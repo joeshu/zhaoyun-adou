@@ -171,6 +171,7 @@ const MOBS = {
   弩: { hp: 48,  spd: 36, atk: 8,  dmg: 1, gold: 4, archer: true, tip: '远程消耗阿斗' },
   斧: { hp: 180, spd: 22, atk: 14, dmg: 2, gold: 8, armor: 0.6, tip: '持斧重甲' },
   狂: { hp: 42,  spd: 88, atk: 6,  dmg: 1, gold: 4, tip: '高速突进' },
+  粮: { hp: 65, spd: 26, atk: 0, dmg: 0, gold: 10, supply: true, tip: '补给车：击毁获得额外馒头' },
   // 5 BOSS 按文档 5.3：HP/技能对齐，速度按 0.15-0.5 相对值 ×80 映射
   梁: { hp: 200,  spd: 32, atk: 12, dmg: 3, gold: 30, boss: true, castIv: 8, cast: 'shehun', stunT: 3, name: '张梁', tip: '摄魂:每8秒全军瘫痪3秒' },
   铁: { hp: 400,  spd: 24, atk: 14, dmg: 3, gold: 30, boss: true, charge: true, castIv: 9, cast: 'summon', name: '重甲骑兵', tip: '冲锋:半血速度翻倍·召唤斧手' },

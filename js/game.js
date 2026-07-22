@@ -212,6 +212,7 @@ function update(dt) {
   // P2-2 统计：累计游戏时长（仅玩家正常对局，不含 ghostMode 回放）
   if (!G.ghostMode && SAVE.stats) SAVE.stats.playTime += dt;
   tickMapEffect(dt);
+  if (typeof tickChapterMechanic === 'function') tickChapterMechanic(dt);
   if (G.mode && typeof modeTick === 'function') modeTick(dt);
   if (G.state !== 'play') return;
   // 永久主将阵亡后整备 12 秒，以半血回到合成栏；栏满时延后返场。

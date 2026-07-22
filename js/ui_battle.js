@@ -332,6 +332,18 @@ function drawGame() {
       btn(42, y, 291, 29, c.n + ' · ' + c.d, () => chooseRogue(i), { size: 11, bg: '#7250b8' });
     });
   }
+  if (G.chapterFire) {
+    for (const f of G.chapterFire) { ctx.globalAlpha=.22; ctx.fillStyle='#e8590c'; ctx.beginPath(); ctx.arc(f.x,f.y,26,0,7); ctx.fill(); ctx.globalAlpha=1; txt('🔥',f.x,f.y+6,16,'#e8590c','center'); }
+    txt('赤壁·'+G.wind, W/2, 48, 10, '#bd4a31', 'center', true);
+  }
+  if (G.chapterChoice) {
+    ctx.fillStyle='rgba(32,28,20,.55)'; ctx.fillRect(0,0,W,H);
+    panel(30,250,315,145,{bg:'#fffdf9',stroke:'#e5c98b',r:14});
+    txt('流民求援',W/2,282,22,'#b78324','center',true);
+    txt('救援换取金币与护盾，或固守获得即时馒头',W/2,306,11,'#656d76','center');
+    btn(48,330,130,38,'救援 · -10馒',()=>chooseRefugee(true),{size:12,bg:'#318c4a'});
+    btn(197,330,130,38,'固守 · +15馒',()=>chooseRefugee(false),{size:12,bg:'#7250b8'});
+  }
   if (G.state === 'win') {
     const acts2 = [];
     if (!G.endless && G.stage < STAGE_MAX) acts2.push(['下一关', () => { startBattle(G.stage + 1, false, G.mapIdx); }]);

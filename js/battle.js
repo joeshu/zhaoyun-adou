@@ -44,6 +44,7 @@ function dealDmg(S, m, dmg, byUnit, cell) {
     fl(m.x, m.y, '+' + gain, '#8b5e3c'); boom(m.x, m.y, '#e03131');
     sfx(m.boss ? 'boss' : 'kill');                          // 音效（P1-3）
     if (m.boss) { G.goldEarn += m.gold; SAVE.mat++; fl(m.x, m.y - 16, '材料+1', '#e8a005'); }
+    if (m.type === '粮') { S.mantou += 10; fl(m.x, m.y - 16, '截获补给 +10馒', '#b78324'); }
     if (SAVE.stats) SAVE.stats.kills++;
     if (typeof orderProgress === 'function') orderProgress('kills');
   }

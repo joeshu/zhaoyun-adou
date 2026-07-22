@@ -47,4 +47,5 @@ function startWave() {
   G.spawnT = 0;
   G.banner = { txt: '第 ' + G.wave + '/' + (G.endless ? '∞' : waves) + ' 波' + bossTxt, t: 1.6 };
   if (G.endless && G.wave > SAVE.bestWave) { SAVE.bestWave = G.wave; saveSave(); }
+  if (!G.mode && typeof chapterWaveEvent === 'function') chapterWaveEvent();
 }
