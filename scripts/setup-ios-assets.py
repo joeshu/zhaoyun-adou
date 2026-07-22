@@ -1,6 +1,6 @@
-// scripts/setup-ios-assets.py
-// 配置 iOS App 名称、图标、启动屏（跨平台，macOS/Windows/Linux 均可运行）
-// 需要 Pillow: pip install Pillow
+# scripts/setup-ios-assets.py
+# 配置 iOS App 名称、图标、启动屏（跨平台，macOS/Windows/Linux 均可运行）
+# 需要 Pillow: pip install Pillow
 import os, json, shutil, plistlib, sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
