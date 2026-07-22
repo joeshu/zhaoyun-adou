@@ -101,9 +101,11 @@ function drawMob(m) {
 }
 function drawAdou(S) {
   const mine = S.side > 0;
-  txt('阿斗', S.adou.x, S.adou.y + 7, 20, mine ? '#343a40' : '#c0392b', 'center', true);
-  txt('♥' + Math.max(0, S.hp), S.adou.x + 36, S.adou.y + 5, 12, '#e03131', 'left', true);
-  if (S.hp < ADOU_HP) hpBar(S.adou.x - 18, S.adou.y + 14, 36, Math.max(0, S.hp) / ADOU_HP, '#e03131');
+  // 玩家阿斗的实际终点仍在底部；仅将状态标记上移，避免被合成栏遮挡。
+  const y = mine ? S.adou.y - 38 : S.adou.y;
+  txt('阿斗', S.adou.x, y + 7, 20, mine ? '#343a40' : '#c0392b', 'center', true);
+  txt('♥' + Math.max(0, S.hp), S.adou.x + 36, y + 5, 12, '#e03131', 'left', true);
+  if (S.hp < ADOU_HP) hpBar(S.adou.x - 18, y + 14, 36, Math.max(0, S.hp) / ADOU_HP, '#e03131');
 }
 
 function drawGame() {
@@ -113,7 +115,7 @@ function drawGame() {
   ctx.fillStyle = '#edf0f2'; ctx.fillRect(0, 532, W, H - 532);
   ctx.fillStyle = '#b9a995'; ctx.fillRect(0, 296, W, 3);
   drawPath(G.E); drawPath(G.P);
-  drawAdou(G.E); drawAdou(G.P);
+  drawAdou(G.E);
   G.E.cells.forEach(c => drawCell(c, G.E, false));
   G.P.cells.forEach((c, i) => {
     drawCell(c, G.P, drag && drag.area === 'board' && drag.from === i);
@@ -142,6 +144,8 @@ function drawGame() {
       }
     }
   });
+  // 玩家阿斗状态置于手牌绘制之后，确保不会被底部栏遮挡。
+  drawAdou(G.P);
   for (const sn of G.P.snakes) { txt('蛇', sn.x, sn.y + 5, 15, '#2f9e44', 'center', true); hpBar(sn.x - 12, sn.y + 12, 24, sn.hp / 150, '#2f9e44'); }
   for (const sn of G.E.snakes) txt('蛇', sn.x, sn.y + 5, 15, '#2f9e44', 'center', true);
   for (const m of G.E.mobs) drawMob(m);
