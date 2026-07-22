@@ -48,6 +48,16 @@ jobs:
           fi
           npx cap copy ios
 
+      - name: Configure iOS app name + icon + launch screen
+        run: |
+          # 安装 Pillow 用于生成应用图标
+          pip3 install --user --quiet Pillow
+          # 生成赵云主题图标（红底黄"赵"字）+ 修改 Info.plist + 自定义启动屏
+          python3 scripts/setup-ios-assets.py
+          # 验证 Info.plist 关键字段
+          /usr/libexec/PlistBuddy -c "Print :CFBundleDisplayName" ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Print :CFBundleName" ios/App/App/Info.plist
+
       - name: Install CocoaPods dependencies
         run: |
           cd ios/App
