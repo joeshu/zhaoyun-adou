@@ -210,7 +210,29 @@ function updUnit(S, cell, dt) {
   }
 }
 
-/* ---------- 怪物 ---------- */
+
+/* ---------- 羁绊组合技：完整阵容会周期性产生战术效果 ---------- */
+function tickFateSkills(S, dt) {
+  if (!S || !S.fate || !S.fate.list.length) return;
+  for (const name of S.fate.list) S.fateCd[name] = Math.max(0, (S.fateCd[name] || 0) - dt);
+  const ready = name => !(S.fateCd[name] > 0);
+  if (S.fate.list.includes('桃园羁绊') && ready('桃园羁绊')) {
+    S.fateCd['桃园羁绊'] = 25;
+    for (const c of S.cells) if (c.unit && !noDeploy(c.unit)) { const st = unitStats(c.unit, S); c.unit.hp = Math.min(st.maxhp, c.unit.hp + st.maxhp * .22); }
+    if (S.side > 0) { G.banner = { txt:'桃园结义：全军恢复', t:1.4 }; fl(187, 320, '桃园结义', '#2f9e44'); }
+  }
+  if (S.fate.list.includes('五虎羁绊') && ready('五虎羁绊')) {
+    S.fateCd['五虎羁绊'] = 30;
+    for (const m of S.mobs) if (m.hp > 0) dealDmg(S, m, 35);
+    if (S.side > 0) { G.banner = { txt:'五虎破阵：全线冲锋', t:1.4 }; G.fx.push({ type:'lane', y: 408, t:.5, t0:.5, col:'#e8a005' }); }
+  }
+  if (S.fate.list.includes('父子羁绊') && ready('父子羁绊')) {
+    S.fateCd['父子羁绊'] = 22;
+    S.shield = Math.min(2, S.shield + 1);
+    if (S.side > 0) { G.banner = { txt:'父子同心：阿斗护盾 +1', t:1.4 }; fl(187, 520, '护盾 +1', '#1c7ed6'); }
+  }
+}
+
 function spawnMob(S, type, hpMul, press) {
   const b = MOBS[type];
   const hp = (b.hp + (b.boss ? 0 : (G.hpAdd || 0))) * hpMul * (press ? 1.5 : 1);   // HP=基础+关卡加成

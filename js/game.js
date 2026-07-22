@@ -32,6 +32,7 @@ function mkSide(side, mapIdx) {
     shield: 0, noHit: true,            // 阿斗护盾：每波+1、无伤+1，上限2（仅玩家侧有意义）
     tempBag: side > 0 ? [] : null,           // 临时背包：抽卡溢出暂存（仅玩家侧，AI侧为null不渲染）
     combo: 0, comboT: 0,                     // 连杀：5秒内3杀→攻速+20%（仅玩家侧，独立计数不干扰压力怪killCnt）
+    fateCd: {},                              // 羁绊组合技冷却
     path: pathP,
     cum: cum,
     adou: side > 0 ? M.ADOU_P : M.ADOU_E,
@@ -251,6 +252,7 @@ function update(dt) {
     if (S.comboT > 0) { S.comboT -= dt; if (S.comboT <= 0) S.combo = 0; }   // 连杀窗口衰减
     sideIncome(S, dt);
     if (S.slowT > 0) S.slowT -= dt;
+    if (typeof tickFateSkills === 'function') tickFateSkills(S, dt);
     for (const c of S.cells) if (c.unit) {
       if (c.unit.animT > 0) c.unit.animT -= dt;
       updUnit(S, c, dt);
