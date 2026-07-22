@@ -171,6 +171,7 @@ function endBattle(win) {
     G.banner = { txt: '成就解锁: ' + newAch.map(a => a.name).join(' · '), t: 2.5 };
   }
   sfx(win ? 'win' : 'lose');                        // 音效（P1-3）
+  if (win && typeof evWin === 'function') evWin(G.stage, G.endless, G.mode, G.rewardTxt);
   saveSave();
 }
 

@@ -79,6 +79,7 @@ function doSummon(S) {
     G.flash = 0.35;
     sfx('summon');                                    // 音效（P1-3）
     recOp({ op: 'summon' });                          // 录像（P1-4）
+    if (typeof evSummon === 'function') evSummon(1);
     // 新手引导：抽卡完成 → step 1
     if (G.tutorial && G.tutStep === 0) {
       G.tutStep = 1;
@@ -111,6 +112,7 @@ function drawTen(S) {                                       // 十连：90馒头
   if (S.side > 0 && typeof G !== 'undefined' && G) {
     G.summonFx = { name, t: 1.4 }; G.flash = 0.7;
     recOp({ op: 'drawTen' });                        // 录像（P1-4）
+    if (typeof evSummon === 'function') evSummon(10);
   }
   return name;
 }
@@ -169,6 +171,7 @@ function dropUnit(S, a1, i1, a2, i2) {
       sfx('upgrade');                                // 音效（P1-3）
       if (SAVE.stats) SAVE.stats.merges++;
       if (typeof orderProgress === 'function') orderProgress('merges');
+      if (typeof evMerge === 'function') evMerge('upgrade');
     }
     // 新手引导：合成完成 → step 2
     if (S.side > 0 && typeof G !== 'undefined' && G && G.tutorial && G.tutStep === 1) {
@@ -185,6 +188,7 @@ function dropUnit(S, a1, i1, a2, i2) {
       recOp({ op: 'drop', a1, i1, a2, i2 });
       if (SAVE.stats) SAVE.stats.merges++;
       if (typeof orderProgress === 'function') orderProgress('merges');
+      if (typeof evMerge === 'function') evMerge('upgrade');
     }
     return 'item';
   }
@@ -205,6 +209,7 @@ function dropUnit(S, a1, i1, a2, i2) {
       recOp({ op: 'drop', a1, i1, a2, i2 });
       if (SAVE.stats) { SAVE.stats.merges++; SAVE.stats.heroes++; }
       if (typeof orderProgress === 'function') { orderProgress('merges'); orderProgress('heroes'); }
+      if (typeof evHeroCreated === 'function') evHeroCreated(o.name);
     }
     S.fate = fateBuff(S);
     return 'hero';

@@ -47,6 +47,7 @@ function dealDmg(S, m, dmg, byUnit, cell) {
     if (m.type === '粮') { S.mantou += 10; fl(m.x, m.y - 16, '截获补给 +10馒', '#b78324'); }
     if (SAVE.stats) SAVE.stats.kills++;
     if (typeof orderProgress === 'function') orderProgress('kills');
+    if (typeof evKill === 'function') evKill(S.side, m);
   }
   // 压力怪：每满阈值给对方生成（阈值随关卡/难度缩放）
   const pk = pressureKills(G.stage || 1, SAVE.difficulty || 'normal');
@@ -85,6 +86,7 @@ function damageUnit(S, holder, atk) {         // holder: cell 或 snake
     if (u.permanent && S.side > 0 && G && Array.isArray(G.heroRespawns)) {
       G.heroRespawns.push({ name: u.name, t: 12 });
       fl(holder.x, holder.y - 14, u.name + '撤回整备·12秒', '#7250b8');
+      if (typeof evHeroRespawn === 'function') evHeroRespawn(u.name);
     }
     holder.unit = null;
     S.fate = fateBuff(S);
@@ -221,16 +223,19 @@ function tickFateSkills(S, dt) {
     S.fateCd['桃园羁绊'] = 25;
     for (const c of S.cells) if (c.unit && !noDeploy(c.unit)) { const st = unitStats(c.unit, S); c.unit.hp = Math.min(st.maxhp, c.unit.hp + st.maxhp * .22); }
     if (S.side > 0) { G.banner = { txt:'桃园结义：全军恢复', t:1.4 }; fl(187, 320, '桃园结义', '#2f9e44'); }
+    if (typeof evFateSkill === 'function') evFateSkill('桃园羁绊');
   }
   if (S.fate.list.includes('五虎羁绊') && ready('五虎羁绊')) {
     S.fateCd['五虎羁绊'] = 30;
     for (const m of S.mobs) if (m.hp > 0) dealDmg(S, m, 35);
     if (S.side > 0) { G.banner = { txt:'五虎破阵：全线冲锋', t:1.4 }; G.fx.push({ type:'lane', y: 408, t:.5, t0:.5, col:'#e8a005' }); }
+    if (typeof evFateSkill === 'function') evFateSkill('五虎羁绊');
   }
   if (S.fate.list.includes('父子羁绊') && ready('父子羁绊')) {
     S.fateCd['父子羁绊'] = 22;
     S.shield = Math.min(2, S.shield + 1);
     if (S.side > 0) { G.banner = { txt:'父子同心：阿斗护盾 +1', t:1.4 }; fl(187, 520, '护盾 +1', '#1c7ed6'); }
+    if (typeof evFateSkill === 'function') evFateSkill('父子羁绊');
   }
 }
 
@@ -244,6 +249,7 @@ function spawnMob(S, type, hpMul, press) {
   });
 }
 function bossCast(S, m, mb) {                   // BOSS 周期技能（文档 5.3）
+  if (typeof evBossSkill === 'function') evBossSkill(mb.name, mb.cast);
   if (mb.cast === 'shehun') {                               // 张梁：全军瘫痪
     for (const c of S.cells) if (c.unit) c.unit.stun = mb.stunT;
     if (S.side > 0) { G.banner = { txt: mb.name + '·摄魂! 全军瘫痪', t: 1.5 }; G.flash = 0.5; }
@@ -292,6 +298,7 @@ function updMob(S, m, dt) {
     m.castT -= dt;
     if (m.boss && S.side > 0 && m.castT <= 1.5 && !m.warnCast) {
       m.warnCast = true;
+      if (typeof evBossWarning === 'function') evBossWarning(mb.name);
       G.banner = { txt: mb.name + '即将发动：' + (mb.tip || '技能'), t: 1.5 };
     }
     if (m.castT <= 0) { m.castT = mb.castIv; m.warnCast = false; bossCast(S, m, mb); }
