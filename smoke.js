@@ -1,7 +1,7 @@
 // v2.1 无头冒烟测试：node smoke.js（仅逻辑模拟，无渲染）
 'use strict';
 const fs = require('fs');
-const FILES = ['data', 'save', 'audio', 'merge', 'battle', 'chapter', 'modecfg', 'waves', 'modes', 'meta', 'actions', 'game'];
+const FILES = ['data', 'save', 'events', 'audio', 'merge', 'battle', 'chapter', 'modecfg', 'waves', 'modes', 'meta', 'roster', 'dailytask', 'actions', 'game'];
 const src = FILES.map(f => fs.readFileSync(__dirname + '/js/' + f + '.js', 'utf8')).join('\n;\n');
 eval(src + `
 ;(function () {
@@ -222,7 +222,7 @@ eval(src + `
   // 旧档迁移：构造 v3 存档验证迁移到最新版
   const v3 = { ver: 3, gold: 100, stage: 1, eggs: { flag: false, vine: false, acc: false, all: false } };
   const v5 = migrateSave(JSON.parse(JSON.stringify(v3)));
-  A(v5 && v5.ver === 6, '军师系统 v3→v6 migrate 升版');
+  A(v5 && v5.ver === 7, '军师与群英谱迁移 v3→v7 升版');
   A(v5.skins && typeof v5.skins === 'object', '迁移补 skins');
   A(v5.stats && v5.stats.kills === 0 && v5.stats.wins === 0, '迁移补 stats 默认值');
   A(v5.ownedHeroes['赵云'] && v5.leadHero === '赵云', '迁移赠送赵云初始主将');
@@ -252,6 +252,11 @@ eval(src + `
   A(G.P.mobs.length <= 10 && G.E.mobs.length <= 10, '火攻模式保留镜像战场且双方敌军上限10');
   SAVE.invincible = false;
   console.log('特别玩法 OK: 火攻/试炼/护送/残局/讨伐');
+
+  updateHeroRecord('赵云', 'kills');
+  updateHeroRecord('赵云', 'deployments');
+  var zyRecord = heroRecord('赵云');
+  A(zyRecord.kills === 1 && zyRecord.deployments === 1, '群英谱自动记录');
 
   console.log('冒烟测试全部通过');
 })();
