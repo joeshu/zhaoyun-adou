@@ -427,12 +427,23 @@ function draw() {
 }
 
 /* ---------- 成就面板（P1-1） ---------- */
+let achMsg = '';
+let achMsgT = 0;
 function drawAch() {
   txt('成就', W / 2, 46, 22, '#343a40', 'center', true);
   // 检查一次成就（玩家进入页面时实时同步）
-  checkAchievements();
-  const done = ACHIEVEMENTS.filter(a => SAVE.ach[a.id]).length;
-  txt('已解锁 ' + done + '/' + ACHIEVEMENTS.length, W / 2, 70, 12, '#868e96', 'center');
+  const newly = checkAchievements();
+  if (newly.length > 0) {
+    achMsg = '解锁 ' + newly.length + ' 个成就！奖励已发放';
+    achMsgT = 3;
+  }
+  if (achMsgT > 0) {
+    achMsgT -= DT60;
+    txt(achMsg, W / 2, 70, 12, '#e8a005', 'center', true);
+  } else {
+    const done = ACHIEVEMENTS.filter(a => SAVE.ach[a.id]).length;
+    txt('已解锁 ' + done + '/' + ACHIEVEMENTS.length, W / 2, 70, 12, '#868e96', 'center');
+  }
   const startY = 88, rowH = 36;
   ACHIEVEMENTS.forEach((a, i) => {
     const y = startY + i * rowH, on = !!SAVE.ach[a.id];
@@ -460,7 +471,9 @@ function drawDaily() {
   for (let i = 0; i < 7; i++) {
     const x = x0 + i * (bw + gap), day = i + 1;
     const cur = (SAVE.dailyStreak - 1) % 7 + 1;
-    const signed = i < (SAVE.lastDaily === todayStr() ? cur : (canDaily() ? cur - 1 : cur));
+    const totalSigned = SAVE.lastDaily === todayStr() ? SAVE.dailyStreak : (SAVE.dailyStreak > 0 && SAVE.lastDaily === yestStr() ? SAVE.dailyStreak : 0);
+    const showSigned = Math.min(totalSigned, 7);
+    const signed = i < showSigned;
     rr(x, y0, bw, 64, 6);
     ctx.fillStyle = signed ? '#fff9db' : '#f8f9fa'; ctx.fill();
     ctx.strokeStyle = i === 6 ? '#e8a005' : '#dee2e6'; ctx.lineWidth = i === 6 ? 2 : 1; ctx.stroke();

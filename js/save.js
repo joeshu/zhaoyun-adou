@@ -154,6 +154,11 @@ function todayStr() {
   const p = n => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
+function yestStr() {
+  const d = new Date(); d.setDate(d.getDate() - 1);
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
 function daysBetween(a, b) {
   if (!a || !b) return 0;
   const da = new Date(a + 'T00:00:00'), db = new Date(b + 'T00:00:00');
@@ -176,12 +181,7 @@ function doDaily() {
   if (!canDaily()) return null;
   const today = todayStr();
   // 连续签到判定：上次签到是昨天则 +1，否则重置为 1
-  const yest = (() => {
-    const d = new Date(); d.setDate(d.getDate() - 1);
-    const p = n => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-  })();
-  SAVE.dailyStreak = (SAVE.lastDaily === yest) ? SAVE.dailyStreak + 1 : 1;
+  SAVE.dailyStreak = (SAVE.lastDaily === yestStr()) ? SAVE.dailyStreak + 1 : 1;
   if (SAVE.stats && SAVE.stats.dailyStreakMax !== undefined) SAVE.stats.dailyStreakMax = Math.max(SAVE.stats.dailyStreakMax, SAVE.dailyStreak);
   const idx = (SAVE.dailyStreak - 1) % 7;
   const r = DAILY_REWARDS[idx];
@@ -233,7 +233,6 @@ function toggleLoadout(id) {
   if (i >= 0) { SAVE.loadout.splice(i, 1); saveSave(); return true; }
   if (SAVE.loadout.length >= LOADOUT_MAX) return false;
   if (ITEMS[id].act && SAVE.loadout.filter(k => ITEMS[k].act).length >= LOADOUT_ACT_MAX) return false;
-  if (SAVE.loadout.includes(id)) return;
   SAVE.loadout.push(id); saveSave();
   return true;
 }

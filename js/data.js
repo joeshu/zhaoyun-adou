@@ -255,7 +255,7 @@ const EGGS = { flag: { stage: 15, ch: '旗', x: 340, y: 470 }, vine: { stage: 28
    id → { name, desc, reward{gold,mat}, check(SAVE,G?) → bool } */
 const ACHIEVEMENTS = [
   { id: 'first_summon', name: '初出茅庐', desc: '完成第一次抽卡', reward: { gold: 30 },
-    check: () => SAVE.summons !== undefined || (G && G.P && G.P.summons > 0) || SAVE.tutorial >= 99 },
+    check: () => (SAVE.stats && SAVE.stats.summons > 0) || (G && G.P && G.P.summons > 0) || SAVE.tutorial >= 99 },
   { id: 'first_hero', name: '得良将', desc: '合成首位武将', reward: { gold: 50, mat: 1 },
     check: () => SAVE.weapons !== undefined && Object.keys(SAVE.equips || {}).length >= 0 },
   { id: 'first_win', name: '首战告捷', desc: '通关第1关', reward: { gold: 50 },

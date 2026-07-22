@@ -35,7 +35,8 @@ function dealDmg(S, m, dmg, byUnit, cell) {
   S.killCnt++;
   if (S.side > 0) {                          // 连杀：5秒内3杀→攻速+20%（独立计数，不干扰压力怪killCnt）
     S.combo++; S.comboT = 5;
-    if (S.combo >= 3) { G.banner = { txt: '连杀! 攻速+20%', t: 1.2 }; fl(m.x, m.y - 30, '连杀 x' + S.combo, '#ffd43b'); }
+    if (S.combo === 3) { G.banner = { txt: '连杀! 攻速+20%', t: 1.2 }; fl(m.x, m.y - 30, '连杀 x' + S.combo, '#ffd43b'); }
+    else if (S.combo > 3 && S.combo % 5 === 0) { fl(m.x, m.y - 30, '连杀 x' + S.combo, '#ffd43b'); }
   }
   if (S.side > 0) {
     fl(m.x, m.y, '+' + gain, '#8b5e3c'); boom(m.x, m.y, '#e03131');
