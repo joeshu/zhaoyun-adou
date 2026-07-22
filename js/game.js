@@ -230,12 +230,16 @@ function update(dt) {
   } else if (G.mode === 'rogue' && G.wave >= 1 && !G.P.mobs.length && !G.E.mobs.length && !G.rogueChoices) {
     rogueOffer();
   } else {
-    G.betweenT -= dt;
-    // 首轮主线固定 20 秒备战；特别玩法保持更紧凑的 5 秒节奏。
-    const nextDelay = G.mode === 'fire' ? 3 : 5;
-    if (G.betweenT <= 0) { G.betweenT = nextDelay; startWave(); if (G.wave > 1) G.goldEarn += 2; }
+    // 赤壁火攻将任一战场的敌人上限锁为 10；清掉一部分后才继续登陆，避免长时间战斗堆积卡顿。
+    if (G.mode === 'fire' && Math.max(G.P.mobs.length, G.E.mobs.length) >= 10) {
+      G.betweenT = Math.max(G.betweenT, 2);
+    } else {
+      G.betweenT -= dt;
+      const nextDelay = G.mode === 'fire' ? 4 : 5;
+      if (G.betweenT <= 0) { G.betweenT = nextDelay; startWave(); if (G.wave > 1) G.goldEarn += 2; }
+    }
   }
-  // AI 行动
+  // AI 行动：包括赤壁火攻在内均保留镜像对抗。
   G.aiT -= dt;
   if (G.aiT <= 0) { G.aiT = G.aiIv; aiAct(G.E); }
   // 双侧模拟

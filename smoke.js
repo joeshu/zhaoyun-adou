@@ -243,6 +243,11 @@ eval(src + `
   startBattle(12, false, 0, null, { mode: 'puzzle' });
   G.P.totalKills = G.puzzle.target; modeTick(0.1);
   A(G.state === 'win', '残局挑战达到击杀目标结算');
+  startBattle(12, false, 1, null, { mode: 'fire' });
+  SAVE.invincible = true;
+  for (let i = 0; i < 60 * 70 && G.state === 'play'; i++) update(1 / 60);
+  A(G.P.mobs.length <= 10 && G.E.mobs.length <= 10, '火攻模式保留镜像战场且双方敌军上限10');
+  SAVE.invincible = false;
   console.log('特别玩法 OK: 火攻/试炼/护送/残局/讨伐');
 
   console.log('冒烟测试全部通过');

@@ -49,7 +49,9 @@ function modeTick(dt) {
   if (G.mode === 'fire') {
     G.modeTime -= dt; G.windT -= dt;
     if (G.windT <= 0) { G.windT = 30; G.wind = G.wind === '东南风' ? '西北风' : '东南风'; G.banner = { txt: '风向变为' + G.wind + '！火势蔓延', t: 1.8 }; }
-    for (const m of G.P.mobs) for (const f of G.fireCells) if (Math.hypot(m.x - f.x, m.y - f.y) < 76) m.hp -= (G.wind === '东南风' ? 18 : 11) * dt;
+    // 火油与风向对双方战场同时生效，维持镜像对抗的公平性。
+    for (const side of [G.P, G.E]) for (const m of side.mobs) for (const f of G.fireCells)
+      if (Math.hypot(m.x - f.x, m.y - f.y) < 76) m.hp -= (G.wind === '东南风' ? 18 : 11) * dt;
     if (G.modeTime <= 0) { G.rewardTxt = '火攻战功 ' + Math.floor(G.modeScore + G.P.killCnt); endBattle(true); }
   } else if (G.mode === 'escort') {
     // 前方敌军越少，护送越快；抵达时以剩余生命结算。
@@ -74,7 +76,7 @@ function modeWaveConfig() {
   if (G.mode === 'rogue') return { waves: 1, per: 5 + G.rogue.floor * 2, mix: [45, 20, 20, 15], hp: 0.85 + G.rogue.floor * 0.12 };
   if (G.mode === 'puzzle') return { waves: 99, per: 6, mix: [45, 35, 10, 10], hp: 0.85 };
   if (G.mode === 'escort') return { waves: 99, per: 5, mix: [45, 20, 25, 10], hp: 0.9 + G.escort.progress / 400 };
-  if (G.mode === 'fire') return { waves: 99, per: 7, mix: [35, 25, 25, 15], hp: 1 }; 
+  if (G.mode === 'fire') return { waves: 99, per: 5, mix: [45, 25, 20, 10], hp: 1, hpAdd: 0, atkTier: 1 };
   if (G.mode === 'raid') return { waves: 0, per: 0, mix: [100, 0, 0, 0], hp: 1 };
   return null;
 }
