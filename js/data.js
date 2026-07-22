@@ -1,11 +1,17 @@
-/* 赵云与阿斗 v2 —— 全量静态数据表（无 DOM） */
+/* 赵云与阿斗 v2 -- 全量静态数据表（无 DOM） */
 'use strict';
 
 /* ---------- 布局 ---------- */
 const W = 375, H = 667, TOP = 32, CELL = 48;
+// 全局 UI 安全区：战斗界面不得绕开这些区域直接硬编码坐标。
+const UI_LAYOUT = {
+  topBar: { y: 0, h: 32 }, enemyField: { y: 32, h: 264 }, messageBand: { y: 296, h: 28 }, playerField: { y: 324, h: 204 },
+  heroStatus: { y: 498, h: 24 }, handRows: [538, 584], actionBar: { y: 636, h: 28 },
+  recycle: { x: 288, y: 636, w: 80, h: 28 }, tempDrawer: { x: 8, y: 504, w: 272, h: 66 },
+};
 // 底部合成栏 2×5 + 操作行（不随战场变）
-const BAR_ROWS = [552, 600], BAR_COLS = [45, 113, 181, 249, 317], BAR_N = 10;
-const RECYCLE = { x: 288, y: 638, w: 80, h: 26 };
+const BAR_ROWS = UI_LAYOUT.handRows, BAR_COLS = [45, 113, 181, 249, 317], BAR_N = 10;
+const RECYCLE = UI_LAYOUT.recycle;
 
 function pathCum(pts) {
   const c = [0];

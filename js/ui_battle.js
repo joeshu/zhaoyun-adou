@@ -233,11 +233,12 @@ function drawGame() {
   btn(339, 4, 33, 24, '菜单', () => { scr = 'menu'; }, { bg: '#868e96', size: 9 });
   // 临时背包：空时完全隐藏；有溢出卡时用右下「包」打开抽屉，避免常驻挤占手牌区。
   if (G.P.tempBag && G.P.tempBag.length > 0) {
-    btn(256, 638, 28, 26, '包' + G.P.tempBag.length, () => { G.tempOpen = !G.tempOpen; }, { size: 8, bg: '#7250b8' });
+    btn(256, UI_LAYOUT.actionBar.y, 28, UI_LAYOUT.actionBar.h, '包' + G.P.tempBag.length, () => { G.tempOpen = !G.tempOpen; }, { size: 8, bg: '#7250b8' });
     if (G.tempOpen) {
-      panel(8, 510, 272, 66, { bg: '#fffdf9', stroke: '#cfc4af', r: 9, blur: 5 });
-      txt('临时背包 · 点卡牌放回合成栏', 18, 525, 10, '#6f6556', 'left', true);
-      const bx = [16, 68, 120], by = 532, bs = 40;
+      const dl = UI_LAYOUT.tempDrawer;
+      panel(dl.x, dl.y, dl.w, dl.h, { bg: '#fffdf9', stroke: '#cfc4af', r: 9, blur: 5 });
+      txt('临时背包 · 点卡牌放回合成栏', dl.x + 10, dl.y + 15, 10, '#6f6556', 'left', true);
+      const bx = [dl.x + 8, dl.x + 60, dl.x + 112], by = dl.y + 22, bs = 38;
       for (let i = 0; i < 3; i++) {
         const u = G.P.tempBag[i];
         rr(bx[i], by, bs, bs, 6); ctx.fillStyle = '#f5f2eb'; ctx.fill(); ctx.setLineDash([3, 2]); ctx.strokeStyle = '#8d96a0'; ctx.stroke(); ctx.setLineDash([]);
@@ -250,26 +251,28 @@ function drawGame() {
           if (!G.P.tempBag.length) G.tempOpen = false;
         }});
       }
-      btn(174, 534, 46, 28, '折现', () => { const n = G.P.tempBag.length; G.P.tempBag = []; G.P.mantou += n * 2; G.tempOpen = false; fl(120, 505, '背包折现 +' + n * 2, '#8b5e3c'); }, { size: 10, bg: '#8e98a3' });
-      btn(226, 534, 42, 28, '收起', () => { G.tempOpen = false; }, { size: 9, bg: '#7c8792' });
+      btn(dl.x + 166, dl.y + 24, 46, 28, '折现', () => { const n = G.P.tempBag.length; G.P.tempBag = []; G.P.mantou += n * 2; G.tempOpen = false; fl(120, 505, '背包折现 +' + n * 2, '#8b5e3c'); }, { size: 10, bg: '#8e98a3' });
+      btn(dl.x + 218, dl.y + 24, 42, 28, '收起', () => { G.tempOpen = false; }, { size: 9, bg: '#7c8792' });
     }
   } else G.tempOpen = false;
-  btn(8, 638, 62, 26, '抽卡 馒' + DRAW.cost, () => doSummon(G.P),
+  const ay = UI_LAYOUT.actionBar.y, ah = UI_LAYOUT.actionBar.h;
+  btn(8, ay, 62, ah, '抽卡 馒' + DRAW.cost, () => doSummon(G.P),
     { size: 11, bg: '#c0392b', disabled: G.P.mantou < DRAW.cost || barFree(G.P) < 0 });
   const tenCostNow = SAVE.firstTen ? (DRAW.tenCost / 2 | 0) : DRAW.tenCost;
-  btn(74, 638, 62, 26, '十连 ' + tenCostNow, () => drawTen(G.P),
+  btn(74, ay, 62, ah, '十连 ' + tenCostNow, () => drawTen(G.P),
     { size: 11, bg: '#a61e4e', disabled: G.P.mantou < tenCostNow || barFree(G.P) < 0 });
   const acts = Object.keys(ITEMS).filter(id => ITEMS[id].act && (G.itemUses[id] || SAVE.loadout.includes(id)));
   acts.slice(0, 2).forEach((id, i) => {
     const n = G.itemUses[id] || 0;
-    btn(140 + i * 58, 638, 54, 26, ITEMS[id].name + '×' + n, () => useActive(id),
+    btn(140 + i * 58, ay, 54, ah, ITEMS[id].name + '×' + n, () => useActive(id),
       { size: 9, bg: G.targeting === id ? '#e8a005' : '#5f3dc4', disabled: !n });
   });
-  rr(RECYCLE.x, RECYCLE.y, RECYCLE.w, RECYCLE.h, 6);
+  const rc = RECYCLE;
+  rr(rc.x, rc.y, rc.w, rc.h, 6);
   ctx.fillStyle = '#e9ecef'; ctx.fill();
   ctx.setLineDash([4, 3]); ctx.strokeStyle = '#868e96'; ctx.stroke(); ctx.setLineDash([]);
-  txt('回收♻', RECYCLE.x + RECYCLE.w / 2, RECYCLE.y + 19, 12, '#868e96', 'center', true);
-  txt('拖单位到此回收', RECYCLE.x + RECYCLE.w / 2, RECYCLE.y + RECYCLE.h - 4, 9, '#adb5bd', 'center');
+  txt('回收♻', rc.x + rc.w / 2, rc.y + rc.h / 2 + 4, 11, '#868e96', 'center', true);
+  txt('拖单位回收', rc.x + rc.w / 2, rc.y + rc.h - 3, 8, '#adb5bd', 'center');
   if (G.targeting) {
     const label = ITEMS[G.targeting] ? ITEMS[G.targeting].name : '道具';
     // 道具上下文操作移至敌我战场分隔带，不再侵占底部手牌与回收区。
