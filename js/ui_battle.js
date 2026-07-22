@@ -150,6 +150,12 @@ function drawGame() {
   });
   // 玩家阿斗状态置于手牌绘制之后，确保不会被底部栏遮挡。
   drawAdou(G.P);
+  // 主将整备状态置于手牌上方，返场时间可见而不遮挡操作。
+  if (G.heroRespawns && G.heroRespawns.length) {
+    const r = G.heroRespawns[0];
+    panel(10, 504, 118, 20, { bg: 'rgba(255,253,249,.92)', stroke: '#d9c8ec', r: 6, blur: 1, offsetY: 0 });
+    txt(r.name + '整备 ' + Math.ceil(Math.max(0, r.t)) + '秒', 18, 518, 10, '#7250b8', 'left', true);
+  }
   for (const sn of G.P.snakes) { txt('蛇', sn.x, sn.y + 5, 15, '#2f9e44', 'center', true); hpBar(sn.x - 12, sn.y + 12, 24, sn.hp / 150, '#2f9e44'); }
   for (const sn of G.E.snakes) txt('蛇', sn.x, sn.y + 5, 15, '#2f9e44', 'center', true);
   for (const m of G.E.mobs) drawMob(m);
@@ -160,7 +166,12 @@ function drawGame() {
     txt(G.egg.ch, G.egg.x, G.egg.y + 6, 20, '#e8a005', 'center', true);
     ctx.globalAlpha = 1;
   }
-  if (G.P.fate.list.length) txt('羁绊：' + G.P.fate.list.join('·'), 10, 315, 10, '#e8a005', 'left', true);
+  if (G.orders && G.orders.length) {
+    panel(10, 302, 220, 22, { bg: 'rgba(255,253,249,.88)', stroke: '#e6dbc8', r: 6, blur: 1, offsetY: 0 });
+    const brief = G.orders.map(o => (o.done ? '✓' : '') + o.name + ' ' + o.value + '/' + o.need).join(' · ');
+    txt(brief, 16, 317, 9, '#7250b8', 'left', true);
+  }
+  if (G.P.fate.list.length) txt('羁绊：' + G.P.fate.list.join('·'), 240, 317, 9, '#b78324', 'left', true);
   // 特效
   for (const f of G.fx) {
     ctx.globalAlpha = clamp(f.t / f.t0, 0, 1) * 0.8;
