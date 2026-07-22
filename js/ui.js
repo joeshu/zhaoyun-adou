@@ -53,55 +53,67 @@ function btn(x, y, w, h, label, fn, opt = {}) {
 
 /* ---------- 菜单 ---------- */
 function drawMenu() {
-  // 温暖纸张底色 + 宫廷红金的层级，将原来密集按钮分成清晰功能区。
   const gold = '#b78324', ink = '#2f3540', slate = '#4b5563', red = '#bf3b2d';
-  ctx.fillStyle = '#f4efe5'; ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = '#eadfcb'; ctx.fillRect(0, 0, W, 6);
+  ctx.fillStyle = '#f4efe5'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#eadfcb'; ctx.fillRect(0, 0, W, 6);
   txt('赵云与阿斗', W / 2, 66, 32, SAVE.eggs.all ? '#d29a22' : ink, 'center', true);
   txt('文字合成塔防 · 全量复刻版', W / 2, 90, 12, '#90949a', 'center');
   panel(64, 105, 247, 35, { bg: '#fffaf0', stroke: '#eadfcb', r: 17, blur: 4 });
   txt('金 ' + SAVE.gold + '     材料 ' + SAVE.mat, W / 2, 128, 15, gold, 'center', true);
 
+  // 第一层：开始战斗
   selStage = clamp(selStage, 1, SAVE.stage);
   const ch = CHAPTERS[Math.min(3, ((selStage - 1) / 10) | 0)];
-  sectionLabel('关卡与战场', 30, 164);
-  panel(20, 174, 335, 115, { bg: '#fffdf9', stroke: '#ebe3d6' });
+  sectionLabel('开始战斗', 30, 164); panel(20, 174, 335, 114, { bg: '#fffdf9', stroke: '#ebe3d6' });
   btn(34, 190, 42, 42, '◀', () => selStage--, { disabled: selStage <= 1, bg: '#8e98a3', size: 15 });
   btn(299, 190, 42, 42, '▶', () => selStage++, { disabled: selStage >= SAVE.stage, bg: '#8e98a3', size: 15 });
   txt('第 ' + selStage + ' 关 · ' + ch + (selStage % 10 === 0 ? ' · BOSS' : ''), W / 2, 215, 16, ink, 'center', true);
-  MAPS.forEach((m, i) => btn(40 + i * 150, 243, 145, 27, m.name, () => { selMap = i; },
-    { size: 12, bg: selMap === i ? red : slate }));
-  const mapEffect = MAPS[selMap].effect;
-  if (mapEffect) txt('战场机制 · ' + mapEffect.name + '：' + mapEffect.tip, W / 2, 284, 10, '#8a7e6c', 'center');
-  btn(30, 301, 315, 45, '开 战', () => { startBattle(selStage, false, selMap); scr = 'game'; }, { size: 20, bg: red });
-  btn(30, 352, 315, 30, SAVE.endless ? '无尽模式 · 最高 ' + SAVE.bestWave + ' 波' : '无尽模式（通关 30 关解锁）',
-    () => { startBattle(STAGE_MAX, true, selMap); scr = 'game'; }, { size: 12, bg: '#6850ba', disabled: !(SAVE.endless || SAVE.endlessOn) });
+  MAPS.forEach((m, i) => btn(40 + i * 150, 243, 145, 27, m.name, () => { selMap = i; }, { size: 12, bg: selMap === i ? red : slate }));
+  const mapEffect = MAPS[selMap].effect; if (mapEffect) txt('战场机制 · ' + mapEffect.name, W / 2, 284, 10, '#8a7e6c', 'center');
+  btn(30, 296, 315, 42, '主线推进 · 开战', () => { startBattle(selStage, false, selMap); scr = 'game'; }, { size: 18, bg: red });
+  btn(30, 344, 154, 30, '特别玩法', () => { scr = 'modes'; }, { size: 11, bg: '#bd4a31' });
+  btn(191, 344, 154, 30, SAVE.endless ? '无尽挑战 · ' + SAVE.bestWave + '波' : '无尽挑战（30关解锁）', () => { startBattle(STAGE_MAX, true, selMap); scr = 'game'; }, { size: 10, bg: '#6850ba', disabled: !(SAVE.endless || SAVE.endlessOn) });
 
-  sectionLabel('对局设置', 30, 407);
-  const DIFF_NAMES = { easy: '简单', normal: '普通', hard: '困难' };
-  btn(30, 417, 100, 29, '难度 · ' + (DIFF_NAMES[SAVE.difficulty] || '普通'), () => { const c = ['easy', 'normal', 'hard']; SAVE.difficulty = c[(c.indexOf(SAVE.difficulty) + 1) % 3]; saveSave(); }, { size: 10, bg: '#318c4a' });
-  btn(138, 417, 100, 29, 'AI · ' + (DIFF_NAMES[SAVE.aiLevel] || '普通'), () => { const c = ['easy', 'normal', 'hard']; SAVE.aiLevel = c[(c.indexOf(SAVE.aiLevel) + 1) % 3]; saveSave(); }, { size: 10, bg: '#6850ba' });
-  btn(246, 417, 99, 29, SAVE.mute ? '🔇 静音' : '🔊 有声', () => { SAVE.mute = !SAVE.mute; saveSave(); sfx('click'); }, { size: 10, bg: SAVE.mute ? '#7c8792' : '#318c4a' });
-  const sw = (x, y, label, on, fn) => btn(x, y, 100, 27, label + (on ? ' · 开' : ' · 关'), fn, { size: 10, bg: on ? '#318c4a' : slate });
-  sw(30, 453, '兵种无敌', SAVE.invincible, () => { SAVE.invincible = !SAVE.invincible; saveSave(); });
-  sw(138, 453, '动态路径', SAVE.dynPath, () => { SAVE.dynPath = !SAVE.dynPath; saveSave(); });
-  sw(246, 453, 'BOSS阶段', SAVE.bossPhase, () => { SAVE.bossPhase = !SAVE.bossPhase; saveSave(); });
-  sw(30, 486, '无尽快捷', SAVE.endlessOn, () => { SAVE.endlessOn = !SAVE.endlessOn; saveSave(); });
-  sw(138, 486, '新橙将', SAVE.newHeros, () => { SAVE.newHeros = !SAVE.newHeros; saveSave(); });
-  sw(246, 486, '武将觉醒', SAVE.awaken, () => { SAVE.awaken = !SAVE.awaken; saveSave(); });
+  // 第二层：养成
+  sectionLabel('养成', 30, 402);
+  btn(30, 412, 100, 34, '武将营', () => { scr = 'camp'; }, { bg: '#7250b8', size: 12 });
+  btn(138, 412, 100, 34, '锻造装备', () => { scr = 'forge'; forgeMsg = ''; }, { bg: slate, size: 12 });
+  btn(246, 412, 99, 34, '道具商店', () => { scr = 'shop'; }, { bg: slate, size: 12 });
+  btn(30, 452, 154, 30, '军师 · 军令', () => { scr = 'command'; }, { size: 11, bg: '#7250b8' });
+  btn(191, 452, 154, 30, '心愿招募', () => { scr = 'wish'; }, { size: 11, bg: '#b78324' });
 
-  sectionLabel('养成与管理', 30, 536);
-  btn(30, 546, 100, 34, '道具商店', () => { scr = 'shop'; }, { bg: slate, size: 12 });
-  btn(138, 546, 100, 34, '锻造装备', () => { scr = 'forge'; forgeMsg = ''; }, { bg: slate, size: 12 });
-  btn(246, 546, 99, 34, '武将营', () => { scr = 'camp'; }, { bg: '#7250b8', size: 12 });
+  // 第三层：记录
+  sectionLabel('记录', 30, 510);
+  btn(30, 520, 100, 32, '成就', () => { scr = 'ach'; }, { bg: slate, size: 11 });
+  btn(138, 520, 100, 32, '对战录像', () => { scr = 'ghost'; ghostMsg = ''; loadGhostList(); }, { bg: '#6850ba', size: 11 });
+  btn(246, 520, 99, 32, '存档管理', () => { scr = 'save'; saveMsg = ''; }, { bg: slate, size: 11 });
   const canSign = canDaily();
-  btn(30, 587, 154, 30, (canSign ? '✓ ' : '') + '每日签到', () => { scr = 'daily'; dailyMsg = ''; }, { size: 11, bg: canSign ? '#318c4a' : slate });
-  btn(191, 587, 154, 30, '军师 · 军令', () => { scr = 'command'; }, { size: 11, bg: '#7250b8' });
-  btn(30, 624, 100, 28, '特别玩法', () => { scr = 'modes'; }, { size: 10, bg: '#bd4a31' });
-  btn(138, 624, 100, 28, '对战录像', () => { scr = 'ghost'; ghostMsg = ''; loadGhostList(); }, { size: 10, bg: '#6850ba' });
-  btn(246, 624, 99, 28, '玩法说明', () => { scr = 'help'; }, { size: 10, bg: slate });
+  btn(30, 558, 154, 28, (canSign ? '✓ ' : '') + '每日签到', () => { scr = 'daily'; dailyMsg = ''; }, { size: 11, bg: canSign ? '#318c4a' : slate });
+  btn(191, 558, 154, 28, '玩法说明', () => { scr = 'help'; }, { size: 11, bg: slate });
+
+  // 非核心规则与实验性功能收进实验室，避免新人首页被开关淹没。
+  btn(30, 612, 210, 30, '设置 · 实验室', () => { scr = 'lab'; }, { size: 11, bg: '#7c8792' });
+  btn(246, 612, 99, 30, SAVE.mute ? '🔇 静音' : '🔊 有声', () => { SAVE.mute = !SAVE.mute; saveSave(); }, { size: 10, bg: SAVE.mute ? '#7c8792' : '#318c4a' });
 }
 
+
+/* ---------- 设置与实验室 ---------- */
+function drawLab() {
+  txt('设置 · 实验室', W / 2, 48, 23, '#2f3540', 'center', true);
+  txt('难度与实验规则；默认关闭，不影响正常主线体验', W / 2, 70, 10, '#8a7e6c', 'center');
+  const DIFF_NAMES = { easy: '简单', normal: '普通', hard: '困难' };
+  btn(30, 92, 150, 34, '难度 · ' + (DIFF_NAMES[SAVE.difficulty] || '普通'), () => { const c=['easy','normal','hard']; SAVE.difficulty=c[(c.indexOf(SAVE.difficulty)+1)%3]; saveSave(); }, { size: 12, bg: '#318c4a' });
+  btn(195, 92, 150, 34, 'AI · ' + (DIFF_NAMES[SAVE.aiLevel] || '普通'), () => { const c=['easy','normal','hard']; SAVE.aiLevel=c[(c.indexOf(SAVE.aiLevel)+1)%3]; saveSave(); }, { size: 12, bg: '#7250b8' });
+  txt('实验规则', 30, 154, 12, '#a48b63', 'left', true);
+  const sw=(x,y,label,on,fn)=>btn(x,y,150,32,label+(on?' · 开':' · 关'),fn,{size:11,bg:on?'#318c4a':'#4b5563'});
+  sw(30,166,'兵种无敌',SAVE.invincible,()=>{SAVE.invincible=!SAVE.invincible;saveSave();});
+  sw(195,166,'动态路径',SAVE.dynPath,()=>{SAVE.dynPath=!SAVE.dynPath;saveSave();});
+  sw(30,206,'BOSS阶段',SAVE.bossPhase,()=>{SAVE.bossPhase=!SAVE.bossPhase;saveSave();});
+  sw(195,206,'无尽快捷',SAVE.endlessOn,()=>{SAVE.endlessOn=!SAVE.endlessOn;saveSave();});
+  sw(30,246,'新橙将',SAVE.newHeros,()=>{SAVE.newHeros=!SAVE.newHeros;saveSave();});
+  sw(195,246,'武将觉醒',SAVE.awaken,()=>{SAVE.awaken=!SAVE.awaken;saveSave();});
+  sw(30,286,'装备扩展',SAVE.gearOn,()=>{SAVE.gearOn=!SAVE.gearOn;saveSave();});
+  btn(128,590,120,34,'返回',()=>{scr='menu';},{bg:'#7c8792'});
+}
 
 /* ---------- 玩法说明 ---------- */
 function drawHelp() {
@@ -466,6 +478,7 @@ function draw() {
   else if (scr === 'ghost') drawGhost();
   else if (scr === 'stats') drawStats();
   else if (scr === 'command') drawCommand();
+  else if (scr === 'lab') drawLab();
   else if (scr === 'modes') drawModes();
   else drawGame();
 }
