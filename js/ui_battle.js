@@ -96,6 +96,10 @@ function drawMob(m) {
   if (m.boss) txt(MOBS[m.type].name, m.x, m.y - size * 0.72, 9, '#a61e4e', 'center', true);
   const bw = m.boss ? 40 : 22;
   hpBar(m.x - bw / 2, m.y + size * 0.62 + 3, bw, m.hp / m.maxhp, '#fa5252');
+  if (m.boss && MOBS[m.type].castIv) {
+    ctx.fillStyle = '#e9ecef'; ctx.fillRect(m.x - 20, m.y + size * .62 + 9, 40, 3);
+    ctx.fillStyle = m.warnCast ? '#f59f00' : '#7250b8'; ctx.fillRect(m.x - 20, m.y + size * .62 + 9, 40 * (1 - m.castT / MOBS[m.type].castIv), 3);
+  }
   if (m.stun > 0) txt('✦', m.x + size * 0.6, m.y - size * 0.5, 10, '#e8a005', 'center');
   if (m.slowT > 0) txt('泥', m.x - size * 0.7, m.y - size * 0.5, 8, '#846358', 'center');
 }

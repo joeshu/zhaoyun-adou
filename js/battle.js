@@ -217,7 +217,7 @@ function spawnMob(S, type, hpMul, press) {
   S.mobs.push({
     type, hp, maxhp: hp, phase: 1, phaseDone: { 2: false, 3: false },
     spd: b.spd, atk: b.atk * (G.atkMul || 1) * Math.sqrt(hpMul), dmg: b.dmg, gold: b.gold, boss: !!b.boss, press: !!press,
-    d: 0, x: S.path[0][0], y: S.path[0][1], stun: 0, flash: 0, atkT: 0, castT: b.castIv || 0, slowT: 0,
+    d: 0, x: S.path[0][0], y: S.path[0][1], stun: 0, flash: 0, atkT: 0, castT: b.castIv || 0, warnCast: false, slowT: 0,
   });
 }
 function bossCast(S, m, mb) {                   // BOSS 周期技能（文档 5.3）
@@ -267,7 +267,11 @@ function updMob(S, m, dt) {
   }
   if (m.castT) {
     m.castT -= dt;
-    if (m.castT <= 0) { m.castT = mb.castIv; bossCast(S, m, mb); }
+    if (m.boss && S.side > 0 && m.castT <= 1.5 && !m.warnCast) {
+      m.warnCast = true;
+      G.banner = { txt: mb.name + '即将发动：' + (mb.tip || '技能'), t: 1.5 };
+    }
+    if (m.castT <= 0) { m.castT = mb.castIv; m.warnCast = false; bossCast(S, m, mb); }
   }
   let spd = m.spd * (m.slowT > 0 ? 0.5 : 1) * (S.slowT > 0 ? 0.5 : 1);
   if (mb.charge && m.hp < m.maxhp * 0.5) spd *= 2;          // 重甲骑兵：半血冲锋
