@@ -32,11 +32,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: 'lts/*'
+          # 不启用 cache: npm，因为本项目无 package-lock.json（Capacitor 依赖在 CI 现装现用）
 
       - name: Install npm dependencies (Capacitor)
-        run: npm install --no-audit --no-fund
+        run: npm install --no-audit --no-fund --no-package-lock
 
       - name: Prepare www/ (复制静态资源)
         run: node scripts/prepare-www.js
