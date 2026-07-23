@@ -1,9 +1,25 @@
 /* v2 战斗模拟：怪物围殴防线 / 单位攻击克制 / 武将技能 / 专武特效 / 灵蛇 / 压力怪 */
 'use strict';
 
+// 统一飘字入口：所有 fl() 调用经此汇入 popFloat（info 类），保证淡出/封顶/样式统一（#3）。
 function fl(x, y, txt, col) {
-  if (!G || G.floats.length > 60) return;
-  G.floats.push({ x, y, txt, col, t: 0.8 });
+  popFloat(x, y, 'info', null, { txt, col });
+}
+// 统一上浮飘字类型（伤害/治疗/金/馒/暴击）；挂载受击、治疗、资源入账处（battle/actions/game）
+const FLOAT_KINDS = {
+  dmg:    { col: '#ff6b6b', size: 11 },
+  heal:   { col: '#2f9e44', size: 11 },
+  gold:   { col: '#b0801f', size: 13 },
+  mantou: { col: '#8b5e3c', size: 13 },
+  crit:   { col: '#ffd43b', size: 13 },
+  info:   { col: '#868e96', size: 10 },
+};
+function popFloat(x, y, kind, val, opt) {
+  if (!G || G.floats.length > 80) return;
+  const k = FLOAT_KINDS[kind] || FLOAT_KINDS.info;
+  let s = (opt && opt.txt != null) ? opt.txt : (val != null ? String(val) : '');
+  if (val != null && (kind === 'gold' || kind === 'mantou')) s = '+' + val;
+  G.floats.push({ x, y, txt: s, col: (opt && opt.col) || k.col, size: (opt && opt.size) || k.size, t: (opt && opt.t) || 0.9, t0: (opt && opt.t) || 0.9, vy: (opt && opt.vy) || 30 });
 }
 function boom(x, y, col) {
   if (!G) return;
@@ -16,6 +32,15 @@ function boomRadial(x, y, col) {
   for (let i = 0; i < 14 && G.parts.length < 200; i++) {
     const a = Math.random() * Math.PI * 2, sp = rnd(80, 200);
     G.parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: rnd(0.3, 0.7), col, r: rnd(2, 4) });
+  }
+}
+// 单位死亡/消散演出：溶解环 + 轻微粒子（复用 fxRing/粒子骨架，不进入模拟逻辑，零回归风险）
+function fxDissolve(x, y, col) {
+  if (!G) return;
+  fxRing(x, y, 16, col, 0.4);
+  for (let i = 0; i < 6 && G.parts.length < 200; i++) {
+    const a = Math.random() * Math.PI * 2, sp = rnd(20, 60);
+    G.parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 30, t: rnd(0.3, 0.6), col, r: rnd(1.5, 3) });
   }
 }
 // 屏震：累积最大幅度，drawGame 每帧衰减
@@ -39,9 +64,9 @@ function dealDmg(S, m, dmg, byUnit, cell) {
   const mb = MOBS[m.type];
   let crit = false;
   if (byUnit) {
-    if (mb.armor && ((byUnit.t === 'troop' && byUnit.type === '枪') || (byUnit.t === 'hero' && HEROES[byUnit.name].wq === '枪'))) { dmg *= 2; crit = crit || atkSide > 0; if (atkSide > 0) { boom(m.x, m.y, '#ffd43b'); fl(m.x, m.y - 18, '暴击!', '#ffd43b'); } }
-    if (m.type === '弩' && byUnit.t === 'troop' && byUnit.type === '骑') { dmg *= 2; crit = crit || atkSide > 0; if (atkSide > 0) { boom(m.x, m.y, '#ffd43b'); fl(m.x, m.y - 18, '暴击!', '#ffd43b'); } }
-    if (m.type === '骑' && byUnit.t === 'hero' && HEROES[byUnit.name].vs骑) { dmg *= HEROES[byUnit.name].vs骑; crit = crit || atkSide > 0; if (atkSide > 0) { boom(m.x, m.y, '#ffd43b'); fl(m.x, m.y - 18, '暴击!', '#ffd43b'); } }
+    if (mb.armor && ((byUnit.t === 'troop' && byUnit.type === '枪') || (byUnit.t === 'hero' && HEROES[byUnit.name].wq === '枪'))) { dmg *= 2; crit = crit || atkSide > 0; if (atkSide > 0) { boom(m.x, m.y, '#ffd43b'); popFloat(m.x, m.y - 18, 'crit', null, { txt: '暴击!' }); } }
+    if (m.type === '弩' && byUnit.t === 'troop' && byUnit.type === '骑') { dmg *= 2; crit = crit || atkSide > 0; if (atkSide > 0) { boom(m.x, m.y, '#ffd43b'); popFloat(m.x, m.y - 18, 'crit', null, { txt: '暴击!' }); } }
+    if (m.type === '骑' && byUnit.t === 'hero' && HEROES[byUnit.name].vs骑) { dmg *= HEROES[byUnit.name].vs骑; crit = crit || atkSide > 0; if (atkSide > 0) { boom(m.x, m.y, '#ffd43b'); popFloat(m.x, m.y - 18, 'crit', null, { txt: '暴击!' }); } }
   }
   if (mb.armor) dmg *= 1 - mb.armor;
   m.hp -= dmg; m.flash = 0.12;
@@ -56,6 +81,7 @@ function dealDmg(S, m, dmg, byUnit, cell) {
     m.stun = Math.max(m.stun, 1);
   if (m.hp > 0) return;
   m.dead = true;
+  if (G.deaths) G.deaths.push({ x: m.x, y: m.y, type: m.type, boss: !!m.boss, t: 0.4, t0: 0.4, col: mb.boss ? '#a61e4e' : '#c0392b' });  // 死亡溶解演出层
   if (m.boss) { addShake(6); boomRadial(m.x, m.y, '#e8a005'); }   // BOSS 爆裂屏震
   const gain = m.gold + (G.goldAdd || 0);                   // 击杀奖励 = 基础 + floor(关卡/3)
   S.mantou += gain;
@@ -64,14 +90,14 @@ function dealDmg(S, m, dmg, byUnit, cell) {
   if (S.side > 0 && G && G.mode === 'fire') G.modeScore = (G.modeScore || 0) + 1;
   if (S.side > 0) {                          // 连杀：5秒内3杀→攻速+20%（独立计数，不干扰压力怪killCnt）
     S.combo++; S.comboT = 5;
-    if (S.combo === 3) { G.banner = { txt: '连杀! 攻速+20%', t: 1.2 }; fl(m.x, m.y - 30, '连杀 x' + S.combo, '#ffd43b'); }
-    else if (S.combo > 3 && S.combo % 5 === 0) { fl(m.x, m.y - 30, '连杀 x' + S.combo, '#ffd43b'); }
+    if (S.combo === 3) { G.banner = { txt: '连杀! 攻速+20%', t: 1.2 }; popFloat(m.x, m.y - 30, 'crit', null, { txt: '连杀 x' + S.combo }); }
+    else if (S.combo > 3 && S.combo % 5 === 0) { popFloat(m.x, m.y - 30, 'crit', null, { txt: '连杀 x' + S.combo }); }
   }
   if (S.side > 0) {
-    fl(m.x, m.y, '+' + gain, '#8b5e3c'); boom(m.x, m.y, '#e03131');
+    popFloat(m.x, m.y, 'gold', gain); boom(m.x, m.y, '#e03131');
     sfx(m.boss ? 'boss' : 'kill');                          // 音效（P1-3）
-    if (m.boss) { G.goldEarn += m.gold; SAVE.mat++; fl(m.x, m.y - 16, '材料+1', '#e8a005'); }
-    if (m.type === '粮') { S.mantou += 10; fl(m.x, m.y - 16, '截获补给 +10馒', '#b78324'); }
+    if (m.boss) { G.goldEarn += m.gold; SAVE.mat++; popFloat(m.x, m.y - 16, 'info', null, { txt: '材料+1', col: '#e8a005' }); }
+    if (m.type === '粮') { S.mantou += 10; popFloat(m.x, m.y - 16, 'mantou', 10, { txt: '截获补给 +10馒' }); }
     if (SAVE.stats) SAVE.stats.kills++;
     if (typeof orderProgress === 'function') orderProgress('kills');
     if (typeof evKill === 'function') evKill(S.side, m);
@@ -106,7 +132,7 @@ function damageUnit(S, holder, atk) {         // holder: cell 或 snake
   u.hp -= d;
   // 打击反馈：受击闪白（复用 drawUnitAt 红描边）+ 伤害飘字（粒子留给击杀段，避免翻倍）
   u.animT = Math.max(u.animT || 0, 0.18);
-  if (S.side > 0) fl(holder.x, holder.y - 22, '-' + Math.round(d), '#ff6b6b');
+  if (S.side > 0) popFloat(holder.x, holder.y - 22, 'dmg', Math.round(d));
   if (u.hp > 0) return;
   if (holder.unit) {
     if (S.side > 0) { fl(holder.x, holder.y, (u.t === 'hero' ? u.name : u.type || '') + '阵亡', '#868e96'); boom(holder.x, holder.y, '#868e96'); }
@@ -210,7 +236,7 @@ function castSkill(S, cell, u) {
 }
 function hitOne(S, u, cell, m, st) {            // 单发命中（含每击特效）
   let dmg = st.dmg;
-  if (u.weapon === 'guding' && Math.random() < 0.25) { dmg *= 2; fl(m.x, m.y - 14, '暴击!', '#e8a005'); }
+  if (u.weapon === 'guding' && Math.random() < 0.25) { dmg *= 2; popFloat(m.x, m.y - 14, 'crit', null, { txt: '暴击!' }); }
   if (u.weapon === 'luori') dmg *= 1 + Math.hypot(m.x - cell.x, m.y - cell.y) / 300;
   if (u.weapon === 'goulian' && Math.random() < 0.2) { m.slowT = 2; }
   dealDmg(S, m, dmg, u, cell);
@@ -278,7 +304,7 @@ function tickFateSkills(S, dt) {
   if (S.fate.list.includes('桃园羁绊') && ready('桃园羁绊')) {
     S.fateCd['桃园羁绊'] = 25;
     for (const c of S.cells) if (c.unit && !noDeploy(c.unit)) { const st = unitStats(c.unit, S); c.unit.hp = Math.min(st.maxhp, c.unit.hp + st.maxhp * .22); }
-    if (S.side > 0) { G.banner = { txt:'桃园结义：全军恢复', t:1.4 }; fl(187, 320, '桃园结义', '#2f9e44'); }
+    if (S.side > 0) { G.banner = { txt:'桃园结义：全军恢复', t:1.4 }; popFloat(187, 320, 'heal', null, { txt: '桃园结义 全军恢复', col: '#2f9e44' }); }
     if (typeof evFateSkill === 'function') evFateSkill('桃园羁绊');
   }
   if (S.fate.list.includes('五虎羁绊') && ready('五虎羁绊')) {
@@ -410,9 +436,10 @@ function hurtAdou(S, dmg) {
   if (S.side > 0 && SAVE.gearOn && SAVE.equipArmor && ARMORS[SAVE.equipArmor]) dmg *= (1 - ARMORS[SAVE.equipArmor].def);
     S.hp -= dmg;
     boom(S.adou.x, S.adou.y, '#e03131');
-    if (S.side > 0) { G.flash = 0.4; addShake(4); fl(S.adou.x, S.adou.y - 30, '阿斗受袭 -' + dmg, '#e03131'); sfx('hurt'); }  // 音效（P1-3）
+    if (S.side > 0) { G.flash = 0.4; addShake(4); popFloat(S.adou.x, S.adou.y - 30, 'dmg', dmg, { txt: '阿斗受袭 -' + dmg }); sfx('hurt'); }  // 音效（P1-3）
   if (S.hp <= 0 && S.side > 0 && hasItem('xuming') && !S.xumingUsed) {
     S.xumingUsed = true; S.hp = 3;
     G.banner = { txt: '续命丹! 阿斗回魂', t: 1.5 };
+    popFloat(S.adou.x, S.adou.y - 30, 'heal', 3, { txt: '续命丹! 回魂', col: '#2f9e44' });
   }
 }

@@ -97,6 +97,54 @@ function drawMapMotif(cx, w, h, mapIdx, intensity) {
   }
 }
 
+/* ========== 战场环境氛围动效（#8，可选） ==========
+   每地图主题一套轻量氛围粒子：≤20 颗、按时间驱动、绘制于棋盘之下（drawGame 早期），
+   复用既有 MAP_THEMES 配色；数组预分配、逐帧只做位移与 alpha，避免每帧 heavy 分配（保 iOS 侧载性能）。 */
+var _amb = null, _ambMap = -1, _ambT = 0;
+function ensureAmbient(mapIdx) {
+  if (_amb && _ambMap === mapIdx) return;
+  _ambMap = mapIdx; _amb = [];
+  var mt = MAP_THEMES[mapIdx] || MAP_THEMES[0];
+  var n = 16;                                       // ≤20，严格限制
+  for (var i = 0; i < n; i++) {
+    _amb.push({
+      x: Math.random() * W, y: TOP + Math.random() * (H - TOP),
+      r: 1 + Math.random() * 2,
+      spd: 6 + Math.random() * 16,
+      ph: Math.random() * Math.PI * 2,
+      ax: 3 + Math.random() * 7,
+      col: mt.accent,
+      mode: mapIdx,                                 // 0 落沙 / 1 水影 / 2 浮岚 / 3 微光
+    });
+  }
+}
+function drawAmbient(mapIdx) {
+  ensureAmbient(mapIdx);
+  _ambT += DT60;
+  ctx.save();
+  for (var i = 0; i < _amb.length; i++) {
+    var a = _amb[i];
+    if (a.mode === 0) {                              // 长坂坡：黄沙缓缓下落
+      a.y += a.spd * DT60; a.x += Math.sin(_ambT + a.ph) * a.ax * DT60;
+      if (a.y > H + 4) { a.y = TOP - 4; a.x = Math.random() * W; }
+    } else if (a.mode === 1) {                       // 赤壁：江风水影横向微漾
+      a.x += Math.sin(_ambT * 0.8 + a.ph) * a.ax * DT60 * 1.4; a.y += 2 * DT60;
+      if (a.x > W + 4) a.x = -4; else if (a.x < -4) a.x = W + 4;
+      if (a.y > H) a.y = TOP;
+    } else if (a.mode === 2) {                       // 街亭：山岚缓慢上浮
+      a.y -= a.spd * 0.5 * DT60; a.x += Math.sin(_ambT + a.ph) * a.ax * DT60 * 0.6;
+      if (a.y < TOP - 4) { a.y = H + 4; a.x = Math.random() * W; }
+    } else {                                         // 函谷关：崖壁微光呼吸（位移极小）
+      a.x += Math.sin(_ambT * 0.5 + a.ph) * a.ax * DT60 * 0.3;
+    }
+    var al = 0.10 + 0.07 * Math.sin(_ambT * 2 + a.ph);
+    ctx.globalAlpha = Math.max(0.03, al);
+    ctx.fillStyle = a.col;
+    ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, 7); ctx.fill();
+  }
+  ctx.restore();
+}
+
 /* --- Motif: 长坂坡 Dust (warm sand tone) ---
    APPROVED look: mostly sand color, subtle atmospheric patches, no heavy silhouettes. */
 function paintDust(cx, w, h, intensity) {
@@ -558,6 +606,9 @@ function drawGame() {
   var mapCanvas = getMapBg(G.mapIdx, intensity);
   ctx.drawImage(mapCanvas, 0, 0);
 
+  /* ---- 战场环境氛围（#8）：绘制于路径/单位之下，≤20 粒子、时间驱动、无每帧分配 ---- */
+  drawAmbient(G.mapIdx);
+
   /* ---- Path (double-line, bug #1 fixed) ---- */
   drawPath(G.E); drawPath(G.P);
 
@@ -608,6 +659,20 @@ function drawGame() {
   /* Mobs */
   for (const m of G.E.mobs) drawMob(m);
   for (const m of G.P.mobs) drawMob(m);
+
+  /* 单位死亡溶解层（#5）：hp<=0 移除时由 dealDmg 推入 G.deaths；此处逐帧淡出+轻微放大，
+     配合 dealDmg 内 fxDissolve 的溶解环/粒子，替代原"瞬间消失"，零模拟逻辑改动、零回归风险 */
+  if (G.deaths && G.deaths.length) {
+    for (const d of G.deaths) {
+      const a = clamp(d.t / d.t0, 0, 1);
+      ctx.globalAlpha = a * 0.9;
+      const s = (d.boss ? 28 : 16) * (1 + (1 - a) * 0.35);
+      txt(d.type, d.x, d.y + s * 0.35, s, d.col, 'center', true);
+      ctx.globalAlpha = 1;
+      d.t -= DT60;
+    }
+    G.deaths = G.deaths.filter(d => d.t > 0);
+  }
 
   /* Egg */
   if (G.egg) {
@@ -677,11 +742,11 @@ function drawGame() {
   ctx.globalAlpha = 1;
   G.parts = G.parts.filter(p => p.t > 0);
 
-  /* Float texts */
+  /* 统一上浮飘字（#3）：按各自 t0/size/vy 淡出与位移；数组封顶已在 popFloat 内处理（≤80） */
   for (const f of G.floats) {
-    ctx.globalAlpha = clamp(f.t / 0.8, 0, 1);
-    txt(f.txt, f.x, f.y, 10, f.col, 'center', true);
-    f.y -= 26 * DT60; f.t -= DT60;
+    ctx.globalAlpha = clamp(f.t / (f.t0 || 0.8), 0, 1);
+    txt(f.txt, f.x, f.y, f.size || 10, f.col, 'center', true);
+    f.y -= (f.vy || 26) * DT60; f.t -= DT60;
   }
   ctx.globalAlpha = 1;
   G.floats = G.floats.filter(f => f.t > 0);
@@ -728,7 +793,7 @@ function drawGame() {
   btn(273, 4, 32, 24, G.paused ? '▶' : 'Ⅱ', () => { G.paused = !G.paused; }, { bg: '#495057', size: 11 });
   btn(306, 4, 32, 24, SAVE.mute ? '🔇' : '🔊', () => { SAVE.mute = !SAVE.mute; saveSave(); sfx('click'); if (typeof stopBgm === 'function') stopBgm(); },
     { bg: SAVE.mute ? '#e03131' : '#2f9e44', size: 12 });
-  btn(339, 4, 32, 24, '菜单', () => { scr = 'menu'; }, { bg: '#868e96', size: 9 });
+  btn(339, 4, 32, 24, '菜单', () => { goTo('menu'); }, { bg: '#868e96', size: 9 });
 
   /* Temp bag */
   if (G.P.tempBag && G.P.tempBag.length > 0) {
@@ -890,20 +955,43 @@ function drawGame() {
     const acts2 = [];
     if (!G.endless && G.stage < STAGE_MAX) acts2.push(['下一关', () => { startBattle(G.stage + 1, false, G.mapIdx); }]);
     acts2.push(['再来一局', () => { startBattle(G.stage, G.endless, G.mapIdx); }]);
-    acts2.push(['返回菜单', () => { scr = 'menu'; selStage = SAVE.stage; }, '#868e96']);
+    acts2.push(['返回菜单', () => { goTo('menu'); selStage = SAVE.stage; }, '#868e96']);
     let desc = G.rewardTxt;
     if (G.stage === 30 && !SAVE.eggs.acc) desc += '  (停留' + Math.max(0, Math.ceil(10 - G.resultT)) + 's…)';
     overlay('胜 利', desc, acts2);
   } else if (G.state === 'lose') {
     overlay('失 败', '阿斗被掳走 · ' + G.rewardTxt, [
       ['再来一局', () => { startBattle(G.stage, G.endless, G.mapIdx); }],
-      ['返回菜单', () => { scr = 'menu'; }, '#868e96'],
+      ['返回菜单', () => { goTo('menu'); }, '#868e96'],
     ]);
   } else if (G.paused) {
     overlay('已暂停', '', [
       ['继续', () => { G.paused = false; }],
-      ['退出对局', () => { scr = 'menu'; }, '#868e96'],
+      ['退出对局', () => { goTo('menu'); }, '#868e96'],
     ]);
+  }
+
+  /* 手动大招专属全屏演出（#7）：金色闪光 + 中央扩散环 + 暗角 + 横幅；
+     与觉醒（fxRing+boomRadial+shake+banner）区分但同调，仅作用于手动大招释放瞬间 */
+  if (G.ultFx) {
+    var up = 1 - G.ultFx.t / G.ultFx.t0;                 // 0→1 进度
+    ctx.save();
+    ctx.globalAlpha = clamp(G.ultFx.t * 0.45, 0, 0.6);
+    ctx.fillStyle = '#e8a005'; ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 1;
+    var ucx = W / 2, ucy = H / 2, uR = up * 360, uA = 1 - up;
+    ctx.globalAlpha = clamp(uA, 0, 1) * 0.85;
+    ctx.strokeStyle = '#e8a005'; ctx.lineWidth = 4 + 5 * uA;
+    ctx.beginPath(); ctx.arc(ucx, ucy, uR, 0, 7); ctx.stroke();
+    ctx.globalAlpha = clamp(uA, 0, 1) * 0.35;           // 轻量暗角（粗描边框，避免每帧大渐变分配）
+    ctx.strokeStyle = 'rgba(40,28,10,.9)'; ctx.lineWidth = 26;
+    ctx.strokeRect(13, 13, W - 26, H - 26);
+    ctx.globalAlpha = clamp(G.ultFx.t * 1.4, 0, 1);
+    ctx.font = 'bold 30px "PingFang SC","Microsoft YaHei",sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff7e0'; ctx.fillText((G.ultFx.hero || '') + '·大招!', ucx, ucy + 10);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+    G.ultFx.t -= DT60; if (G.ultFx.t <= 0) G.ultFx = null;
   }
 }
 

@@ -8,7 +8,8 @@ let saveConfirm = false, saveMsg = '';   // 存档页：清除二次确认 / 保
 let canvas, ctx, scaleF = 1;
 // 轻量滚动（列表超屏时启用，如 equip 18 武将）：btn 记录的 y 减去 g_scrollY 以贴合屏幕坐标
 let g_scrollY = 0, listScroll = 0, listScrollMax = 0, LIST_AREA = null, scrollDrag = null;
-let _lastScr = '', _wipe = 0;                 // 过场淡入：切屏时短暂遮罩
+let _lastScr = '', _wipe = 0, _pendingScr = null, _wipeOut = 0;   // 过场：_wipe 进场淡入；_wipeOut 出场淡出（goTo 触发）
+let g_ptrDown = false, g_ptrHit = null;            // 全局"指针按下"标记，驱动 btn 按下态（不改命中区）
 const DT60 = 1 / 60;
 
 // 字体字符串缓存：txt() 每帧被调用上百次，避免重复拼接与重复设置 ctx.font
@@ -39,6 +40,20 @@ function wrapText(s, x, y, size, col, maxW, bold = false) {
   }
   if (line) ctx.fillText(line, x, y + yOff);
   return yOff + lh;
+}
+// 小屏信息密度兜底（#9）：文本溢出容器或字号过小时动态缩字号（下限 8px），不换行、不越界。
+function txtFit(s, x, y, size, col, align, bold, maxW) {
+  const m = maxW || W;
+  let sz = size;
+  while (sz > 8) {
+    const key = sz + (bold ? 'b' : '');
+    let f = _fontCache.get(key);
+    if (!f) { f = `${bold ? 'bold ' : ''}${sz}px "PingFang SC","Microsoft YaHei",sans-serif`; _fontCache.set(key, f); }
+    ctx.font = f;
+    if (ctx.measureText(s).width <= m) break;
+    sz -= 1;
+  }
+  txt(s, x, y, sz, col, align, bold);
 }
 function rr(x, y, w, h, r) {
   ctx.beginPath();
@@ -88,6 +103,11 @@ function hpBar(x, y, w, p, col) {
 function btn(x, y, w, h, label, fn, opt = {}) {
   btns.push({ x, y: y - g_scrollY, w, h, fn, disabled: opt.disabled, label: String(label) });   // label 仅用于调试/自动化检测（如重叠扫描），不影响点击
   const r = opt.r !== undefined ? opt.r : 9;
+  // 按下态：命中且指针按下的按钮整体下沉/缩放（命中区由 btns[] 几何决定，此处仅改绘制，不缩放命中区）
+  const pressed = g_ptrDown && g_ptrHit && !opt.disabled &&
+    g_ptrHit.x === x && g_ptrHit.y === y - g_scrollY && g_ptrHit.w === w && g_ptrHit.h === h;
+  ctx.save();
+  if (pressed) { const cx = x + w / 2, cy = y + h / 2; ctx.translate(cx, cy); ctx.scale(0.96, 0.96); ctx.translate(-cx, -cy); }
   const grad = opt.grad || [opt.bg || '#4b5563', shade(opt.bg || '#4b5563', 0.78)];
   const g = ctx.createLinearGradient(0, y, 0, y + h);
   if (opt.disabled) { g.addColorStop(0, '#e5e0d5'); g.addColorStop(1, '#cfc8b8'); }
@@ -99,6 +119,10 @@ function btn(x, y, w, h, label, fn, opt = {}) {
     rr(x + 1, y + 1, w - 2, h * 0.5, Math.max(1, r - 1)); ctx.fillStyle = hl; ctx.fill();
   }
   rr(x, y, w, h, r); ctx.strokeStyle = opt.disabled ? '#b8b0a0' : 'rgba(0,0,0,.16)'; ctx.lineWidth = 1; ctx.stroke();
+  if (pressed) {   // 按下态：内阴影/下沉描边
+    rr(x + 1, y + 1, w - 2, h - 2, Math.max(1, r - 1));
+    ctx.strokeStyle = 'rgba(0,0,0,.30)'; ctx.lineWidth = 2; ctx.stroke();
+  }
   ctx.save();
   const size = opt.size || 14, lines = String(label).split('\n');
   const prevBaseline = ctx.textBaseline; ctx.textBaseline = 'middle';
@@ -106,12 +130,27 @@ function btn(x, y, w, h, label, fn, opt = {}) {
     txt(ln, x + w / 2, y + h / 2 + (i - (lines.length - 1) / 2) * (size + 3), size, opt.col || '#fff', 'center', true));
   ctx.textBaseline = prevBaseline;
   ctx.restore();
+  ctx.restore();
 }
 // 资源小药丸（Phase 0 #32 图标化）：色点 + 文字，扫视更快
 function resChip(label, x, y, dot) {
   rr(x, y, 64, 18, 9); ctx.fillStyle = '#fffdf9'; ctx.fill();
   ctx.fillStyle = dot; ctx.beginPath(); ctx.arc(x + 11, y + 9, 5, 0, 7); ctx.fill();
   txt(label, x + 22, y + 13, 11, '#495057', 'left', true);
+}
+
+/* ---------- 切屏过场：goTo 统一进场/出场 ---------- */
+// 所有 scr 切换经 goTo：先播放旧屏"出场"淡出，完成后再切屏触发新屏"进场"淡入（draw() 内处理）。
+// 防止重复触发：动画进行中或目标即当前屏时忽略。不触碰任何游戏逻辑，仅控制视觉过场。
+function goTo(s) {
+  if (s === scr || _wipeOut > 0) return;
+  _pendingScr = s; _wipeOut = 0.22;
+}
+
+/* ---------- 统一子屏返回键（#1 根治遮挡） ---------- */
+// 右下对齐、尺寸一致、风格统一；底部预留不压列表末项。所有子屏均经此返回主菜单。
+function backBtn() {
+  btn(W - 30 - 99, H - 63, 99, 34, '返回', () => { goTo('menu'); }, { grad: THEME.slate });
 }
 
 // 列表滚动容器：裁剪绘制区 + 应用 g_scrollY 偏移 + 右侧滚动条；contentH 为内容总高
@@ -218,29 +257,29 @@ function drawMenu() {
   MAPS.forEach((m, i) => btn(24 + i * 82, 243, 80, 27, m.name, () => { selMap = i; }, { size: 11, grad: selMap === i ? THEME.vermilion : THEME.slate, r: 8 }));
   const mapEffect = MAPS[selMap].effect; if (mapEffect) txt('战场机制 · ' + mapEffect.name, W / 2, 280, 10, THEME.inkSub, 'center');
   btn(30, 290, 150, 26, '画面:' + (SAVE.mapSkin ? '浓墨' : '标准'), () => { SAVE.mapSkin = SAVE.mapSkin ? 0 : 1; saveSave(); }, { size: 10, grad: SAVE.mapSkin ? THEME.vermilion : THEME.slate, r: 8 });
-  btn(195, 290, 150, 26, '开 战', () => { startBattle(selStage, false, selMap); scr = 'game'; }, { size: 18, grad: THEME.vermilion, r: 8 });
-  btn(30, 344, 154, 30, '特别玩法', () => { scr = 'modes'; }, { size: 11, grad: THEME.vermilion, r: 9 });
-  btn(191, 344, 154, 30, SAVE.endless ? '无尽挑战 · ' + SAVE.bestWave + '波' : '无尽挑战（30关解锁）', () => { startBattle(STAGE_MAX, true, selMap); scr = 'game'; }, { size: 10, grad: THEME.indigo, disabled: !(SAVE.endless || SAVE.endlessOn), r: 9 });
+  btn(195, 290, 150, 26, '开 战', () => { startBattle(selStage, false, selMap); goTo('game'); }, { size: 18, grad: THEME.vermilion, r: 8 });
+  btn(30, 344, 154, 30, '特别玩法', () => { goTo('modes'); }, { size: 11, grad: THEME.vermilion, r: 9 });
+  btn(191, 344, 154, 30, SAVE.endless ? '无尽挑战 · ' + SAVE.bestWave + '波' : '无尽挑战（30关解锁）', () => { startBattle(STAGE_MAX, true, selMap); goTo('game'); }, { size: 10, grad: THEME.indigo, disabled: !(SAVE.endless || SAVE.endlessOn), r: 9 });
 
   // 第二层：养成
   groupLabel('养成', 30, 404, 335);
-  btn(30, 412, 100, 34, '武将营', () => { scr = 'camp'; }, { grad: THEME.purple, size: 12, r: 9 });
-  btn(138, 412, 100, 34, '锻造装备', () => { scr = 'forge'; forgeMsg = ''; }, { grad: THEME.slate, size: 12, r: 9 });
-  btn(246, 412, 99, 34, '道具商店', () => { scr = 'shop'; }, { grad: THEME.slate, size: 12, r: 9 });
-  btn(30, 452, 154, 30, '军师 · 军令', () => { scr = 'command'; }, { size: 11, grad: THEME.purple, r: 9 });
-  btn(191, 452, 154, 30, '心愿招募', () => { scr = 'wish'; }, { size: 11, grad: THEME.gold2, r: 9 });
+  btn(30, 412, 100, 34, '武将营', () => { goTo('camp'); }, { grad: THEME.purple, size: 12, r: 9 });
+  btn(138, 412, 100, 34, '锻造装备', () => { goTo('forge'); forgeMsg = ''; }, { grad: THEME.slate, size: 12, r: 9 });
+  btn(246, 412, 99, 34, '道具商店', () => { goTo('shop'); }, { grad: THEME.slate, size: 12, r: 9 });
+  btn(30, 452, 154, 30, '军师 · 军令', () => { goTo('command'); }, { size: 11, grad: THEME.purple, r: 9 });
+  btn(191, 452, 154, 30, '心愿招募', () => { goTo('wish'); }, { size: 11, grad: THEME.gold2, r: 9 });
 
   // 第三层：记录
   groupLabel('记录', 30, 512, 335);
-  btn(30, 520, 100, 32, '成就', () => { scr = 'ach'; }, { grad: THEME.slate, size: 11, r: 9 });
-  btn(138, 520, 100, 32, '录像', () => { scr = 'ghost'; ghostMsg = ''; loadGhostList(); }, { grad: THEME.indigo, size: 11, r: 9 });
-  btn(246, 520, 99, 32, '存档管理', () => { scr = 'save'; saveMsg = ''; }, { grad: THEME.slate, size: 11, r: 9 });
+  btn(30, 520, 100, 32, '成就', () => { goTo('ach'); }, { grad: THEME.slate, size: 11, r: 9 });
+  btn(138, 520, 100, 32, '录像', () => { goTo('ghost'); ghostMsg = ''; loadGhostList(); }, { grad: THEME.indigo, size: 11, r: 9 });
+  btn(246, 520, 99, 32, '存档管理', () => { goTo('save'); saveMsg = ''; }, { grad: THEME.slate, size: 11, r: 9 });
   const canSign = canDaily();
-  btn(30, 558, 154, 28, (canSign ? '✓ ' : '') + '每日签到', () => { scr = 'daily'; dailyMsg = ''; }, { size: 11, grad: canSign ? THEME.pine : THEME.slate, r: 8 });
-  btn(191, 558, 154, 28, '玩法说明', () => { scr = 'help'; }, { size: 11, grad: THEME.slate, r: 8 });
+  btn(30, 558, 154, 28, (canSign ? '✓ ' : '') + '每日签到', () => { goTo('daily'); dailyMsg = ''; }, { size: 11, grad: canSign ? THEME.pine : THEME.slate, r: 8 });
+  btn(191, 558, 154, 28, '玩法说明', () => { goTo('help'); }, { size: 11, grad: THEME.slate, r: 8 });
 
   // 非核心规则与实验性功能收进实验室，避免新人首页被开关淹没。
-  btn(30, 612, 210, 30, '设置 · 实验室', () => { scr = 'lab'; }, { size: 11, grad: THEME.slate, r: 8 });
+  btn(30, 612, 210, 30, '设置 · 实验室', () => { goTo('lab'); }, { size: 11, grad: THEME.slate, r: 8 });
   btn(246, 612, 99, 30, SAVE.mute ? '🔇 静音' : '🔊 有声', () => { SAVE.mute = !SAVE.mute; saveSave(); }, { size: 10, grad: SAVE.mute ? THEME.slate : THEME.pine, r: 8 });
 }
 
@@ -265,7 +304,7 @@ function drawLab() {
   sw(30,326,'遗物系统',SAVE.relicsOn,()=>{SAVE.relicsOn=!SAVE.relicsOn;saveSave();});
   sw(30,366,'音乐 BGM',SAVE.music,()=>{SAVE.music=!SAVE.music;saveSave();if(typeof toggleMusic==='function')toggleMusic(SAVE.music);});
   sw(195,366,'手动大招',SAVE.manualUlt,()=>{SAVE.manualUlt=!SAVE.manualUlt;saveSave();if(G&&G.banner)G.banner={txt:'手动大招 '+(SAVE.manualUlt?'开启 · 点「大招」释放武将技能':'关闭 · 技能自动释放'),t:1.6};});
-  btn(128,590,120,34,'返回',()=>{scr='menu';},{bg:'#7c8792'});
+  backBtn();
 }
 
 /* ---------- 玩法说明 ---------- */
@@ -301,7 +340,7 @@ function drawHelp() {
     });
     y += 4;
   });
-  btn(128, 604, 120, 34, '返回', () => { scr = 'menu'; }, { bg: '#868e96' });
+  backBtn();
 }
 
 /* ---------- 存档管理（多槽 / 手动保存 / 导出导入 / 继续游戏） ---------- */
@@ -328,7 +367,7 @@ function drawWish() {
       saveSave();
     }, { bg: on ? '#ffe3a3' : '#fff', fg: on ? '#b8860b' : '#333' });
   });
-  btn(W / 2 - 70, 600, 140, 34, '返回', () => scr = 'menu');
+  backBtn();
 }
 function drawSave() {
   txt('存档管理', W / 2, 46, 22, '#343a40', 'center', true);
@@ -353,10 +392,10 @@ function drawSave() {
   } else {
     txt('确定清除当前槽？不可撤销', W / 2, 232, 12, '#e03131', 'center');
     btn(80, 244, 90, 32, '取消', () => { saveConfirm = false; }, { bg: '#868e96', size: 12 });
-    btn(205, 244, 90, 32, '确认清除', () => { clearSave(); G = null; selStage = 1; saveConfirm = false; saveMsg = '已清除并重置'; scr = 'menu'; }, { bg: '#e03131', size: 12 });
+    btn(205, 244, 90, 32, '确认清除', () => { clearSave(); G = null; selStage = 1; saveConfirm = false; saveMsg = '已清除并重置'; goTo('menu'); }, { bg: '#e03131', size: 12 });
   }
   // 继续游戏 / 导出 / 导入
-  btn(30, 300, 150, 34, '继续游戏', () => { startBattle(SAVE.stage, SAVE.endless, selMap); scr = 'game'; }, { bg: '#1c7ed6', size: 13 });
+  btn(30, 300, 150, 34, '继续游戏', () => { startBattle(SAVE.stage, SAVE.endless, selMap); goTo('game'); }, { bg: '#1c7ed6', size: 13 });
   btn(195, 300, 150, 34, '存到目录', () => {
     const s = exportSave();
     // 服务仅绑定 127.0.0.1，本机直连即可写盘（已去掉一次性 token 机制）
@@ -376,7 +415,7 @@ function drawSave() {
     });
   }, { bg: '#495057', size: 13 });
   if (saveMsg) txt(saveMsg, W / 2, 408, 13, saveMsg.includes('失败') ? '#e03131' : '#2f9e44', 'center', true);
-  btn(128, 600, 120, 34, '返回', () => { scr = 'menu'; }, { bg: '#868e96' });
+  backBtn();
 }
 
 /* ---------- P1-4 录像管理：本地列表 + 共享上传/下载 + 回放挑战 ---------- */
@@ -393,7 +432,7 @@ function loadGhostList() {
 function startGhostPlayback(rec) {
   if (!rec || !rec.ops || !rec.ops.length) { ghostMsg = '录像为空'; return; }
   startBattle(rec.stage || 1, false, 0, rec);
-  scr = 'game';
+  goTo('game');
 }
 function uploadGhost(rec) {
   // 服务仅绑定 127.0.0.1，本机直连即可上传（已去掉一次性 token 机制）
@@ -426,7 +465,9 @@ function drawGhost() {
   if (!ghostList.length) txt('暂无录像（胜利后自动保存）', W / 2, 160, 12, '#adb5bd', 'center');
   const DIFF_NAMES = { easy: '简单', normal: '普通', hard: '困难' };
   const ranked = ghostList.slice().sort((a, b) => (b.stage - a.stage) || (a.ops - b.ops) || ((b.result === 'win') - (a.result === 'win')));
-  ranked.slice(0, 13).forEach((g, i) => {
+  // 复用 clipList 滚动与截断（与 equip/roster 一致），列表过长可滚动、底部预留不压返回键
+  clipList(14, 120, 347, 456, 130 + ranked.length * 30);
+  ranked.forEach((g, i) => {
     const y = 130 + i * 30;
     const isLocal = g.src === 'local';
     rr(14, y, 347, 26, 5); ctx.fillStyle = isLocal ? '#f8f9fa' : '#f1f8ff'; ctx.fill();
@@ -440,8 +481,9 @@ function drawGhost() {
     else btn(220, y + 3, 60, 20, '下载', () => downloadGhost(g.id), { size: 10, bg: '#5f3dc4' });
     if (isLocal) btn(285, y + 3, 70, 20, '上传共享', () => uploadGhost(SAVE.ghosts[g.idx]), { size: 10, bg: '#2f9e44' });
   });
+  unclip();
   if (ghostMsg) txt(ghostMsg, W / 2, 580, 12, ghostMsg.includes('失败') ? '#e03131' : '#2f9e44', 'center', true);
-  btn(128, 600, 120, 34, '返回', () => { scr = 'menu'; }, { bg: '#868e96' });
+  backBtn();
 }
 
 /* ---------- P2-2 数据统计面板 + P2-1 皮肤总览 ---------- */
@@ -497,7 +539,7 @@ function drawStats() {
     txt(name, x + 8, y + 18, 12, col2, 'left', true);
     txt(sk ? sk.name : '常服', x + 102, y + 18, 10, '#868e96', 'right');
   });
-  btn(128, 604, 120, 34, '返回', () => { scr = 'menu'; }, { bg: '#868e96' });
+  backBtn();
 }
 
 /* ---------- 商店（购买 + 携带 ≤6，主动 ≤2） ---------- */
@@ -514,12 +556,12 @@ function drawShop() {
     ctx.strokeStyle = on ? '#e8a005' : '#dee2e6'; ctx.lineWidth = 1; ctx.stroke();
     txt(it.name, 24, y + 16, 14, it.act ? '#c0392b' : '#2f9e44', 'left', true);
     txt(it.act ? '主动×' + it.uses : '被动', 24, y + 30, 9, '#adb5bd');
-    txt(it.tip, 92, y + 23, 11, '#495057');
+    txtFit(it.tip, 92, y + 23, 11, '#495057', 'left', false, 190);   // 小屏密度兜底（#9）：超宽自动缩字号至 8px
     btn(288, y + 5, 64, 26, owned ? (on ? '携带中' : '携带') : it.price + '金',
       () => { owned ? toggleLoadout(id) : buyItem(id); },
       { size: 11, bg: owned ? (on ? '#e8a005' : '#868e96') : '#8b5e3c', disabled: !owned && SAVE.gold < it.price });
   });
-  btn(128, 604, 120, 34, '返回', () => { scr = 'menu'; }, { bg: '#868e96' });
+  backBtn();
 }
 
 /* ---------- 锻造 ---------- */
@@ -543,11 +585,11 @@ function drawForge() {
   SAVE.weapons.forEach((id, i) => {
     const w = WEAPONS[id], y = 216 + i * 24;
     txt(Q_NAME[w.q] + '·' + w.name + (w.lock ? '〔' + w.lock + '专属〕' : '〔' + w.wq + '系〕'), 24, y + 14, 12, Q_COL[w.q], 'left', true);
-    txt(w.tip, 200, y + 14, 10, '#868e96');
+    txtFit(w.tip, 200, y + 14, 10, '#868e96', 'left', false, 132);   // 小屏密度兜底（#9）
   });
   txt('武器给对应「系」武将穿戴：加攻击/射程，专武带特效', W / 2, 588, 10, '#8a7e6c', 'center');
-  btn(30, 604, 210, 34, '→ 去武将装备穿戴', () => { scr = 'equip'; }, { grad: THEME.purple, size: 12 });
-  btn(246, 604, 99, 34, '返回', () => { scr = 'menu'; }, { grad: THEME.slate });
+  btn(30, 604, 210, 34, '→ 去武将装备穿戴', () => { goTo('equip'); }, { grad: THEME.purple, size: 12 });
+  backBtn();
 }
 
 /* ---------- 武将装备（点武将轮换武器 + P2-1 皮肤切换） ---------- */
@@ -568,7 +610,7 @@ function drawEquip() {
     const nameCol = (sk && sk.col) ? sk.col : (h.grade === 4 ? '#e8a005' : '#9c36b5');
     txt(name + (sk && sk.decor && sk.decor !== 'none' ? ' ' + ((typeof SKIN_DECOR !== 'undefined' && SKIN_DECOR[sk.decor]) || '★') : ''),
       24, y + 23, 15, nameCol, 'left', true);
-    txt(h.wq + '系 · ' + h.tip, 80, y + 15, 10, '#868e96');
+    txtFit(h.wq + '系 · ' + h.tip, 80, y + 15, 10, '#868e96', 'left', false, 176);   // 小屏密度兜底（#9）
     txt(eq ? Q_NAME[WEAPONS[eq].q] + '·' + WEAPONS[eq].name : (weaponsFor(name).length ? '未装备(点击穿戴)' : '无' + h.wq + '系武器·去锻造'),
       80, y + 30, 11, eq ? Q_COL[WEAPONS[eq].q] : '#adb5bd', 'left', !!eq);
     txt('⇄', 246, y + 18, 14, '#c0c6cc', 'center');   // 可点循环换装的手势提示（旧版行是隐形按钮，玩家想不到点）
@@ -582,8 +624,8 @@ function drawEquip() {
     }, { size: 10, bg: (skinBtn && skinBtn.col) ? skinBtn.col : '#5f3dc4' });
   });
   unclip();
-  btn(30, 604, 154, 34, '← 去锻造', () => { scr = 'forge'; forgeMsg = ''; }, { grad: THEME.indigo });
-  btn(191, 604, 154, 34, '返回', () => { scr = 'menu'; }, { grad: THEME.slate });
+  btn(30, 604, 154, 34, '← 去锻造', () => { goTo('forge'); forgeMsg = ''; }, { grad: THEME.indigo });
+  backBtn();
 }
 
 /* ---------- 武将营：永久招募、心愿与主将选择 ---------- */
@@ -610,7 +652,7 @@ function drawCamp() {
     } else btn(x + 110, y + 7, 48, 27, SAVE.heroWish === name ? '心愿中' : '设心愿', () => { SAVE.heroWish = SAVE.heroWish === name ? '' : name; saveSave(); campMsg = SAVE.heroWish ? '已设定心愿：' + name : '已取消心愿'; }, { size: 9, bg: SAVE.heroWish === name ? '#bd4a31' : '#7c8792' });
   });
   if (campMsg) txt(campMsg, W / 2, 570, 11, campMsg.includes('不足') ? '#bd4a31' : '#318c4a', 'center', true);
-  btn(128, 600, 120, 34, '返回', () => { scr = 'menu'; }, { bg: '#7c8792' });
+  backBtn();
 }
 
 
@@ -627,7 +669,7 @@ function drawCommand() {
   txt('局内军令', 34, 352, 15, '#2f3540', 'left', true);
   txt('每局随机两条军令；达成后即时获得馒头奖励。', 34, 374, 10, '#656d76', 'left');
   ORDERS.forEach((o, i) => txt('· ' + o.name + '：' + o.desc + '（+' + o.reward + '馒）', 36, 398 + i * 18, 11, '#7250b8', 'left'));
-  btn(128, 590, 120, 34, '返回', () => { scr = 'menu'; }, { bg: '#7c8792' });
+  backBtn();
 }
 
 function drawRoster() {
@@ -663,7 +705,7 @@ function drawRoster() {
     }
   });
   unclip();
-  btn(128, 596, 120, 34, '返回', function() { scr = 'menu'; }, { bg: '#7c8792' });
+  backBtn();
 }
 
 function drawModes() {
@@ -677,7 +719,7 @@ function drawModes() {
     txt(m.sub, 72, y + 51, 11, open ? '#777d84' : '#a6a9ac', 'left');
     btn(268, y + 22, 70, 33, open ? '进入' : '第' + m.unlock + '关解锁', () => { if (open) startSpecialMode(m.id); }, { size: open ? 12 : 9, bg: open ? m.col : '#aab0b6', disabled: !open });
   });
-  btn(128, 586, 120, 34, '返回', () => { scr = 'menu'; }, { bg: '#7c8792' });
+  backBtn();
 }
 
 
@@ -687,7 +729,10 @@ function draw() {
   ctx.fillStyle = '#f3eee3'; ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = '#e1d4bf'; ctx.fillRect(0, 0, W, 4);
   btns = [];
-  if (scr !== _lastScr) { _lastScr = scr; _wipe = 0.25; listScroll = 0; scrollDrag = null; }   // 切屏触发淡入 + 滚动复位
+  if (scr !== _lastScr) {                       // 切屏：进场淡入 + 滚动复位 + 清除残留按压态
+    _lastScr = scr; _wipe = 0.3; listScroll = 0; scrollDrag = null;
+    g_ptrDown = false; g_ptrHit = null;
+  }
   if (scr === 'menu') drawMenu();
   else if (scr === 'shop') drawShop();
   else if (scr === 'forge') drawForge();
@@ -705,10 +750,19 @@ function draw() {
   else if (scr === 'roster') drawRoster();
   else if (scr === 'modes') drawModes();
   else drawGame();
+  // 出场淡出（goTo 触发）：在当前屏之上叠一层遮罩，透明→不透明，完成后再切屏触发进场
+  if (_wipeOut > 0) {
+    const p = _wipeOut / 0.22;                     // 1→0
+    ctx.globalAlpha = 1 - p;                       // 0→1 覆盖度
+    ctx.fillStyle = '#f3eee3'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1;
+    _wipeOut = Math.max(0, _wipeOut - DT60);
+    if (_wipeOut === 0 && _pendingScr) { scr = _pendingScr; _pendingScr = null; _lastScr = ''; }  // 强制下一帧进场
+    return;                                        // 本帧只渲染旧屏 + 出场遮罩
+  }
   // 过场淡入：新画面从背景色渐显（不抖 UI）
   if (_wipe > 0) {
     _wipe = Math.max(0, _wipe - DT60);
-    ctx.globalAlpha = (_wipe / 0.25) * 0.8; ctx.fillStyle = '#f3eee3'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1;
+    ctx.globalAlpha = (_wipe / 0.3) * 0.85; ctx.fillStyle = '#f3eee3'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1;
   }
 }
 
@@ -730,7 +784,8 @@ function drawAch() {
     const done = ACHIEVEMENTS.filter(a => SAVE.ach[a.id]).length;
     txt('已解锁 ' + done + '/' + ACHIEVEMENTS.length, W / 2, 70, 12, '#868e96', 'center');
   }
-  const startY = 88, rowH = 33;
+  const startY = 88, rowH = 33, listH = 512;
+  clipList(14, startY, 347, listH, startY + ACHIEVEMENTS.length * rowH);  // 长列表滚动，底部预留不压返回键
   ACHIEVEMENTS.forEach((a, i) => {
     const y = startY + i * rowH, on = !!SAVE.ach[a.id];
     rr(14, y, 347, 30, 6);
@@ -742,7 +797,8 @@ function drawAch() {
     const r = (a.reward.gold ? '+' + a.reward.gold + '金' : '') + (a.reward.mat ? ' +' + a.reward.mat + '材' : '');
     txt(r, 355, y + 20, 10, '#b0801f', 'right', true);
   });
-  btn(128, 604, 120, 34, '返回', () => { scr = 'menu'; }, { bg: '#868e96' });
+  unclip();
+  backBtn();
 }
 
 /* ---------- 每日签到面板（P1-2） ---------- */
@@ -780,7 +836,7 @@ function drawDaily() {
   }, { size: 16, bg: can ? '#2f9e44' : '#868e96', disabled: !can });
   if (dailyMsg) txt(dailyMsg, W / 2, 282, 12, dailyMsg.includes('成功') ? '#2f9e44' : '#e03131', 'center', true);
   txt('提示：连续签到 7 日可获得额外武器奖励', W / 2, 308, 11, '#868e96', 'center');
-  btn(128, 604, 120, 34, '返回', () => { scr = 'menu'; }, { bg: '#868e96' });
+  backBtn();
 }
 
 /* ---------- 输入 ---------- */
@@ -799,9 +855,11 @@ function barAt(p) {
   return -1;
 }
 function onDown(p) {
+  g_ptrDown = true; g_ptrHit = null;                       // 每帧按下都重置命中，滚动拖拽/棋盘点按不触发布局按压
   for (let i = btns.length - 1; i >= 0; i--) {
     const b = btns[i];
     if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) {
+      g_ptrHit = { x: b.x, y: b.y, w: b.w, h: b.h };        // 记录命中按钮几何，btn() 绘制按下态时比对（不改命中区）
       if (!b.disabled) b.fn();
       return;
     }
@@ -828,6 +886,7 @@ function onDown(p) {
 
 }
 function onUp(p) {
+  g_ptrDown = false; g_ptrHit = null;                      // 抬起即清除按压态
   if (scrollDrag) { scrollDrag = null; return; }
   if (!drag) return;
   const d = drag; drag = null;

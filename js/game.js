@@ -65,7 +65,7 @@ function startBattle(stage, endless, mapIdx) {
       return lvl === 'hard' ? base * 0.75 : lvl === 'easy' ? base * 1.5 : base;
     })(),
     itemUses: uses, targeting: null,
-    fx: [], parts: [], floats: [], banner: null, flash: 0, summonFx: null,
+    fx: [], parts: [], floats: [], deaths: [], ultFx: null, banner: null, flash: 0, summonFx: null,
     undoStack: [],                            // 玩家侧操作快照栈（撤销用）
     shake: 0,                                 // 屏震幅度（打击感）
     playerDmgMul: 1, playerRateMul: 1, playerHpMul: 1,   // 遗物系统：本局玩家全军增益（#27）
@@ -187,14 +187,14 @@ function sideIncome(S, dt) {
     // 农民=2馒头/秒（文档7.1），无农民保留基础0.6/秒
     const n = S.side > 0 && hasItem('nongmin') ? INCOME_IV * 2 : INCOME_N;
     S.mantou += n;
-    if (S.side > 0) fl(30, 26, '+' + n, '#8b5e3c');
+    if (S.side > 0) popFloat(30, 42, 'mantou', n);   // 馒头被动收入上浮（#6 经济可见）；偏离顶栏避免被遮挡
   }
   if (S.side > 0 && hasItem('luoyang')) {
     S.luoyangT += dt;
     if (S.luoyangT >= 45) {
       S.luoyangT = 0;
       const i = barFree(S);
-      if (i >= 0) { S.bar[i].unit = { t: 'shovel', animT: 0.25 }; fl(S.bar[i].x, S.bar[i].y - 24, '洛阳铲!', '#846358'); }
+      if (i >= 0) { S.bar[i].unit = { t: 'shovel', animT: 0.25 }; fl(S.bar[i].x, S.bar[i].y - 24, '洛阳铲!', '#846358'); fxRing(S.bar[i].x, S.bar[i].y, 22, '#846358', 0.4); }
     }
   }
 }
@@ -211,7 +211,7 @@ function tickMapEffect(dt) {
     G.P.slowT = Math.max(G.P.slowT, 3); G.E.slowT = Math.max(G.E.slowT, 3);
     G.banner = { txt: '江风水势：敌军减速 3 秒', t: 1.5 };
   } else if (G.mapIdx === 2) {
-    var fi = barFree(G.P); if (fi >= 0) { G.P.bar[fi].unit = mkTroop(Math.random() < 0.5 ? '刀' : '弓'); G.P.bar[fi].unit.animT = 0.25; fl(G.P.bar[fi].x, G.P.bar[fi].y - 20, '援军!', '#2f9e44'); }
+    var fi = barFree(G.P); if (fi >= 0) { G.P.bar[fi].unit = mkTroop(Math.random() < 0.5 ? '刀' : '弓'); G.P.bar[fi].unit.animT = 0.25; fl(G.P.bar[fi].x, G.P.bar[fi].y - 20, '援军!', '#2f9e44'); fxRing(G.P.bar[fi].x, G.P.bar[fi].y, 22, '#2f9e44', 0.4); }
     fi = barFree(G.E); if (fi >= 0) { G.E.bar[fi].unit = mkTroop('刀'); G.E.bar[fi].unit.animT = 0.25; }
     G.banner = { txt: '军情支援：双方获得援军', t: 1.5 };
   } else if (G.mapIdx === 3) {
@@ -241,7 +241,7 @@ function update(dt) {
       if (bi < 0) { r.t = 1; continue; }
       const h = mkHero(r.name, G.P, true); h.hp *= 0.5; h.animT = 0.3;
       G.P.bar[bi].unit = h; G.heroRespawns.splice(i, 1);
-      fl(G.P.bar[bi].x, G.P.bar[bi].y - 20, r.name + '归队！', '#7250b8');
+      fl(G.P.bar[bi].x, G.P.bar[bi].y - 20, r.name + '归队！', '#7250b8'); fxRing(G.P.bar[bi].x, G.P.bar[bi].y, 22, '#7250b8', 0.4);
     }
   }
   // P1-4 ghost 回放：按时间戳触发玩家操作（在 wave/ai 之前）
