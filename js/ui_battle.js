@@ -395,45 +395,30 @@ function drawCell(c, S, hide) {
     return;
   }
 
-  /* Open cell: only style when occupied (minimal hint when empty)
-     玩家拍板：空格子去掉瓷面填充/高光/底阴影，只留淡虚线轮廓，避免「长方形叠格子」的视觉负担。 */
-  if (c.unit) {
-    var cg = ctx.createLinearGradient(x, y, x, y + CELL);
-    cg.addColorStop(0, cFill); cg.addColorStop(1, shade(cFill, 0.94));
-    ctx.fillStyle = cg; ctx.fill();
+  /* Open cell: celadon gradient fill */
+  var cg = ctx.createLinearGradient(x, y, x, y + CELL);
+  cg.addColorStop(0, cFill); cg.addColorStop(1, shade(cFill, 0.94));
+  ctx.fillStyle = cg; ctx.fill();
 
-    /* Top highlight strip (瓷面高光) */
-    ctx.save();
-    var hl = ctx.createLinearGradient(x, y, x, y + CELL * 0.45);
-    hl.addColorStop(0, 'rgba(255,255,255,.28)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
-    rr(x + 1, y + 1, CELL - 2, (CELL - 2) * 0.45, 5);
-    ctx.fillStyle = hl; ctx.fill();
-    ctx.restore();
+  /* Top highlight strip (瓷面高光) */
+  ctx.save();
+  var hl = ctx.createLinearGradient(x, y, x, y + CELL * 0.45);
+  hl.addColorStop(0, 'rgba(255,255,255,.28)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+  rr(x + 1, y + 1, CELL - 2, (CELL - 2) * 0.45, 5);
+  ctx.fillStyle = hl; ctx.fill();
+  ctx.restore();
 
-    /* Ink border (color = unit color) */
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = unitCol(c.unit);
-    ctx.stroke();
+  /* Ink border (occupation-tinted) */
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = !c.unit ? cBord : unitCol(c.unit);
+  ctx.stroke();
 
-    /* Bottom-right inner shadow */
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,.07)'; ctx.shadowBlur = 3; ctx.shadowOffsetX = 1.5; ctx.shadowOffsetY = 1.5;
-    rr(x + 2, y + 2, CELL - 4, CELL - 4, 4);
-    ctx.strokeStyle = 'rgba(0,0,0,.05)'; ctx.lineWidth = 0.5; ctx.stroke();
-    ctx.restore();
-  } else {
-    /* Empty open cell: thin dashed outline only (subtle deploy-zone hint) */
-    ctx.save();
-    ctx.setLineDash([2, 3]);
-    ctx.strokeStyle = cBord;
-    ctx.globalAlpha = 0.55;
-    ctx.lineWidth = 0.8;
-    rr(x + 1, y + 1, CELL - 2, CELL - 2, 5);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 1;
-    ctx.restore();
-  }
+  /* Bottom-right inner shadow */
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.07)'; ctx.shadowBlur = 3; ctx.shadowOffsetX = 1.5; ctx.shadowOffsetY = 1.5;
+  rr(x + 2, y + 2, CELL - 4, CELL - 4, 4);
+  ctx.strokeStyle = 'rgba(0,0,0,.05)'; ctx.lineWidth = 0.5; ctx.stroke();
+  ctx.restore();
 
   if (c.unit && !hide) drawUnitAt(c.unit, c.x, c.y, S);
   if (S && S.side > 0 && G && G.targeting && typeof canTargetItem === 'function' && canTargetItem(G.targeting, c.unit)) {
