@@ -61,9 +61,13 @@ function unitStats(u, S) {
   const comboMul = (S && S.side > 0 && S.combo >= 3) ? 1.2 : 1;   // 连杀攻速buff（p5：5秒内3杀→攻速+20%）
   const modeDmg = (typeof G !== 'undefined' && G && G.mode === 'rogue' && G.rogue) ? G.rogue.dmg : 1;
   const modeRate = (typeof G !== 'undefined' && G && G.mode === 'rogue' && G.rogue) ? G.rogue.hp : 1;
+  // 遗物系统：本局玩家全军增益（仅玩家侧生效）
+  const pD = (typeof G !== 'undefined' && G && G.playerDmgMul) ? G.playerDmgMul : 1;
+  const pR = (typeof G !== 'undefined' && G && G.playerRateMul) ? G.playerRateMul : 1;
+  const pH = (typeof G !== 'undefined' && G && G.playerHpMul) ? G.playerHpMul : 1;
   if (u.t === 'troop') {
     const b = TROOPS[u.type];
-    return { ...b, dmg: b.dmg * TIER_MUL[u.tier - 1] * fb.dmg * modeDmg, rate: b.rate * fb.rate * comboMul * modeRate, maxhp: b.hp * TIER_MUL[u.tier - 1] };
+    return { ...b, dmg: b.dmg * TIER_MUL[u.tier - 1] * fb.dmg * modeDmg * pD, rate: b.rate * fb.rate * comboMul * modeRate * pR, maxhp: b.hp * TIER_MUL[u.tier - 1] * pH };
   }
   const b = HEROES[u.name];
   const aw = u.awaken || 0, awMul = aw ? Math.pow(1.3, aw) : 1;
@@ -92,7 +96,7 @@ function unitStats(u, S) {
   } else if (S) {
     for (const c of S.cells) if (c.unit && c.unit.t === 'hero' && HEROES[c.unit.name].aura && c.unit !== u) aura += HEROES[c.unit.name].aura;
   }
-  return { ...b, dmg: dmg * fb.dmg * aura * modeDmg, rng, rate: rate * fb.rate * comboMul * modeRate, splash, maxhp: b.hp * HERO_LVL_HP(u.lvl) * awMul };
+  return { ...b, dmg: dmg * fb.dmg * aura * modeDmg * pD, rng, rate: rate * fb.rate * comboMul * modeRate * pR, splash, maxhp: b.hp * HERO_LVL_HP(u.lvl) * awMul * pH };
 }
 function skillCd(u) {
   const cd = HEROES[u.name].skill.cd;

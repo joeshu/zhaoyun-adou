@@ -16,9 +16,42 @@ function unitCol(u) {
   }
   return HEROES[u.name].grade === 4 ? '#b0801f' : '#9c36b5';
 }
+/* 棋子底衬：给每个单位加一枚底牌（圆/盾/菱/方按类型区分），
+   保留汉字居中，从"表格"变"棋局"；色弱模式加高对比描边。 */
+function drawBase(u) {
+  const hero = u.t === 'hero';
+  const g = hero ? (HEROES[u.name].grade === 4 ? '#e8a005' : '#9c36b5') : null;
+  ctx.save();
+  if (u.t === 'troop') {
+    const c = TIER_COL[u.tier - 1];
+    ctx.fillStyle = c; ctx.globalAlpha = 0.16; ctx.beginPath(); ctx.arc(0, 0, 18, 0, 7); ctx.fill();
+    ctx.globalAlpha = 1; ctx.lineWidth = 2; ctx.strokeStyle = c; ctx.beginPath(); ctx.arc(0, 0, 18, 0, 7); ctx.stroke();
+  } else if (hero) {
+    rr(-19, -19, 38, 38, 9); ctx.fillStyle = g; ctx.globalAlpha = 0.20; ctx.fill();
+    ctx.globalAlpha = 1; ctx.lineWidth = 2.5; ctx.strokeStyle = g; rr(-19, -19, 38, 38, 9); ctx.stroke();
+  } else if (u.t === 'char') {
+    rr(-16, -16, 32, 32, 7); ctx.fillStyle = '#9c36b5'; ctx.globalAlpha = 0.18; ctx.fill();
+    ctx.globalAlpha = 1; ctx.lineWidth = 2; ctx.strokeStyle = '#9c36b5'; rr(-16, -16, 32, 32, 7); ctx.stroke();
+  } else if (u.t === 'ifrag') {
+    ctx.fillStyle = '#1c7ed6'; ctx.globalAlpha = 0.18;
+    ctx.beginPath(); ctx.moveTo(0, -17); ctx.lineTo(17, 0); ctx.lineTo(0, 17); ctx.lineTo(-17, 0); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 1; ctx.lineWidth = 2; ctx.strokeStyle = '#1c7ed6';
+    ctx.beginPath(); ctx.moveTo(0, -17); ctx.lineTo(17, 0); ctx.lineTo(0, 17); ctx.lineTo(-17, 0); ctx.closePath(); ctx.stroke();
+  }
+  ctx.restore();
+  if (SAVE.colorblind) {                          // 色弱：统一加黑色高对比描边
+    ctx.save(); ctx.lineWidth = 1; ctx.strokeStyle = '#222';
+    if (hero) rr(-19, -19, 38, 38, 9);
+    else if (u.t === 'char') rr(-16, -16, 32, 32, 7);
+    else if (u.t === 'ifrag') { ctx.beginPath(); ctx.moveTo(0, -17); ctx.lineTo(17, 0); ctx.lineTo(0, 17); ctx.lineTo(-17, 0); ctx.closePath(); }
+    else { ctx.beginPath(); ctx.arc(0, 0, 18, 0, 7); }
+    ctx.stroke(); ctx.restore();
+  }
+}
 function drawUnitAt(u, x, y, S) {
   const pop = u.animT > 0 ? 1 + u.animT * 0.6 : 1;
   ctx.save(); ctx.translate(x, y); ctx.scale(pop, pop);
+  drawBase(u);
   const col = unitCol(u);
   if (u.t === 'hero') {
     txt(u.name, 0, 4, 14 + u.lvl, col, 'center', true);
@@ -29,6 +62,10 @@ function drawUnitAt(u, x, y, S) {
       var cdRatio = 1 - Math.min(1, Math.max(0, (u.cd || 0) / cdMax));
       ctx.strokeStyle = cdRatio >= 1 ? '#2f9e44' : '#5f3dc4'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(0, -5, 21, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * cdRatio); ctx.stroke();
+    }
+    // 觉醒等级：橙色小圆点（觉醒丹叠加的全属性加成，unitStats 已乘 1.3^awaken）
+    if (u.awaken > 0) {
+      for (let k = 0; k < u.awaken; k++) { ctx.fillStyle = '#e8590c'; ctx.beginPath(); ctx.arc(-8 + k * 8, 20, 2.4, 0, 7); ctx.fill(); }
     }
     // P2-1 皮肤装饰：按当前皮肤的 decor 显示角标
     if (typeof currentSkin === 'function') {
@@ -125,10 +162,22 @@ function drawAdou(S) {
   txt('阿斗', S.adou.x, y + 7, 20, mine ? '#343a40' : '#c0392b', 'center', true);
   txt('♥' + Math.max(0, S.hp), S.adou.x + 36, y + 5, 12, '#e03131', 'left', true);
   if (S.hp < ADOU_HP) hpBar(S.adou.x - 18, y + 14, 36, Math.max(0, S.hp) / ADOU_HP, '#e03131');
+  // 护盾：每波+1、无伤+1（上限2），画成阿斗头上的小盾标
+  for (let i = 0; i < (S.shield || 0); i++) {
+    const sx = S.adou.x - 18 + i * 14;
+    ctx.fillStyle = '#1c7ed6';
+    ctx.beginPath();
+    ctx.moveTo(sx, y + 19); ctx.lineTo(sx + 9, y + 19); ctx.lineTo(sx + 9, y + 26);
+    ctx.lineTo(sx + 4.5, y + 30); ctx.lineTo(sx, y + 26); ctx.closePath();
+    ctx.fill();
+  }
 }
 
 function drawGame() {
   // 各战场底纹可由用户切换为四种地图皮肤，与机制无关，纯视觉区分。
+  var sh = G.shake || 0;
+  ctx.save();
+  if (sh > 0) ctx.translate((Math.random() * 2 - 1) * sh, (Math.random() * 2 - 1) * sh);  // 屏震：仅战场层
   var skinId = SAVE.mapSkin || 0;
   var skins = [
     { e:'#fff5f0', p:'#fbf7ed', b:'#edf0f2', band:'#b9a995', name:'羊皮纸' },
@@ -227,13 +276,22 @@ function drawGame() {
   }
   ctx.globalAlpha = 1;
   G.floats = G.floats.filter(f => f.t > 0);
-  // 顶栏：资源、关卡与快捷控制保持同一阅读基线
+  // 顶栏：资源、关卡与快捷控制保持同一阅读基线（不随屏震抖动）
+  if (G.shake > 0) G.shake = Math.max(0, G.shake - 0.6);
+  ctx.restore();
   ctx.fillStyle = '#fffdf9'; ctx.fillRect(0, 0, W, TOP);
   ctx.fillStyle = '#e4d9c8'; ctx.fillRect(0, TOP - 3, W, 3);
   txt('馒 ' + G.P.mantou, 8, 22, 14, '#8b5e3c', 'left', true);
   txt('金 ' + SAVE.gold, 78, 22, 12, '#b0801f', 'left', true);
   txt((G.mode ? G.modeLabel : (G.endless ? '无尽' : '第' + G.stage + '关')) + '·第' + G.wave + '波', 175, 22, 12, '#495057', 'center');
   if (SAVE.invincible) txt('无敌', 200, 22, 12, '#2f9e44', 'center', true);
+  // 下一波预告：基于当前关卡配置预览下一波的兵种构成（提前布防）
+  if (G.previewQ && G.previewQ.pool && G.previewQ.pool.length) {
+    const p = G.previewQ;
+    const parts = p.pool.map(x => x[0] + '×' + Math.round(p.per * x[1] / 100)).filter(s => !s.endsWith('×0'));
+    let s = '下波 ▸ ' + parts.join(' ') + (p.boss ? '  ☠BOSS' : '');
+    txt(s, 8, 44, 10, '#8a7e6c', 'left');
+  }
   // 特别玩法状态条：保留战斗视野，不弹出额外常驻面板。
   if (G.mode === 'fire') {
     txt('🔥 ' + G.wind + ' · 守城 ' + Math.ceil(Math.max(0, G.modeTime)) + ' 秒', W / 2, 48, 11, '#bd4a31', 'center', true);
@@ -248,7 +306,7 @@ function drawGame() {
   } else if (G.mode === 'rogue') {
     txt('⚔ 五虎试炼 · 第 ' + G.rogue.floor + '/' + G.rogue.maxFloor + ' 战 · 军略 ' + G.rogue.picks, W / 2, 48, 11, '#7250b8', 'center', true);
   }
-  btn(234, 4, 33, 24, '×' + G.speed, () => { G.speed = G.speed === 1 ? 2 : 1; }, { bg: '#495057', size: 11 });
+  btn(234, 4, 33, 24, '×' + G.speed, () => { G.speed = G.speed >= 4 ? 1 : G.speed + 1; }, { bg: '#495057', size: 11 });
   btn(269, 4, 33, 24, G.paused ? '▶' : 'Ⅱ', () => { G.paused = !G.paused; }, { bg: '#495057', size: 11 });
   // 静音切换（P1-3）
   btn(304, 4, 33, 24, SAVE.mute ? '🔇' : '🔊', () => { SAVE.mute = !SAVE.mute; saveSave(); sfx('click'); },
@@ -279,6 +337,8 @@ function drawGame() {
     }
   } else G.tempOpen = false;
   const ay = UI_LAYOUT.actionBar.y, ah = UI_LAYOUT.actionBar.h;
+  btn(254, ay, 32, ah, '撤销', () => undoAction(),
+    { size: 9, bg: '#8e98a3', disabled: G.ghostMode || !G.undoStack || !G.undoStack.length });
   btn(8, ay, 62, ah, '抽卡 馒' + DRAW.cost, () => doSummon(G.P),
     { size: 11, bg: '#c0392b', disabled: G.P.mantou < DRAW.cost || barFree(G.P) < 0 });
   const tenCostNow = SAVE.firstTen ? (DRAW.tenCost / 2 | 0) : DRAW.tenCost;
@@ -347,12 +407,29 @@ function drawGame() {
     ctx.globalAlpha = 1;
     s.t -= DT60; if (s.t <= 0) G.summonFx = null;
   }
-  // 结算 / 暂停
-  if (G.mode === 'rogue' && G.rogueChoices) {
+  // 十连翻牌仪式：逐张弹入，突出保底武将
+  if (G.cardReveal && G.cardReveal.t > 0) {
+    const cr = G.cardReveal, prog = 1 - cr.t / 1.1, n = cr.list.length;
+    const cw = 30, gap = 4, total = n * cw + (n - 1) * gap, x0 = (W - total) / 2, y = 235;
+    ctx.globalAlpha = clamp(cr.t * 1.5, 0, 1);
+    panel(x0 - 12, y - 28, total + 24, 88, { bg: '#fffdf9', stroke: '#e6c98b', r: 12, blur: 4 });
+    txt('十连!', W / 2, y - 8, 15, '#a61e4e', 'center', true);
+    cr.list.forEach((g, i) => {
+      if (prog < i / n) return;
+      const x = x0 + i * (cw + gap);
+      rr(x, y, cw, cw, 5); ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = '#ced4da'; ctx.lineWidth = 1; ctx.stroke();
+      txt(g, x + cw / 2, y + cw / 2 + 7, 15, '#495057', 'center', true);
+    });
+    txt('保底武将 · ' + cr.hero, W / 2, y + cw + 16, 11, '#e8a005', 'center');
+    ctx.globalAlpha = 1;
+    cr.t -= DT60; if (cr.t <= 0) G.cardReveal = null;
+  }
+  // 结算 / 暂停 / 军略选择（rogue 试炼 或 主线遗物系统共用）
+  if (G.rogueChoices) {
     ctx.fillStyle = 'rgba(26,24,35,.72)'; ctx.fillRect(0, 0, W, H);
     panel(24, 210, 327, 190, { bg: '#fffdf9', stroke: '#dacdf0', r: 14 });
     txt('选择一条军略', W / 2, 244, 21, '#503b83', 'center', true);
-    txt('本局生效 · 选择后继续远征', W / 2, 264, 10, '#8f8a9c', 'center');
+    txt(G.rogue ? '本局生效 · 选择后继续远征' : '本局遗物 · 选择后继续作战', W / 2, 264, 10, '#8f8a9c', 'center');
     G.rogueChoices.forEach((c, i) => {
       const y = 279 + i * 35;
       btn(42, y, 291, 29, c.n + ' · ' + c.d, () => chooseRogue(i), { size: 11, bg: '#7250b8' });

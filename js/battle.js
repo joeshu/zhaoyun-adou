@@ -10,6 +10,16 @@ function boom(x, y, col) {
   for (let i = 0; i < 8 && G.parts.length < 200; i++)
     G.parts.push({ x, y, vx: rnd(-70, 70), vy: rnd(-100, 10), t: rnd(0.3, 0.7), col, r: rnd(1.5, 3.5) });
 }
+// 径向爆裂粒子（击杀/技能爆发用，比 boom 更"炸"）
+function boomRadial(x, y, col) {
+  if (!G) return;
+  for (let i = 0; i < 14 && G.parts.length < 200; i++) {
+    const a = Math.random() * Math.PI * 2, sp = rnd(80, 200);
+    G.parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: rnd(0.3, 0.7), col, r: rnd(2, 4) });
+  }
+}
+// 屏震：累积最大幅度，drawGame 每帧衰减
+function addShake(m) { if (G) G.shake = Math.max(G.shake || 0, m); }
 
 // 复用数组，消除战斗热路径每帧 Array.filter 分配（降低 iOS WebView GC 压力）
 const _rangeScratch = [];
@@ -34,6 +44,7 @@ function dealDmg(S, m, dmg, byUnit, cell) {
     m.stun = Math.max(m.stun, 1);
   if (m.hp > 0) return;
   m.dead = true;
+  if (m.boss) { addShake(6); boomRadial(m.x, m.y, '#e8a005'); }   // BOSS 爆裂屏震
   const gain = m.gold + (G.goldAdd || 0);                   // 击杀奖励 = 基础 + floor(关卡/3)
   S.mantou += gain;
   S.killCnt++;
@@ -148,7 +159,7 @@ function castSkill(S, cell, u) {
       var skinId = (typeof currentSkin === 'function') ? (currentSkin('赵云') || {}).id : 'default';
       if (skinId && skinId !== 'default') { heroHits(S, u, cell, 3, 0.7); fl(cell.x, cell.y - 26, '飞枪!', '#1c7ed6'); }
     }
-    if (S.side > 0) { G.banner = { txt: u.name + '·七进七出!', t: 1.2 }; G.flash = 0.5; }
+    if (S.side > 0) { G.banner = { txt: u.name + '·七进七出!', t: 1.2 }; G.flash = 0.5; addShake(3); }
   } else if (sk.id === 'dahe' || sk.id === 'shengjian') {   // 大喝 / 圣剑
     const ts = inRangeMobs(S, cell.x, cell.y, sk.r);
     if (!ts.length) return false;
@@ -162,6 +173,7 @@ function castSkill(S, cell, u) {
       if (zSkin && zSkin !== 'default') { for (var y = 0; y < ts.length; y++) if (ts[y].hp > 0) { ts[y].stun = Math.max(ts[y].stun, (sk.stun || 1.5) + 0.5); } }
     }
     G.fx.push({ type: 'ring', x: cell.x, y: cell.y, r: sk.r, t: 0.35, t0: 0.35, col: '#9c36b5' });
+    if (S.side > 0) addShake(3);
     if (sk.id === 'dahe' && u.weapon === 'shemao') for (const sn of S.snakes) sn.buffT = 5;
   } else if (sk.id === 'tiaopi') {                          // 跳劈：强化接下来 n 击
       if (S.side > 0 && u.name === '关羽') {
@@ -279,7 +291,7 @@ function bossCast(S, m, mb) {                   // BOSS 周期技能（文档 5.
   if (typeof evBossSkill === 'function') evBossSkill(mb.name, mb.cast);
   if (mb.cast === 'shehun') {                               // 张梁：全军瘫痪
     for (const c of S.cells) if (c.unit) c.unit.stun = mb.stunT;
-    if (S.side > 0) { G.banner = { txt: mb.name + '·摄魂! 全军瘫痪', t: 1.5 }; G.flash = 0.5; }
+    if (S.side > 0) { G.banner = { txt: mb.name + '·摄魂! 全军瘫痪', t: 1.5 }; G.flash = 0.5; addShake(8); }
     G.fx.push({ type: 'ring', x: m.x, y: m.y, r: 130, t: 0.5, t0: 0.5, col: '#5f3dc4' });
   } else if (mb.cast === 'volley') {                        // 弓箭统领：箭雨射随机3格
     const occ = S.cells.filter(c => c.unit && !noDeploy(c.unit));
@@ -377,9 +389,9 @@ function hurtAdou(S, dmg) {
     return;
   }
   if (S.side > 0 && SAVE.gearOn && SAVE.equipArmor && ARMORS[SAVE.equipArmor]) dmg *= (1 - ARMORS[SAVE.equipArmor].def);
-  S.hp -= dmg;
-  boom(S.adou.x, S.adou.y, '#e03131');
-  if (S.side > 0) { G.flash = 0.4; fl(S.adou.x, S.adou.y - 30, '阿斗受袭 -' + dmg, '#e03131'); sfx('hurt'); }  // 音效（P1-3）
+    S.hp -= dmg;
+    boom(S.adou.x, S.adou.y, '#e03131');
+    if (S.side > 0) { G.flash = 0.4; addShake(4); fl(S.adou.x, S.adou.y - 30, '阿斗受袭 -' + dmg, '#e03131'); sfx('hurt'); }  // 音效（P1-3）
   if (S.hp <= 0 && S.side > 0 && hasItem('xuming') && !S.xumingUsed) {
     S.xumingUsed = true; S.hp = 3;
     G.banner = { txt: '续命丹! 阿斗回魂', t: 1.5 };

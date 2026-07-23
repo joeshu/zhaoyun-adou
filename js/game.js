@@ -66,6 +66,9 @@ function startBattle(stage, endless, mapIdx) {
     })(),
     itemUses: uses, targeting: null,
     fx: [], parts: [], floats: [], banner: null, flash: 0, summonFx: null,
+    undoStack: [],                            // 玩家侧操作快照栈（撤销用）
+    shake: 0,                                 // 屏震幅度（打击感）
+    playerDmgMul: 1, playerRateMul: 1, playerHpMul: 1,   // 遗物系统：本局玩家全军增益（#27）
     goldEarn: 0, resultT: 0,
     egg: null,
     // 录像录制：玩家侧每个动作记录时间戳+动作+参数（P1-4 用）；ghost 回放时停止录制
@@ -298,4 +301,7 @@ function update(dt) {
   }
   if (G.P.hp <= 0) endBattle(false);
   else if (G.E.hp <= 0 && !G.mode) endBattle(true);
+  // 遗物系统：主线/无尽每 5 波可选一条本局军略（roguelike 元进度）
+  if (SAVE.relicsOn && !G.mode && !G.rogueChoices && G.wave > 0 && G.wave % 5 === 0 && G.betweenT >= 1 && typeof offerRelic === 'function')
+    offerRelic();
 }

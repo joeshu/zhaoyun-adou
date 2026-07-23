@@ -6,6 +6,7 @@ let btns = [], drag = null, selStage = 1, selMap = 0, forgeMsg = '';
 let ghostList = [], ghostMsg = '';   // P1-4 录像列表 / 反馈
 let saveConfirm = false, saveMsg = '';   // 存档页：清除二次确认 / 保存反馈
 let canvas, ctx, scaleF = 1;
+let _lastScr = '', _wipe = 0;                 // 过场淡入：切屏时短暂遮罩
 const DT60 = 1 / 60;
 
 // 字体字符串缓存：txt() 每帧被调用上百次，避免重复拼接与重复设置 ctx.font
@@ -120,6 +121,8 @@ function drawLab() {
   sw(30,246,'新橙将',SAVE.newHeros,()=>{SAVE.newHeros=!SAVE.newHeros;saveSave();});
   sw(195,246,'武将觉醒',SAVE.awaken,()=>{SAVE.awaken=!SAVE.awaken;saveSave();});
   sw(30,286,'装备扩展',SAVE.gearOn,()=>{SAVE.gearOn=!SAVE.gearOn;saveSave();});
+  sw(195,286,'色弱模式',SAVE.colorblind,()=>{SAVE.colorblind=!SAVE.colorblind;saveSave();});
+  sw(30,326,'遗物系统',SAVE.relicsOn,()=>{SAVE.relicsOn=!SAVE.relicsOn;saveSave();});
   btn(128,590,120,34,'返回',()=>{scr='menu';},{bg:'#7c8792'});
 }
 
@@ -263,18 +266,20 @@ function drawGhost() {
   }, { size: 11, bg: '#2f9e44' });
   // 刷新列表
   btn(195, 96, 165, 28, '↻ 刷新共享列表', () => { loadGhostList(); ghostMsg = '已刷新'; }, { size: 11, bg: '#495057' });
-  // 列表
+  // 列表（按关卡降序、步数升序排名，命令行首显示名次）
   if (!ghostList.length) txt('暂无录像（胜利后自动保存）', W / 2, 160, 12, '#adb5bd', 'center');
   const DIFF_NAMES = { easy: '简单', normal: '普通', hard: '困难' };
-  ghostList.slice(0, 13).forEach((g, i) => {
+  const ranked = ghostList.slice().sort((a, b) => (b.stage - a.stage) || (a.ops - b.ops) || ((b.result === 'win') - (a.result === 'win')));
+  ranked.slice(0, 13).forEach((g, i) => {
     const y = 130 + i * 30;
     const isLocal = g.src === 'local';
     rr(14, y, 347, 26, 5); ctx.fillStyle = isLocal ? '#f8f9fa' : '#f1f8ff'; ctx.fill();
     ctx.strokeStyle = '#dee2e6'; ctx.stroke();
-    txt((isLocal ? '本' : '享') + '·第' + g.stage + '关', 22, y + 17, 11, isLocal ? '#343a40' : '#1c7ed6', 'left', true);
-    txt((DIFF_NAMES[g.diff] || '普') + '/' + (DIFF_NAMES[g.ai] || '普'), 100, y + 17, 10, '#868e96');
-    txt(g.ops + '步', 160, y + 17, 10, '#495057');
-    txt(g.result === 'win' ? '胜' : '—', 195, y + 17, 11, '#2f9e44', 'center', true);
+    txt('#' + (i + 1), 20, y + 17, 11, '#b78324', 'left', true);
+    txt((isLocal ? '本' : '享') + '·第' + g.stage + '关', 40, y + 17, 11, isLocal ? '#343a40' : '#1c7ed6', 'left', true);
+    txt((DIFF_NAMES[g.diff] || '普') + '/' + (DIFF_NAMES[g.ai] || '普'), 118, y + 17, 10, '#868e96');
+    txt(g.ops + '步', 175, y + 17, 10, '#495057');
+    txt(g.result === 'win' ? '胜' : '—', 205, y + 17, 11, '#2f9e44', 'center', true);
     if (isLocal) btn(220, y + 3, 60, 20, '回放', () => startGhostPlayback(SAVE.ghosts[g.idx]), { size: 10, bg: '#1c7ed6' });
     else btn(220, y + 3, 60, 20, '下载', () => downloadGhost(g.id), { size: 10, bg: '#5f3dc4' });
     if (isLocal) btn(285, y + 3, 70, 20, '上传共享', () => uploadGhost(SAVE.ghosts[g.idx]), { size: 10, bg: '#2f9e44' });
@@ -366,10 +371,15 @@ function drawForge() {
     const r = forge();
     forgeMsg = !r ? '资源不足!' : (r.dup ? '重复·' + WEAPONS[r.id].name + ' 转 30 金' : '获得 ' + Q_NAME[WEAPONS[r.id].q] + '·' + WEAPONS[r.id].name + '!');
   }, { size: 15, bg: '#1c7ed6', disabled: SAVE.gold < FORGE_COST.gold || SAVE.mat < FORGE_COST.mat });
-  if (forgeMsg) txt(forgeMsg, W / 2, 148, 13, '#e8a005', 'center', true);
-  txt('武器仓（' + SAVE.weapons.length + '/' + Object.keys(WEAPONS).length + '）：', 20, 176, 12, '#495057', 'left', true);
+  if (forgeMsg) txt(forgeMsg, W / 2, 134, 13, '#e8a005', 'center', true);
+  // 锻造选系：定向该武器系，降低随机挫败（再点已选系可取消回到随机）
+  const _fs = ['', '枪', '刀', '弓', '剑'], _fl = ['随机', '枪系', '刀系', '弓系', '剑系'];
+  _fs.forEach((s, i) => btn(14 + i * 70, 142, 66, 26, _fl[i], () => { SAVE.forgeSeries = (SAVE.forgeSeries === s ? '' : s); saveSave(); },
+    { size: 10, bg: SAVE.forgeSeries === s ? '#e8a005' : '#868e96' }));
+  if (SAVE.forgeDupStreak >= 3) txt('保底进度 ' + SAVE.forgeDupStreak + '/5：连续重复将必出新武器', W / 2, 182, 9, '#bd4a31', 'center');
+  txt('武器仓（' + SAVE.weapons.length + '/' + Object.keys(WEAPONS).length + '）：', 20, 200, 12, '#495057', 'left', true);
   SAVE.weapons.forEach((id, i) => {
-    const w = WEAPONS[id], y = 192 + i * 26;
+    const w = WEAPONS[id], y = 216 + i * 24;
     txt(Q_NAME[w.q] + '·' + w.name + (w.lock ? '〔' + w.lock + '专属〕' : '〔' + w.wq + '系〕'), 24, y + 14, 12, Q_COL[w.q], 'left', true);
     txt(w.tip, 200, y + 14, 10, '#868e96');
   });
@@ -503,6 +513,7 @@ function draw() {
   ctx.fillStyle = '#f3eee3'; ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = '#e1d4bf'; ctx.fillRect(0, 0, W, 4);
   btns = [];
+  if (scr !== _lastScr) { _lastScr = scr; _wipe = 0.25; }   // 切屏触发淡入
   if (scr === 'menu') drawMenu();
   else if (scr === 'shop') drawShop();
   else if (scr === 'forge') drawForge();
@@ -520,6 +531,11 @@ function draw() {
   else if (scr === 'roster') drawRoster();
   else if (scr === 'modes') drawModes();
   else drawGame();
+  // 过场淡入：新画面从背景色渐显（不抖 UI）
+  if (_wipe > 0) {
+    _wipe = Math.max(0, _wipe - DT60);
+    ctx.globalAlpha = (_wipe / 0.25) * 0.8; ctx.fillStyle = '#f3eee3'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1;
+  }
 }
 
 /* ---------- 成就面板（P1-1） ---------- */

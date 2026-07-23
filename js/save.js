@@ -44,6 +44,10 @@ function defaultSave() {
     heroRecords: {},              // 群英谱：{武将名: {kills,deployments,wins}}
     heroChallenges: {},            // 英雄挑战完成记录 {武将名:true}
     mapSkin: 0,                   // 地图皮肤编号 0..3
+    colorblind: false,            // 色弱可读性：单位底牌改用形状/高对比描边区分
+    relicsOn: false,              // 遗物系统：主线/无尽每5波可选一条本局军略（roguelike 元进度）
+    forgeSeries: '',              // 锻造选系：''=随机，否则限定武器系（枪/刀/弓/剑）
+    forgeDupStreak: 0,            // 锻造连续重复计数（保底：达阈值必出新武器）
     dailyTask: { progress: 0, reward: false, seed: 0 }, // 每日随机任务进度
     stats: {                      // P2-2 累计统计
       kills: 0,                   // 累计击杀
@@ -329,12 +333,23 @@ function rollHeroShard(preferWish = true) {
 function forge() {
   if (SAVE.gold < FORGE_COST.gold || SAVE.mat < FORGE_COST.mat) return null;
   SAVE.gold -= FORGE_COST.gold; SAVE.mat -= FORGE_COST.mat;
-  const q = wpick([[2, 50], [3, 35], [4, 15]]);
-  const pool = Object.keys(WEAPONS).filter(k => WEAPONS[k].q === q);
-  const id = pool[(Math.random() * pool.length) | 0];
+  // 选系：限定武器系，否则按品质随机
+  let pool = Object.keys(WEAPONS);
+  if (SAVE.forgeSeries) pool = pool.filter(k => WEAPONS[k].wq === SAVE.forgeSeries);
+  // 保底：连续重复达到阈值，强制出一把未拥有的（同系优先）
+  let id;
+  if (SAVE.forgeDupStreak >= 5) {
+    const fresh = pool.filter(k => !SAVE.weapons.includes(k));
+    id = (fresh.length ? fresh : pool)[(Math.random() * (fresh.length ? fresh.length : pool.length)) | 0];
+    SAVE.forgeDupStreak = 0;
+  } else {
+    const q = wpick([[2, 50], [3, 35], [4, 15]]);
+    const qpool = pool.filter(k => WEAPONS[k].q === q);
+    id = qpool.length ? qpool[(Math.random() * qpool.length) | 0] : pool[(Math.random() * pool.length) | 0];
+  }
   let dup = false;
-  if (SAVE.weapons.includes(id)) { dup = true; SAVE.gold += 30; }   // 重复转 30 金
-  else SAVE.weapons.push(id);
+  if (SAVE.weapons.includes(id)) { dup = true; SAVE.gold += 30; SAVE.forgeDupStreak++; }   // 重复转 30 金
+  else { SAVE.weapons.push(id); SAVE.forgeDupStreak = 0; }
   saveSave();
   return { id, dup };
 }

@@ -91,9 +91,28 @@ function rogueOffer() {
   G.rogueChoices = all.sort(() => Math.random() - .5).slice(0, 3);
   G.paused = true;
 }
+/* 遗物系统（#27）：主线/无尽每 5 波触发，复用 rogueChoices 选择 UI。
+   增益作用于本局玩家全军（playerDmgMul 等由 unitStats 读取）。 */
+function offerRelic() {
+  if (!G) return;
+  const pool = [
+    { n: '龙胆军略', d: '全军伤害 +25%', apply: () => { G.playerDmgMul *= 1.25; } },
+    { n: '疾风军略', d: '全军攻速 +15%', apply: () => { G.playerRateMul *= 1.15; } },
+    { n: '铁壁军略', d: '全军血量 +20%', apply: () => { G.playerHpMul *= 1.2; G.P.cells.forEach(c => { if (c.unit) c.unit.hp *= 1.2; }); } },
+    { n: '屯田令', d: '立即 +30 馒头', apply: () => { G.P.mantou += 30; } },
+    { n: '资军略', d: '立即 +50 馒头', apply: () => { G.P.mantou += 50; } },
+    { n: '回血军略', d: '阿斗回复 3 血', apply: () => { G.P.hp = Math.min(G.P.maxhp, G.P.hp + 3); } },
+  ];
+  G.rogueChoices = pool.sort(() => Math.random() - .5).slice(0, 3);
+  G.paused = true;
+}
 function chooseRogue(i) {
   const c = G && G.rogueChoices && G.rogueChoices[i]; if (!c) return;
-  c.apply(); G.rogue.picks++; G.rogue.floor++; G.rogueChoices = null; G.paused = false;
-  if (G.rogue.floor > G.rogue.maxFloor) { G.rewardTxt = '试炼完成 · 获得 ' + G.rogue.picks + ' 条军略'; endBattle(true); }
-  else { G.banner = { txt: c.n + '：' + c.d, t: 2 }; G.betweenT = 1; }
+  c.apply(); G.rogueChoices = null; G.paused = false;
+  // rogue 模式有 floor 进度与通关判定；遗物模式（无 G.rogue）仅应用增益
+  if (G.rogue) {
+    G.rogue.picks++; G.rogue.floor++;
+    if (G.rogue.floor > G.rogue.maxFloor) { G.rewardTxt = '试炼完成 · 获得 ' + G.rogue.picks + ' 条军略'; endBattle(true); return; }
+  }
+  G.banner = { txt: c.n + '：' + c.d, t: 2 }; G.betweenT = 1;
 }

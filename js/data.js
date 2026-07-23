@@ -90,7 +90,8 @@ function wpick(pairs) {
 function mobCap(mode) {
   if (mode === 'fire') return 10;
   if (mode === 'escort' || mode === 'puzzle') return 12;
-  return 999;
+  // 普通/无尽模式：封顶 60，避免长局堆怪掉帧与视觉灾难（原 999 无上限）
+  return 60;
 }
 
 /* ---------- 兵种（7 种）×品级（白绿蓝紫橙） ---------- */

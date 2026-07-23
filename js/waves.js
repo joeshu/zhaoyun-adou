@@ -45,6 +45,14 @@ function startWave() {
     bossTxt = ' · ' + MOBS[bossType].name;
   }
   G.spawnT = 0;
+  // 下一波预告：基于当前关卡配置的下一波构成（仅普通/无尽/rogue 有意义）
+  if (!G.mode || G.mode === 'rogue') {
+    const nw = G.wave + 1;
+    const nIsBoss = G.endless ? (nw % 10 === 0) : (nw === waves);
+    const nPool = mix.map((w, i) => [['兵', '弩', '骑', '斧'][i], w]).filter(p => p[1] > 0);
+    if (G.endless) nPool.push(['狂', 10]);
+    G.previewQ = { per, pool: nPool, boss: !!(boss && nIsBoss) };
+  } else G.previewQ = null;
   G.banner = { txt: '第 ' + G.wave + '/' + (G.endless ? '∞' : waves) + ' 波' + bossTxt, t: 1.6 };
   if (G.endless && G.wave > SAVE.bestWave) { SAVE.bestWave = G.wave; saveSave(); }
   if (!G.mode && typeof chapterWaveEvent === 'function') chapterWaveEvent();
