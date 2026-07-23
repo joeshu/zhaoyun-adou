@@ -43,6 +43,7 @@ function defaultSave() {
     adviser: 'zhuge',             // 当前军师
     heroRecords: {},              // 群英谱：{武将名: {kills,deployments,wins}}
     heroChallenges: {},            // 英雄挑战完成记录 {武将名:true}
+    mapSkin: 0,                   // 地图皮肤编号 0..3
     dailyTask: { progress: 0, reward: false, seed: 0 }, // 每日随机任务进度
     stats: {                      // P2-2 累计统计
       kills: 0,                   // 累计击杀

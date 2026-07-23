@@ -128,11 +128,19 @@ function drawAdou(S) {
 }
 
 function drawGame() {
-  // 战场采用羊皮纸、敌我阵营与操作区三层配色，降低格子/按钮间的视觉噪声。
-  ctx.fillStyle = '#fff5f0'; ctx.fillRect(0, TOP, W, 296 - TOP);
-  ctx.fillStyle = '#fbf7ed'; ctx.fillRect(0, 300, W, 532 - 300);
-  ctx.fillStyle = '#edf0f2'; ctx.fillRect(0, 532, W, H - 532);
-  ctx.fillStyle = '#b9a995'; ctx.fillRect(0, 296, W, 3);
+  // 各战场底纹可由用户切换为四种地图皮肤，与机制无关，纯视觉区分。
+  var skinId = SAVE.mapSkin || 0;
+  var skins = [
+    { e:'#fff5f0', p:'#fbf7ed', b:'#edf0f2', band:'#b9a995', name:'羊皮纸' },
+    { e:'#f4f0e6', p:'#ece5d8', b:'#d9d2c5', band:'#a6937c', name:'古卷' },
+    { e:'#eaf2e3', p:'#d9ead3', b:'#c5d5be', band:'#7b9a6d', name:'竹林' },
+    { e:'#e6e8f0', p:'#d3d8e6', b:'#bec2d4', band:'#6d759a', name:'霜夜' },
+  ];
+  var s = skins[skinId] || skins[0];
+  ctx.fillStyle = s.e; ctx.fillRect(0, TOP, W, 296 - TOP);
+  ctx.fillStyle = s.p; ctx.fillRect(0, 300, W, 532 - 300);
+  ctx.fillStyle = s.b; ctx.fillRect(0, 532, W, H - 532);
+  ctx.fillStyle = s.band; ctx.fillRect(0, 296, W, 3);
   drawPath(G.E); drawPath(G.P);
   drawAdou(G.E);
   G.E.cells.forEach(c => drawCell(c, G.E, false));

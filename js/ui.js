@@ -69,7 +69,9 @@ function drawMenu() {
   txt('第 ' + selStage + ' 关 · ' + ch + (selStage % 10 === 0 ? ' · BOSS' : ''), W / 2, 215, 16, ink, 'center', true);
   MAPS.forEach((m, i) => btn(24 + (i % 2) * 166, 243 + ((i / 2) | 0) * 32, 160, 27, m.name, () => { selMap = i; }, { size: 11, bg: selMap === i ? red : slate }));
   const mapEffect = MAPS[selMap].effect; if (mapEffect) txt('战场机制 · ' + mapEffect.name, W / 2, 284, 10, '#8a7e6c', 'center');
-  btn(30, 296, 315, 42, '主线推进 · 开战', () => { startBattle(selStage, false, selMap); scr = 'game'; }, { size: 18, bg: red });
+  var skinNames = ['羊皮纸','古卷','竹林','霜夜']; var curSkin = SAVE.mapSkin || 0;
+  btn(30, 292, 150, 26, '皮肤:' + skinNames[curSkin], () => { SAVE.mapSkin = (curSkin + 1) % 4; saveSave(); }, { size: 10, bg: '#7250b8' });
+  btn(195, 292, 150, 26, '开 战', () => { startBattle(selStage, false, selMap); scr = 'game'; }, { size: 18, bg: red });
   btn(30, 344, 154, 30, '特别玩法', () => { scr = 'modes'; }, { size: 11, bg: '#bd4a31' });
   btn(191, 344, 154, 30, SAVE.endless ? '无尽挑战 · ' + SAVE.bestWave + '波' : '无尽挑战（30关解锁）', () => { startBattle(STAGE_MAX, true, selMap); scr = 'game'; }, { size: 10, bg: '#6850ba', disabled: !(SAVE.endless || SAVE.endlessOn) });
 
