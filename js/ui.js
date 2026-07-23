@@ -84,10 +84,10 @@ function drawMenu() {
   // 第三层：记录
   sectionLabel('记录', 30, 510);
   btn(30, 520, 100, 32, '成就', () => { scr = 'ach'; }, { bg: slate, size: 11 });
-  btn(138, 520, 100, 32, '对战录像', () => { scr = 'ghost'; ghostMsg = ''; loadGhostList(); }, { bg: '#6850ba', size: 11 });
+  btn(138, 520, 100, 32, '录像', () => { scr = 'ghost'; ghostMsg = ''; loadGhostList(); }, { bg: '#6850ba', size: 11 });
   btn(246, 520, 99, 32, '存档管理', () => { scr = 'save'; saveMsg = ''; }, { bg: slate, size: 11 });
   const canSign = canDaily();
-  btn(30, 558, 154, 28, (canSign ? '✓ ' : '') + '每日签到', () => { scr = 'daily'; dailyMsg = ''; }, { size: 11, bg: canSign ? '#318c4a' : slate });
+  btn(138, 558, 154, 28, (canSign ? '✓ ' : '') + '每日签到', () => { scr = 'daily'; dailyMsg = ''; }, { size: 11, bg: canSign ? '#318c4a' : slate });
   btn(191, 558, 154, 28, '玩法说明', () => { scr = 'help'; }, { size: 11, bg: slate });
 
   // 非核心规则与实验性功能收进实验室，避免新人首页被开关淹没。
@@ -444,6 +444,25 @@ function drawCommand() {
   btn(128, 590, 120, 34, '返回', () => { scr = 'menu'; }, { bg: '#7c8792' });
 }
 
+function drawRoster() {
+  txt('群英谱', W / 2, 48, 24, '#2f3540', 'center', true);
+  txt('征战记录 · 英雄挑战', W / 2, 70, 10, '#8a7e6c', 'center');
+  HERO_LIST.forEach(function(name, i) {
+    var rec = typeof heroRecord === 'function' ? heroRecord(name) : { kills: 0, deployments: 0, wins: 0 };
+    var y = 88 + i * 44, own = SAVE.ownedHeroes[name], star = heroStar ? heroStar(name) : 0;
+    panel(20, y, 335, 38, { bg: own ? '#fffdf9' : '#f0ece4', stroke: own ? '#dfc98d' : '#ded8ce', r: 8, blur: 2 });
+    var c = HEROES[name].grade === 4 ? '#b78324' : '#8050a0';
+    txt(name, 32, y + 17, 14, own ? c : '#8f969c', 'left', true);
+    txt('杀 ' + rec.kills + '  出 ' + rec.deployments + '  ' + (own ? '★' + star : '未拥有'), 32, y + 32, 9, '#656d76');
+    var ch = typeof heroChallenges === 'function' ? heroChallenges().find(function(x) { return x.hero === name; }) : null;
+    if (ch) {
+      txt(ch.desc, 185, y + 24, 9, SAVE.heroChallenges[name] ? '#318c4a' : '#868e96');
+      txt(SAVE.heroChallenges[name] ? '✓' : '未完成', 185, y + 17, 10, SAVE.heroChallenges[name] ? '#318c4a' : '#a48b63', 'center');
+    }
+  });
+  btn(128, 596, 120, 34, '返回', function() { scr = 'menu'; }, { bg: '#7c8792' });
+}
+
 function drawModes() {
   txt('特别玩法', W / 2, 54, 25, '#2f3540', 'center', true);
   txt('改变胜利目标，而不是单纯增加波次', W / 2, 76, 11, '#90949a', 'center');
@@ -479,6 +498,7 @@ function draw() {
   else if (scr === 'stats') drawStats();
   else if (scr === 'command') drawCommand();
   else if (scr === 'lab') drawLab();
+  else if (scr === 'roster') drawRoster();
   else if (scr === 'modes') drawModes();
   else drawGame();
 }

@@ -23,6 +23,13 @@ function drawUnitAt(u, x, y, S) {
   if (u.t === 'hero') {
     txt(u.name, 0, 4, 14 + u.lvl, col, 'center', true);
     txt('Lv' + u.lvl + (u.weapon ? '·' + WEAPONS[u.weapon].name[0] : ''), 0, 17, 8, col, 'center');
+    // 武将技能冷却环：如果该武将拥有主动技能，绘制一个圆形进度表示冷却状态。
+    if (HEROES[u.name].skill) {
+      var cdMax = (typeof skillCd === 'function') ? skillCd(u) : HEROES[u.name].skill.cd;
+      var cdRatio = 1 - Math.min(1, Math.max(0, (u.cd || 0) / cdMax));
+      ctx.strokeStyle = cdRatio >= 1 ? '#2f9e44' : '#5f3dc4'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, -5, 21, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * cdRatio); ctx.stroke();
+    }
     // P2-1 皮肤装饰：按当前皮肤的 decor 显示角标
     if (typeof currentSkin === 'function') {
       const sk = currentSkin(u.name);
@@ -38,6 +45,14 @@ function drawUnitAt(u, x, y, S) {
   } else if (u.t === 'char') {
     txt(u.ch, 0, 7, 22, col, 'center', true);
     txt('将字', 0, 18, 7, '#adb5bd', 'center');
+    // 将字配对预览：在玩家侧显示能与当前字配对的另一个字，降低拼字记忆门槛。
+    if (S && S.side > 0) {
+      var paired = null;
+      for (var i = 0; i < HERO_LIST.length && !paired; i++) {
+        var n = HERO_LIST[i]; if (n[0] === u.ch) paired = n[1]; else if (n[1] === u.ch) paired = n[0];
+      }
+      if (paired) txt('配:' + paired, 0, 30, 8, '#b78324', 'center');
+    }
   } else if (u.t === 'ifrag') {
     txt(u.ch, 0, 7, 22, u.wish ? '#ffd700' : col, 'center', true);
     txt(ITEMS[IFRAGS[u.ch].item].name + ' ' + u.n + '/' + IFRAGS[u.ch].need, 0, 18, 7, '#adb5bd', 'center');
@@ -214,7 +229,7 @@ function drawGame() {
   // 特别玩法状态条：保留战斗视野，不弹出额外常驻面板。
   if (G.mode === 'fire') {
     txt('🔥 ' + G.wind + ' · 守城 ' + Math.ceil(Math.max(0, G.modeTime)) + ' 秒', W / 2, 48, 11, '#bd4a31', 'center', true);
-    for (const f of G.fireCells) { ctx.globalAlpha = .22 + Math.sin(G.time * 8) * .08; ctx.fillStyle = '#e8590c'; ctx.beginPath(); ctx.arc(f.x, f.y, 30, 0, 7); ctx.fill(); ctx.globalAlpha = 1; txt('🔥', f.x, f.y + 7, 18, '#e8590c', 'center'); }
+    drawBuildings();
   } else if (G.mode === 'escort') {
     txt('🐎 护送进度 ' + Math.floor(G.escort.progress) + '%', W / 2, 48, 11, '#2f7f9d', 'center', true);
     ctx.fillStyle = '#d9e8ec'; ctx.fillRect(112, 53, 151, 4); ctx.fillStyle = '#2f7f9d'; ctx.fillRect(112, 53, 151 * G.escort.progress / 100, 4);

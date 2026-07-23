@@ -78,6 +78,7 @@ function startBattle(stage, endless, mapIdx) {
     ghostIdx: 0, ghostDone: false,
     heroRespawns: [],
     mapEventT: (MAPS[mapIdx || 0].effect || {}).iv || 0,
+    buildings: [],
   };
   // 永久主将：每局开场自动放入合成栏，仍需由玩家拖至战场部署。
   if (G.P.side > 0 && SAVE.leadHero && SAVE.ownedHeroes[SAVE.leadHero]) {
@@ -214,6 +215,7 @@ function update(dt) {
   if (!G.ghostMode && SAVE.stats) SAVE.stats.playTime += dt;
   tickMapEffect(dt);
   if (typeof tickChapterMechanic === 'function') tickChapterMechanic(dt);
+  if (typeof tickBuildings === 'function') tickBuildings(dt);
   if (G.mode && typeof modeTick === 'function') modeTick(dt);
   if (G.state !== 'play') return;
   // 永久主将阵亡后整备 12 秒，以半血回到合成栏；栏满时延后返场。

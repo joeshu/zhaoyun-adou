@@ -27,6 +27,7 @@ function modeSetup() {
     G.modeTime = 150; G.modeScore = 0; G.wind = '东南风'; G.windT = 30;
     G.fireCells = [{ x: 80, y: 380 }, { x: 295, y: 436 }];
     G.banner = { txt: '【赤壁火攻】守住水寨 150 秒 · 风势将改变火路', t: 3 };
+    spawnBuilding(80, 380, 'tower'); spawnBuilding(295, 436, 'trap');
   } else if (G.mode === 'rogue') {
     G.rogue = { floor: 1, maxFloor: 8, picks: 0, dmg: 1, hp: 1, income: 0 };
     G.banner = { txt: '【五虎试炼】每场胜利选择一条军略', t: 3 };

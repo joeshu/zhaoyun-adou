@@ -1,7 +1,7 @@
 // v2.1 无头冒烟测试：node smoke.js（仅逻辑模拟，无渲染）
 'use strict';
 const fs = require('fs');
-const FILES = ['data', 'save', 'events', 'audio', 'merge', 'battle', 'chapter', 'modecfg', 'waves', 'modes', 'meta', 'roster', 'dailytask', 'actions', 'game'];
+const FILES = ['data', 'save', 'events', 'audio', 'merge', 'battle', 'chapter', 'modecfg', 'waves', 'modes', 'building', 'meta', 'roster', 'dailytask', 'actions', 'game'];
 const src = FILES.map(f => fs.readFileSync(__dirname + '/js/' + f + '.js', 'utf8')).join('\n;\n');
 eval(src + `
 ;(function () {
