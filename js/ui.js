@@ -546,7 +546,9 @@ function drawForge() {
     txt(Q_NAME[w.q] + '·' + w.name + (w.lock ? '〔' + w.lock + '专属〕' : '〔' + w.wq + '系〕'), 24, y + 14, 12, Q_COL[w.q], 'left', true);
     txt(w.tip, 200, y + 14, 10, '#868e96');
   });
-  btn(128, 604, 120, 34, '返回', () => { scr = 'menu'; }, { bg: '#868e96' });
+  txt('武器给对应「系」武将穿戴：加攻击/射程，专武带特效', W / 2, 588, 10, '#8a7e6c', 'center');
+  btn(30, 604, 210, 34, '→ 去武将装备穿戴', () => { scr = 'equip'; }, { grad: THEME.purple, size: 12 });
+  btn(246, 604, 99, 34, '返回', () => { scr = 'menu'; }, { grad: THEME.slate });
 }
 
 /* ---------- 武将装备（点武将轮换武器 + P2-1 皮肤切换） ---------- */
@@ -568,8 +570,9 @@ function drawEquip() {
     txt(name + (sk && sk.decor && sk.decor !== 'none' ? ' ' + ((typeof SKIN_DECOR !== 'undefined' && SKIN_DECOR[sk.decor]) || '★') : ''),
       24, y + 23, 15, nameCol, 'left', true);
     txt(h.wq + '系 · ' + h.tip, 80, y + 15, 10, '#868e96');
-    txt(eq ? Q_NAME[WEAPONS[eq].q] + '·' + WEAPONS[eq].name : (weaponsFor(name).length ? '未装备(点击穿戴)' : '无可用武器'),
+    txt(eq ? Q_NAME[WEAPONS[eq].q] + '·' + WEAPONS[eq].name : (weaponsFor(name).length ? '未装备(点击穿戴)' : '无' + h.wq + '系武器·去锻造'),
       80, y + 30, 11, eq ? Q_COL[WEAPONS[eq].q] : '#adb5bd', 'left', !!eq);
+    txt('⇄', 246, y + 18, 14, '#c0c6cc', 'center');   // 可点循环换装的手势提示（旧版行是隐形按钮，玩家想不到点）
     // 右侧：皮肤按钮（262-360）
     const skinBtn = (typeof currentSkin === 'function') ? currentSkin(name) : null;
     const skinLabel = skinBtn ? skinBtn.name : '皮肤';
@@ -580,7 +583,8 @@ function drawEquip() {
     }, { size: 10, bg: (skinBtn && skinBtn.col) ? skinBtn.col : '#5f3dc4' });
   });
   unclip();
-  btn(128, 604, 120, 34, '返回', () => { scr = 'menu'; }, { bg: '#868e96' });
+  btn(30, 604, 154, 34, '← 去锻造', () => { scr = 'forge'; forgeMsg = ''; }, { grad: THEME.indigo });
+  btn(191, 604, 154, 34, '返回', () => { scr = 'menu'; }, { grad: THEME.slate });
 }
 
 /* ---------- 武将营：永久招募、心愿与主将选择 ---------- */
