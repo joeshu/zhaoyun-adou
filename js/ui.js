@@ -237,7 +237,7 @@ function drawMenu() {
   btn(138, 520, 100, 32, '录像', () => { scr = 'ghost'; ghostMsg = ''; loadGhostList(); }, { grad: THEME.indigo, size: 11, r: 9 });
   btn(246, 520, 99, 32, '存档管理', () => { scr = 'save'; saveMsg = ''; }, { grad: THEME.slate, size: 11, r: 9 });
   const canSign = canDaily();
-  btn(138, 558, 154, 28, (canSign ? '✓ ' : '') + '每日签到', () => { scr = 'daily'; dailyMsg = ''; }, { size: 11, grad: canSign ? THEME.pine : THEME.slate, r: 8 });
+  btn(30, 558, 154, 28, (canSign ? '✓ ' : '') + '每日签到', () => { scr = 'daily'; dailyMsg = ''; }, { size: 11, grad: canSign ? THEME.pine : THEME.slate, r: 8 });
   btn(191, 558, 154, 28, '玩法说明', () => { scr = 'help'; }, { size: 11, grad: THEME.slate, r: 8 });
 
   // 非核心规则与实验性功能收进实验室，避免新人首页被开关淹没。
