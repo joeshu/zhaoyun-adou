@@ -447,6 +447,7 @@ function drawCommand() {
 function drawRoster() {
   txt('群英谱', W / 2, 48, 24, '#2f3540', 'center', true);
   txt('征战记录 · 英雄挑战', W / 2, 70, 10, '#8a7e6c', 'center');
+  txt('前6位英雄有4套专属皮肤，其余2套通用', W / 2, 82, 9, '#90949a', 'center');
   HERO_LIST.forEach(function(name, i) {
     var rec = typeof heroRecord === 'function' ? heroRecord(name) : { kills: 0, deployments: 0, wins: 0 };
     var y = 88 + i * 44, own = SAVE.ownedHeroes[name], star = heroStar ? heroStar(name) : 0;

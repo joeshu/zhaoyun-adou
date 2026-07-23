@@ -318,7 +318,7 @@ function checkAchievements() {
      'kills_500/2000'    累计击杀
      'ach:<id>'          解锁对应成就
      'wish_<name>'       心愿单设为该武将 */
-const SKIN_DECOR = { none: '', star: '★', diamond: '◈', flame: '✦', gold: '✦' };
+const SKIN_DECOR = { none: '', star: '★', diamond: '◈', flame: '✦', gold: '✦', dragon: '◆' };
 const SKINS = {
   '赵云': [
     { id: 'default', name: '常山', col: null, decor: 'none',     cond: 'default' },
@@ -356,6 +356,7 @@ const SKINS = {
 const SKIN_DEFAULT = [
   { id: 'default', name: '常服', col: null, decor: 'none', cond: 'default' },
   { id: 'gold',    name: '金装', col: '#fab005', decor: 'gold', cond: 'eggs_all' },
+  { id: 'dragon',  name: '真龙', col: '#e8590c', decor: 'flame', cond: 'kills_2000' },
 ];
 function heroSkins(name) {
   return SKINS[name] || SKIN_DEFAULT;
