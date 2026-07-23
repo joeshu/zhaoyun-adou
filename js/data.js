@@ -201,7 +201,7 @@ const MOBS = {
   兵: { hp: 32,  spd: 30, atk: 6,  dmg: 1, gold: 3 },
   卒: { hp: 22,  spd: 52, atk: 5,  dmg: 1, gold: 3 },
   骑: { hp: 70,  spd: 62, atk: 10, dmg: 1, gold: 6, vs弓: 2 },
-  弩: { hp: 48,  spd: 36, atk: 8,  dmg: 1, gold: 4, archer: true, tip: '远程消耗阿斗' },
+  弩: { hp: 48,  spd: 36, atk: 5,  dmg: 1, gold: 5, archer: true, rng: 90, rate: 1.5, tip: '远攻·应骑反制' },
   斧: { hp: 180, spd: 22, atk: 14, dmg: 2, gold: 8, armor: 0.6, tip: '持斧重甲' },
   狂: { hp: 42,  spd: 88, atk: 6,  dmg: 1, gold: 4, tip: '高速突进' },
   粮: { hp: 65, spd: 26, atk: 0, dmg: 0, gold: 10, supply: true, tip: '补给车：击毁获得额外馒头' },

@@ -363,9 +363,11 @@ function updMob(S, m, dt) {
   if (mb.charge && m.hp < m.maxhp * 0.5) spd *= 2;          // 重甲骑兵：半血冲锋
   if (mb.archer) {                                          // 弩：远程射单位/阿斗
     m.atkT += dt;
-    const tc = S.cells.find(c => c.unit && c.unit.t !== 'char' && c.unit.t !== 'shovel' && Math.hypot(m.x - c.x, m.y - c.y) <= 90);
+    const archerRng = mb.rng || 90;                        // 抽离原硬编码 90 → 数据驱动（mb.rng）
+    const archerRate = mb.rate || 1.5;                     // 抽离原硬编码 1.5 → 数据驱动（mb.rate）
+    const tc = S.cells.find(c => c.unit && c.unit.t !== 'char' && c.unit.t !== 'shovel' && Math.hypot(m.x - c.x, m.y - c.y) <= archerRng);
     if (tc) {
-      if (m.atkT >= 1.5) {
+      if (m.atkT >= archerRate) {
         m.atkT = 0; damageUnit(S, tc, m.atk);
         G.fx.push({ type: 'line', x1: m.x, y1: m.y, x2: tc.x, y2: tc.y, t: 0.12, t0: 0.12, col: '#c0392b' });
       }
