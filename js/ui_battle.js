@@ -408,12 +408,9 @@ function drawCell(c, S, hide) {
   ctx.fillStyle = hl; ctx.fill();
   ctx.restore();
 
-  /* Ink border (occupation-tinted) */
-  ctx.lineWidth = 1.5;
-  ctx.strokeStyle = !c.unit ? cBord : unitCol(c.unit);
-  ctx.stroke();
-
-  /* Bottom-right inner shadow */
+  /* No hard ink border — player wants the celadon surface only,
+     the rectangular frame on top of each tile is removed (feedback).
+     Keep the soft bottom-right shadow for celadon depth. */
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,.07)'; ctx.shadowBlur = 3; ctx.shadowOffsetX = 1.5; ctx.shadowOffsetY = 1.5;
   rr(x + 2, y + 2, CELL - 4, CELL - 4, 4);
@@ -436,32 +433,16 @@ function drawBarSlot(s, hide) {
   var cFill = bold ? mt.cellFillBold : mt.cellFill;
   var cBord = bold ? mt.cellBorderBold : mt.cellBorder;
 
-  /* 仅当有单位时才铺瓷面背景，否则只画极淡虚线轮廓（与棋盘空格子视觉一致） */
-  if (s.unit) {
-    var cg = ctx.createLinearGradient(x, y, x, y + CELL);
-    cg.addColorStop(0, cFill); cg.addColorStop(1, shade(cFill, 0.94));
-    ctx.fillStyle = cg; ctx.fill();
-    ctx.save();
-    var hl = ctx.createLinearGradient(x, y, x, y + CELL * 0.45);
-    hl.addColorStop(0, 'rgba(255,255,255,.28)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
-    rr(x + 1, y + 1, CELL - 2, (CELL - 2) * 0.45, 5); ctx.fillStyle = hl; ctx.fill();
-    ctx.restore();
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = noDeploy(s.unit) ? shade(cBord, 0.7) : unitCol(s.unit);
-    if (noDeploy(s.unit)) ctx.setLineDash([3, 3]);
-    ctx.stroke(); ctx.setLineDash([]);
-  } else {
-    ctx.save();
-    ctx.setLineDash([2, 3]);
-    ctx.strokeStyle = cBord;
-    ctx.globalAlpha = 0.5;
-    ctx.lineWidth = 0.8;
-    rr(x + 1, y + 1, CELL - 2, CELL - 2, 5);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 1;
-    ctx.restore();
-  }
+  /* Always celadon fill (empty AND occupied) — player wants all celadon kept.
+     No hard ink border frame on top (removed per feedback). */
+  var cg = ctx.createLinearGradient(x, y, x, y + CELL);
+  cg.addColorStop(0, cFill); cg.addColorStop(1, shade(cFill, 0.94));
+  ctx.fillStyle = cg; ctx.fill();
+  ctx.save();
+  var hl = ctx.createLinearGradient(x, y, x, y + CELL * 0.45);
+  hl.addColorStop(0, 'rgba(255,255,255,.28)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+  rr(x + 1, y + 1, CELL - 2, (CELL - 2) * 0.45, 5); ctx.fillStyle = hl; ctx.fill();
+  ctx.restore();
   if (s.unit && !hide) drawUnitAt(s.unit, s.x, s.y, null);
   if (G && G.targeting && typeof canTargetItem === 'function' && canTargetItem(G.targeting, s.unit)) {
     ctx.strokeStyle = '#e8a005'; ctx.lineWidth = 3; ctx.setLineDash([3, 2]);
