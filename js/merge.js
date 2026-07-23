@@ -56,7 +56,7 @@ function fateBuff(S) {
 }
 
 /* 汇总攻击数值（不含每击特效判定） */
-function unitStats(u, S) {
+function unitStats(u, S, cell) {
   const fb = S.fate || { dmg: 1, rate: 1 };
   const comboMul = (S && S.side > 0 && S.combo >= 3) ? 1.2 : 1;   // 连杀攻速buff（p5：5秒内3杀→攻速+20%）
   const modeDmg = (typeof G !== 'undefined' && G && G.mode === 'rogue' && G.rogue) ? G.rogue.dmg : 1;
@@ -65,9 +65,11 @@ function unitStats(u, S) {
   const pD = (typeof G !== 'undefined' && G && G.playerDmgMul) ? G.playerDmgMul : 1;
   const pR = (typeof G !== 'undefined' && G && G.playerRateMul) ? G.playerRateMul : 1;
   const pH = (typeof G !== 'undefined' && G && G.playerHpMul) ? G.playerHpMul : 1;
+  // 群雄演武：高地(terrain==='high')单位 +射程（PUZZLE_HIGH_RANGE），仅 puzzle 生效。
+  const rngBonus = (typeof G !== 'undefined' && G && G.mode === 'puzzle' && cell && cell.terrain === 'high') ? PUZZLE_HIGH_RANGE : 0;
   if (u.t === 'troop') {
     const b = TROOPS[u.type];
-    return { ...b, dmg: b.dmg * TIER_MUL[u.tier - 1] * fb.dmg * modeDmg * pD, rate: b.rate * fb.rate * comboMul * modeRate * pR, maxhp: b.hp * TIER_MUL[u.tier - 1] * pH };
+    return { ...b, dmg: b.dmg * TIER_MUL[u.tier - 1] * fb.dmg * modeDmg * pD, rate: b.rate * fb.rate * comboMul * modeRate * pR, maxhp: b.hp * TIER_MUL[u.tier - 1] * pH, rng: b.rng + rngBonus };
   }
   const b = HEROES[u.name];
   const aw = u.awaken || 0, awMul = aw ? Math.pow(1.3, aw) : 1;
@@ -88,6 +90,7 @@ function unitStats(u, S) {
   if (w === 'longdan') { dmg *= 1.25; rate *= 0.85; }   // 龙胆·赵云专武：+25% 攻 +15% 速
   if (w === 'shemao') { dmg *= 1.3; rng *= 1.15; }      // 丈八蛇矛·张飞专武：+30% 攻 +15% 射程
   if (w === 'yitian') dmg *= 1.1;                       // 倚天剑·刘备专武：+10% 攻（cd*0.7 已在 skillCd）
+  rng += rngBonus;                                      // 群雄演武高地射程加成（数据驱动 PUZZLE_HIGH_RANGE）
   // 刘备光环：全队增伤（优先用每帧缓存的 S.auraSum，避免每单位遍历 cells）
   let aura = 1;
   if (S && typeof S.auraSum === 'number') {

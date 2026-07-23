@@ -69,6 +69,13 @@ function dealDmg(S, m, dmg, byUnit, cell) {
     if (m.type === '骑' && byUnit.t === 'hero' && HEROES[byUnit.name].vs骑) { dmg *= HEROES[byUnit.name].vs骑; crit = crit || atkSide > 0; if (atkSide > 0) { boom(m.x, m.y, '#ffd43b'); popFloat(m.x, m.y - 18, 'crit', null, { txt: '暴击!' }); } }
   }
   if (mb.armor) dmg *= 1 - mb.armor;
+  // 黄巾讨伐（raid）弱点门控：仅当前暴露侧(左/中/右)的单位对该 Boss 造成满额伤害，
+  // 其余区域攻击被护盾大幅减伤（shieldFactor）。迫使用户多向覆盖 + 随阶段轮换。
+  if (typeof G !== 'undefined' && G && G.mode === 'raid' && m.raidBoss) {
+    const atkCell = (byUnit && G.P.cells.find(c => c.unit === byUnit)) || null;
+    const region = atkCell ? raidRegionOf(atkCell.x) : null;
+    if (!region || region !== G.raid.exposed) dmg *= RAID_BOSS.shieldFactor;
+  }
   m.hp -= dmg; m.flash = 0.12;
   // 暴击白闪 + BOSS 破防高光（Phase 3 #41）
   if (atkSide > 0 && crit) boom(m.x, m.y, '#ffffff');
@@ -249,7 +256,7 @@ function updUnit(S, cell, dt) {
   const u = cell.unit;
   if (u.stun > 0) { u.stun = Math.max(0, u.stun - dt); return; }   // 眩晕中：减帧并跳过本帧行动
   if (u.t === 'char' || u.t === 'shovel') return;
-  const st = unitStats(u, S);
+  const st = unitStats(u, S, cell);
   // 技能冷却
   if (u.t === 'hero' && HEROES[u.name].skill) {
     u.cd -= dt;

@@ -882,7 +882,7 @@ function onDown(p) {
   }
   if (bi >= 0 && G.P.bar[bi].unit) drag = { area: 'bar', from: bi, x: p.x, y: p.y };
   else if (ci >= 0 && G.P.cells[ci].open && G.P.cells[ci].unit) drag = { area: 'board', from: ci, x: p.x, y: p.y };
-  else if (ci >= 0 && !G.P.cells[ci].open) unlockCell(G.P, ci);          // 点荒地花馒头开荒
+  else if (ci >= 0 && !G.P.cells[ci].open && G.mode !== 'puzzle') unlockCell(G.P, ci);   // 群雄演武：隘口(pass)地形锁定，不可开荒
 
 }
 function onUp(p) {

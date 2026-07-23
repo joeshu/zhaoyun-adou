@@ -251,8 +251,9 @@ function update(dt) {
     G.prepT = G.betweenT;
     if (!G.mode) G.banner = { txt: '【首轮备战】还有 ' + Math.ceil(G.prepT) + ' 秒，抓紧抽卡、合成与布阵', t: 999 };
   }
-  if (G.mode === 'raid') {
-    // 讨伐模式只生成阶段 Boss，由 modeTick 处理。
+  if (G.mode === 'raid' || G.mode === 'puzzle') {
+    // 单侧重做模式（黄巾讨伐 / 群雄演武）：Boss(raid)/敌阵(puzzle)由 modeTick 手动生成，
+    // 不刷新镜像波次、不启用 AI 镜像对抗，保持单侧战斗。
   } else if (G.spawnQ.length) {
     G.spawnT += dt;
     while (G.spawnQ.length && G.spawnQ[0].t <= G.spawnT) {
@@ -277,11 +278,12 @@ function update(dt) {
       if (G.betweenT <= 0) { G.betweenT = nextDelay; startWave(); if (G.wave > 1) G.goldEarn += 2; }
     }
   }
-  // AI 行动：包括赤壁火攻在内均保留镜像对抗。
+  // AI 行动：镜像对抗模式保留；raid/puzzle 为单侧重做模式，AI 不行动。
   G.aiT -= dt;
-  if (G.aiT <= 0) { G.aiT = G.aiIv; aiAct(G.E); }
-  // 双侧模拟
-  for (const S of [G.P, G.E]) {
+  if (G.aiT <= 0) { G.aiT = G.aiIv; if (G.mode !== 'raid' && G.mode !== 'puzzle') aiAct(G.E); }
+  // 双侧模拟（raid/puzzle 仅玩家侧参与战斗，敌方侧完全静止）
+  const _sides = (G.mode === 'raid' || G.mode === 'puzzle') ? [G.P] : [G.P, G.E];
+  for (const S of _sides) {
     // 每侧每帧只算一次光环总和，供 unitStats 缓存读取（原实现每单位都遍历 cells 算刘备光环）
     let auraSum = 1;
     for (const c of S.cells) if (c.unit && c.unit.t === 'hero' && HEROES[c.unit.name].aura) auraSum += HEROES[c.unit.name].aura;
@@ -300,8 +302,11 @@ function update(dt) {
     for (const m of S.mobs) if (!m.dead) updMob(S, m, dt);
     S.mobs = S.mobs.filter(m => !m.dead && m.hp > 0);
   }
-  if (G.P.hp <= 0) endBattle(false);
-  else if (G.E.hp <= 0 && !G.mode) endBattle(true);
+  if (G.P.hp <= 0) {
+    // 群雄演武：阿斗阵亡不直接判负，而是消耗一次尝试（仍有余次则重置布阵）。
+    if (G.mode === 'puzzle') puzzleAttemptFail();
+    else endBattle(false);
+  } else if (G.E.hp <= 0 && !G.mode) endBattle(true);
   // 遗物系统：主线/无尽每 5 波可选一条本局军略（roguelike 元进度）
   if (SAVE.relicsOn && !G.mode && !G.rogueChoices && G.wave > 0 && G.wave % 5 === 0 && G.betweenT >= 1 && typeof offerRelic === 'function')
     offerRelic();

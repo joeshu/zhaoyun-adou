@@ -213,7 +213,57 @@ const MOBS = {
   兽: { hp: 1200, spd: 12, atk: 20, dmg: 3, gold: 30, boss: true, armor: 0.5, castIv: 11, cast: 'summon', name: '铁甲巨兽', tip: '铁壁:减伤50%·召唤卒众' },
   曹: { hp: 2000, spd: 16, atk: 24, dmg: 3, gold: 30, boss: true, castIv: 10, cast: 'summon', rage: true, name: '曹操', tip: '召唤小兵·低血狂暴' },
   懿: { hp: 2600, spd: 14, atk: 26, dmg: 3, gold: 40, boss: true, castIv: 9, cast: 'summon', rage: true, name: '司马懿', tip: '召唤死士·低血狂暴' },
+  // 黄巾讨伐 Boss（raid 复用此 MOBS 条目；弱点轮转/阶段在 RAID_BOSS 配置）
+  角: { hp: 2000, spd: 11, atk: 18, dmg: 3, gold: 30, boss: true, armor: 0.5, name: '张角', tip: '黄巾之乱·铁壁减伤50%·阶段召唤信徒' },
 };
+
+/* ---------- raid（黄巾讨伐）Boss 配置：弱点轮转 + 阶段阈值 ----------
+   单位实体复用 MOBS['角']（张角），此处只描述弱点/阶段的玩法数据。
+   弱点按 rotation 顺序轮转暴露；非暴露侧被护盾大幅减伤（shieldFactor）。
+   阶段在 HP 比例阈值触发：重排弱点顺序 + 加速轮转 + 召唤小怪（强制重新布阵）。 */
+const RAID_SIDE_NAME = { left: '左', mid: '中', right: '右' };
+const RAID_BOSS = {
+  type: '角',                                 // 复用 MOBS['角'] 作为 Boss 实体
+  rotation: ['left', 'mid', 'right'],         // 初始弱点轮转顺序（左→中→右）
+  cycle: 5.0,                                 // 每侧暴露秒数
+  shieldFactor: 0.10,                         // 非暴露侧伤害乘数（其余侧被护盾大幅减伤）
+  phases: [                                   // 按 HP 比例触发的阶段：重排 + 加速 + 召唤
+    { at: 0.66, rotation: ['right', 'mid', 'left'], cycle: 4.2, summon: ['卒', '卒'] },
+    { at: 0.33, rotation: ['mid', 'left', 'right'], cycle: 3.6, summon: ['斧', '卒', '卒'] },
+  ],
+};
+
+/* ---------- puzzle（群雄演武）残局小表 ----------
+   每关：固定预置部队 playerPreset + 固定敌阵 enemyFormation + 地形 terrain + 尝试上限 parAttempts。
+   地形 mod：'high'=高地(可部署, +射程) / 'pass'=隘口(限通行, 不可部署)。
+   坐标复用现有棋盘格中心 (MAPS[0].COLS × ROWS_P)。 */
+const PUZZLE_HIGH_RANGE = 42;                 // 高地 +射程（数据驱动，复用于 unitStats 门控）
+const PUZZLE_LEVELS = [
+  {
+    name: '长坂突围', par: 3,
+    playerPreset: [ { troopId: '弓', count: 2 }, { troopId: '枪', count: 1 }, { troopId: '盾', count: 1 } ],
+    enemyFormation: [
+      { mobId: '兵', x: 119, y: 340 }, { mobId: '兵', x: 187, y: 340 }, { mobId: '兵', x: 255, y: 340 }, { mobId: '兵', x: 187, y: 372 },
+    ],
+    terrain: [ { x: 187, y: 408, mod: 'high' } ],
+  },
+  {
+    name: '潼关射义', par: 3,
+    playerPreset: [ { troopId: '弓', count: 2 }, { troopId: '枪', count: 2 }, { troopId: '盾', count: 1 } ],
+    enemyFormation: [
+      { mobId: '弩', x: 119, y: 340 }, { mobId: '弩', x: 255, y: 340 }, { mobId: '兵', x: 187, y: 360 }, { mobId: '兵', x: 187, y: 384 },
+    ],
+    terrain: [ { x: 119, y: 408, mod: 'high' }, { x: 255, y: 408, mod: 'high' }, { x: 187, y: 408, mod: 'pass' } ],
+  },
+  {
+    name: '虎牢关口', par: 4,
+    playerPreset: [ { troopId: '枪', count: 3 }, { troopId: '弓', count: 1 }, { troopId: '盾', count: 1 }, { troopId: '甲', count: 1 } ],
+    enemyFormation: [
+      { mobId: '斧', x: 187, y: 344 }, { mobId: '骑', x: 119, y: 364 }, { mobId: '骑', x: 255, y: 364 }, { mobId: '兵', x: 187, y: 388 },
+    ],
+    terrain: [ { x: 119, y: 352, mod: 'high' }, { x: 255, y: 352, mod: 'high' }, { x: 187, y: 408, mod: 'pass' } ],
+  },
+];
 // 克制：枪 vs 甲怪(armor)×2；骑 vs 弩×2；怪骑 打 弓兵×2；马超 vs 骑×2
 const ADOU_HP = 3;
 const INCOME_IV = 5, INCOME_N = 3;                 // 基础每5秒+3馒头；农民=2馒头/秒（文档7.1）

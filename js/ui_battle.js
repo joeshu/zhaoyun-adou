@@ -416,6 +416,15 @@ function drawCell(c, S, hide) {
   const x = c.x - CELL / 2, y = c.y - CELL / 2;
   rr(x, y, CELL, CELL, 6);
 
+  /* 群雄演武地形：隘口(pass)锁定不可部署；高地(high)在普通开放格基础上加射程高亮 */
+  if (S && S.side > 0 && G && G.mode === 'puzzle' && c.terrain === 'pass') {
+    ctx.fillStyle = 'rgba(80,70,60,.20)'; ctx.fill();
+    ctx.setLineDash([3, 3]); ctx.strokeStyle = '#8a7e6c'; ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
+    txt('隘', c.x, c.y - 1, 13, '#6f6556', 'center', true);
+    txt('锁', c.x, c.y + 13, 8, '#8a7e6c', 'center');
+    return;
+  }
+
   /* Resolve per-map cell style from MAP_THEMES */
   var mi = (G && G.mapIdx !== undefined) ? G.mapIdx : 0;
   var mt = MAP_THEMES[mi] || MAP_THEMES[0];
@@ -466,6 +475,11 @@ function drawCell(c, S, hide) {
   ctx.restore();
 
   if (c.unit && !hide) drawUnitAt(c.unit, c.x, c.y, S);
+  if (S && S.side > 0 && G && G.mode === 'puzzle' && c.terrain === 'high') {
+    ctx.strokeStyle = '#e8a005'; ctx.lineWidth = 2; ctx.setLineDash([4, 2]);
+    ctx.strokeRect(x - 3, y - 3, CELL + 6, CELL + 6); ctx.setLineDash([]);
+    txt('高', c.x + 17, c.y - 15, 9, '#e8a005', 'center', true);
+  }
   if (S && S.side > 0 && G && G.targeting && typeof canTargetItem === 'function' && canTargetItem(G.targeting, c.unit)) {
     ctx.strokeStyle = '#e8a005'; ctx.lineWidth = 3; ctx.setLineDash([3, 2]);
     ctx.strokeRect(x - 2, y - 2, CELL + 4, CELL + 4); ctx.setLineDash([]);
@@ -610,11 +624,11 @@ function drawGame() {
   drawAmbient(G.mapIdx);
 
   /* ---- Path (double-line, bug #1 fixed) ---- */
-  drawPath(G.E); drawPath(G.P);
+  if (G.mode !== 'raid' && G.mode !== 'puzzle') drawPath(G.E);
+  drawPath(G.P);
 
   /* ---- Adou plaques ---- */
-  drawAdou(G.E);
-  G.E.cells.forEach(c => drawCell(c, G.E, false));
+  if (G.mode !== 'raid' && G.mode !== 'puzzle') { drawAdou(G.E); G.E.cells.forEach(c => drawCell(c, G.E, false)); }
   G.P.cells.forEach((c, i) => {
     drawCell(c, G.P, drag && drag.area === 'board' && drag.from === i);
     if (drag && drag.hintType) {
@@ -642,6 +656,17 @@ function drawGame() {
     }
   });
 
+  /* 黄巾讨伐：当前暴露弱点侧高亮带，提示玩家须在该区域部署/移动单位 */
+  if (G.mode === 'raid' && G.raid) {
+    const b = G.raid.bounds, ex = G.raid.exposed, span = (b.maxX - b.minX) || 1;
+    let x0, x1;
+    if (ex === 'left') { x0 = b.minX - 26; x1 = b.minX + span / 3; }
+    else if (ex === 'right') { x0 = b.minX + span * 2 / 3; x1 = b.maxX + 26; }
+    else { x0 = b.minX + span / 3; x1 = b.minX + span * 2 / 3; }
+    ctx.save(); ctx.globalAlpha = 0.12; ctx.fillStyle = '#e8590c';
+    ctx.fillRect(x0, 318, x1 - x0, 218); ctx.restore();
+  }
+
   /* Player Adou (over cards) */
   drawAdou(G.P);
 
@@ -654,11 +679,21 @@ function drawGame() {
 
   /* Snakes */
   for (const sn of G.P.snakes) { txt('蛇', sn.x, sn.y + 5, 15, '#2f9e44', 'center', true); hpBar(sn.x - 12, sn.y + 12, 24, sn.hp / 150, '#2f9e44'); }
-  for (const sn of G.E.snakes) txt('蛇', sn.x, sn.y + 5, 15, '#2f9e44', 'center', true);
+  if (G.mode !== 'raid' && G.mode !== 'puzzle') for (const sn of G.E.snakes) txt('蛇', sn.x, sn.y + 5, 15, '#2f9e44', 'center', true);
 
   /* Mobs */
-  for (const m of G.E.mobs) drawMob(m);
+  if (G.mode !== 'raid' && G.mode !== 'puzzle') for (const m of G.E.mobs) drawMob(m);
   for (const m of G.P.mobs) drawMob(m);
+
+  /* 群雄演武：布阵阶段预览敌阵落点（开战后才真正生成） */
+  if (G.mode === 'puzzle' && G.puzzle && G.puzzle.prep && G.puzzle.cur) {
+    for (const e of G.puzzle.cur.enemyFormation) {
+      ctx.globalAlpha = 0.5;
+      txt(e.mobId, e.x, e.y + 5, 16, '#c0392b', 'center', true);
+      hpBar(e.x - 11, e.y + 13, 22, 1, '#fa5252');
+      ctx.globalAlpha = 1;
+    }
+  }
 
   /* 单位死亡溶解层（#5）：hp<=0 移除时由 dealDmg 推入 G.deaths；此处逐帧淡出+轻微放大，
      配合 dealDmg 内 fxDissolve 的溶解环/粒子，替代原"瞬间消失"，零模拟逻辑改动、零回归风险 */
@@ -759,11 +794,11 @@ function drawGame() {
   ctx.fillStyle = '#e4d9c8'; ctx.fillRect(0, TOP - 3, W, 3);
 
   /* Resource chips */
-  resChip('馒 ' + G.P.mantou, 6, 7, '#8b5e3c');
+  if (G.mode !== 'puzzle') resChip('馒 ' + G.P.mantou, 6, 7, '#8b5e3c');
   resChip('金 ' + SAVE.gold, 76, 7, '#b0801f');
 
   /* Stage/wave info */
-  txt((G.mode ? G.modeLabel : (G.endless ? '无尽' : '第' + G.stage + '关')) + '·第' + G.wave + '波' + (SAVE.invincible ? ' ·无敌' : ''), 232, 20, 12, '#495057', 'right', true);
+  txt((G.mode ? G.modeLabel : (G.endless ? '无尽' : '第' + G.stage + '关')) + (G.mode ? '' : '·第' + G.wave + '波') + (SAVE.invincible ? ' ·无敌' : ''), 232, 20, 12, '#495057', 'right', true);
 
   /* Next wave preview */
   if (G.previewQ && G.previewQ.pool && G.previewQ.pool.length) {
@@ -781,9 +816,11 @@ function drawGame() {
     txt('🐎 护送进度 ' + Math.floor(G.escort.progress) + '%', W / 2, 48, 11, '#2f7f9d', 'center', true);
     ctx.fillStyle = '#d9e8ec'; ctx.fillRect(112, 53, 151, 4); ctx.fillStyle = '#2f7f9d'; ctx.fillRect(112, 53, 151 * G.escort.progress / 100, 4);
   } else if (G.mode === 'puzzle') {
-    txt('♟ 歼敌 ' + G.P.totalKills + '/' + G.puzzle.target + ' · ' + Math.ceil(Math.max(0, G.puzzle.limit)) + ' 秒', W / 2, 48, 11, '#b78324', 'center', true);
+    const pz = G.puzzle;
+    txt('♟ ' + (pz.cur ? pz.cur.name : '群雄演武') + ' · 第 ' + pz.attempt + '/' + pz.maxAttempts + ' 次', W / 2, 48, 11, '#b78324', 'center', true);
   } else if (G.mode === 'raid') {
     txt('👑 讨伐剩余 ' + Math.ceil(Math.max(0, G.raid.limit)) + ' 秒', W / 2, 48, 11, '#8d3543', 'center', true);
+    drawRaidHud();
   } else if (G.mode === 'rogue') {
     txt('⚔ 五虎试炼 · 第 ' + G.rogue.floor + '/' + G.rogue.maxFloor + ' 战 · 军略 ' + G.rogue.picks, W / 2, 48, 11, '#7250b8', 'center', true);
   }
@@ -824,23 +861,25 @@ function drawGame() {
   const ay = UI_LAYOUT.actionBar.y, ah = UI_LAYOUT.actionBar.h;
 
   /* Manual ultimate */
-  if (SAVE.manualUlt) {
+  if (SAVE.manualUlt && G.mode !== 'puzzle') {
     let _ready = 0;
     for (const _c of G.P.cells) if (_c.unit && _c.unit.t === 'hero' && HEROES[_c.unit.name].skill && _c.unit.cd <= 0) _ready++;
     btn(196, ay, 54, ah, '大招×' + _ready, () => manualUlt(G.P), { size: 10, bg: '#e8a005', disabled: !_ready });
   }
   btn(254, ay, 32, ah, '撤销', () => undoAction(),
     { size: 9, bg: '#8e98a3', disabled: G.ghostMode || !G.undoStack || !G.undoStack.length });
-  btn(8, ay, 62, ah, '抽卡 馒' + DRAW.cost, () => doSummon(G.P),
-    { size: 11, bg: '#c0392b', disabled: G.P.mantou < DRAW.cost || barFree(G.P) < 0 });
-  const tenCostNow = SAVE.firstTen ? (DRAW.tenCost / 2 | 0) : DRAW.tenCost;
-  btn(74, ay, 62, ah, '十连 ' + tenCostNow, () => drawTen(G.P),
-    { size: 11, bg: '#a61e4e', disabled: G.P.mantou < tenCostNow || barFree(G.P) < 0 });
+  if (G.mode !== 'puzzle') {
+    btn(8, ay, 62, ah, '抽卡 馒' + DRAW.cost, () => doSummon(G.P),
+      { size: 11, bg: '#c0392b', disabled: G.P.mantou < DRAW.cost || barFree(G.P) < 0 });
+    const tenCostNow = SAVE.firstTen ? (DRAW.tenCost / 2 | 0) : DRAW.tenCost;
+    btn(74, ay, 62, ah, '十连 ' + tenCostNow, () => drawTen(G.P),
+      { size: 11, bg: '#a61e4e', disabled: G.P.mantou < tenCostNow || barFree(G.P) < 0 });
+  }
 
   /* Active items — 单独一行（合成栏下方、操作栏上方 y=ay-ah），
      显示全部已装备/持有 uses 的主动道具，去掉 slice(0,2) 限制，确保觉醒丹（ITEMS 第 6 位）等也可点。 */
   const acts = Object.keys(ITEMS).filter(id => ITEMS[id].act && (G.itemUses[id] || SAVE.loadout.includes(id)));
-  if (acts.length) {
+  if (acts.length && G.mode !== 'puzzle') {
     const AY2 = ay - ah;                                  // 与操作栏同高、上移一行，避免遮挡抽卡/十连/大招/撤销/回收槽
     const AM = 4, AG = 4;                                 // 左右边距 / 按钮间距
     const AW2 = Math.min(54, Math.floor((W - AM * 2 - (acts.length - 1) * AG) / acts.length));
@@ -859,6 +898,12 @@ function drawGame() {
   ctx.setLineDash([4, 3]); ctx.strokeStyle = '#868e96'; ctx.stroke(); ctx.setLineDash([]);
   txt('回收♻', rc.x + rc.w / 2, rc.y + rc.h / 2 + 4, 11, '#868e96', 'center', true);
   txt('拖单位回收', rc.x + rc.w / 2, rc.y + rc.h - 3, 8, '#adb5bd', 'center');
+
+  /* 群雄演武：布阵阶段给出「开战 / 选关」；自动战斗阶段仅观战，无额外按钮 */
+  if (G.mode === 'puzzle' && G.puzzle && G.puzzle.prep) {
+    btn(40, 556, 140, 38, '开 战 ▶', () => puzzleStartAttempt(), { size: 16, bg: '#318c4a' });
+    btn(196, 556, 140, 38, '选 关', () => { G.puzzle.choosing = true; G.puzzle.cur = null; }, { size: 15, bg: '#7250b8' });
+  }
 
   /* Targeting context */
   if (G.targeting) {
@@ -951,19 +996,62 @@ function drawGame() {
     btn(48,330,130,38,'救援 · -10馒',()=>chooseRefugee(true),{size:12,bg:'#318c4a'});
     btn(197,330,130,38,'固守 · +15馒',()=>chooseRefugee(false),{size:12,bg:'#7250b8'});
   }
-  if (G.state === 'win') {
-    const acts2 = [];
-    if (!G.endless && G.stage < STAGE_MAX) acts2.push(['下一关', () => { startBattle(G.stage + 1, false, G.mapIdx); }]);
-    acts2.push(['再来一局', () => { startBattle(G.stage, G.endless, G.mapIdx); }]);
-    acts2.push(['返回菜单', () => { goTo('menu'); selStage = SAVE.stage; }, '#868e96']);
-    let desc = G.rewardTxt;
-    if (G.stage === 30 && !SAVE.eggs.acc) desc += '  (停留' + Math.max(0, Math.ceil(10 - G.resultT)) + 's…)';
-    overlay('胜 利', desc, acts2);
+  /* 群雄演武：关卡选择 overlay（choosing=true 时显示，覆盖在战场之上） */
+  if (G.mode === 'puzzle' && G.puzzle && G.puzzle.choosing) {
+    ctx.fillStyle = 'rgba(26,24,35,.72)'; ctx.fillRect(0, 0, W, H);
+    btns = [];   // 清掉战场/操作栏按钮，避免覆盖层之下仍可点击
+    panel(24, 110, 327, 452, { bg: '#fffdf9', stroke: '#d9c8a0', r: 14 });
+    txt('群雄演武 · 选关', W / 2, 146, 21, '#b78324', 'center', true);
+    txt('禁抽卡/禁合成 · 仅布阵 · 歼灭敌阵', W / 2, 168, 10, '#868e96', 'center');
+    PUZZLE_LEVELS.forEach((lv, i) => {
+      const cy = 184 + i * 96;
+      const on = i === G.puzzle.levelIdx;
+      panel(40, cy, 295, 82, { bg: on ? '#fff8e8' : '#fffdf9', stroke: on ? '#e8a005' : '#e7dccb', r: 10 });
+      txt(lv.name, 54, cy + 26, 15, '#343a40', 'left', true);
+      txt('预设 ' + lv.playerPreset.map(p => p.troopId + '×' + p.count).join(' '), 54, cy + 48, 9, '#868e96', 'left');
+      txt('地形 ' + lv.terrain.map(t => (t.mod === 'high' ? '高地' : '隘口')).join('/') + ' · 尝试 ' + lv.par + ' 次', 54, cy + 64, 9, '#a0483a', 'left');
+      btn(248, cy + 26, 70, 32, '进入', () => puzzleLoadLevel(i), { size: 12, bg: '#318c4a' });
+    });
+    btn(W - 30 - 99, H - 63, 99, 34, '返回', () => { goTo('menu'); }, { grad: THEME.slate });
+  } else if (G.state === 'win') {
+    if (G.mode === 'puzzle') {
+      overlay('演武破阵', G.rewardTxt, [
+        ['再来一局', () => puzzleLoadLevel(G.puzzle.levelIdx)],
+        ['关卡选择', () => { G.puzzle.choosing = true; G.puzzle.cur = null; }],
+        ['返回菜单', () => { goTo('menu'); }, '#868e96'],
+      ]);
+    } else if (G.mode === 'raid') {
+      overlay('讨伐成功', G.rewardTxt, [
+        ['再来一局', () => startSpecialMode('raid')],
+        ['返回菜单', () => { goTo('menu'); }, '#868e96'],
+      ]);
+    } else {
+      const acts2 = [];
+      if (!G.endless && G.stage < STAGE_MAX) acts2.push(['下一关', () => { startBattle(G.stage + 1, false, G.mapIdx); }]);
+      acts2.push(['再来一局', () => { startBattle(G.stage, G.endless, G.mapIdx); }]);
+      acts2.push(['返回菜单', () => { goTo('menu'); selStage = SAVE.stage; }, '#868e96']);
+      let desc = G.rewardTxt;
+      if (G.stage === 30 && !SAVE.eggs.acc) desc += '  (停留' + Math.max(0, Math.ceil(10 - G.resultT)) + 's…)';
+      overlay('胜 利', desc, acts2);
+    }
   } else if (G.state === 'lose') {
-    overlay('失 败', '阿斗被掳走 · ' + G.rewardTxt, [
-      ['再来一局', () => { startBattle(G.stage, G.endless, G.mapIdx); }],
-      ['返回菜单', () => { goTo('menu'); }, '#868e96'],
-    ]);
+    if (G.mode === 'puzzle') {
+      overlay('残局未破', G.rewardTxt, [
+        ['重试本关', () => puzzleLoadLevel(G.puzzle.levelIdx)],
+        ['关卡选择', () => { G.puzzle.choosing = true; G.puzzle.cur = null; }],
+        ['返回菜单', () => { goTo('menu'); }, '#868e96'],
+      ]);
+    } else if (G.mode === 'raid') {
+      overlay('讨伐失败', G.rewardTxt, [
+        ['再来一局', () => startSpecialMode('raid')],
+        ['返回菜单', () => { goTo('menu'); }, '#868e96'],
+      ]);
+    } else {
+      overlay('失 败', '阿斗被掳走 · ' + G.rewardTxt, [
+        ['再来一局', () => { startBattle(G.stage, G.endless, G.mapIdx); }],
+        ['返回菜单', () => { goTo('menu'); }, '#868e96'],
+      ]);
+    }
   } else if (G.paused) {
     overlay('已暂停', '', [
       ['继续', () => { G.paused = false; }],
@@ -993,6 +1081,33 @@ function drawGame() {
     ctx.restore();
     G.ultFx.t -= DT60; if (G.ultFx.t <= 0) G.ultFx = null;
   }
+}
+
+/* 黄巾讨伐 Boss HUD：血条 + 左/中/右 弱点指示珠 + 当前暴露侧文案 */
+function drawRaidHud() {
+  if (!G.raid) return;
+  const boss = G.P.mobs.find(m => m.raidBoss && m.hp > 0);
+  const bw = 280, bx = (W - bw) / 2, by = 62;
+  if (boss) {
+    txt('张角 · 黄巾之乱', W / 2, by - 4, 10, '#8d3543', 'center', true);
+    ctx.fillStyle = '#3a2a2a'; ctx.fillRect(bx, by, bw, 7);
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(bx, by, bw * clamp(boss.hp / boss.maxhp, 0, 1), 7);
+    ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = 1; ctx.strokeRect(bx, by, bw, 7);
+  } else {
+    txt(G.raid.bossSpawned ? '张角已伏诛!' : '张角将至…', W / 2, by + 6, 11, '#8d3543', 'center', true);
+  }
+  const regions = ['left', 'mid', 'right'], labels = ['左', '中', '右'];
+  const py = 86, pw = 32, gap = 16, total = regions.length * pw + (regions.length - 1) * gap;
+  const px0 = (W - total) / 2;
+  regions.forEach((rg, i) => {
+    const cx = px0 + i * (pw + gap) + pw / 2;
+    const on = rg === G.raid.exposed;
+    ctx.beginPath(); ctx.arc(cx, py, 12, 0, 7);
+    ctx.fillStyle = on ? '#e8590c' : 'rgba(120,110,100,.22)'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = on ? '#e8590c' : 'rgba(120,110,100,.5)'; ctx.stroke();
+    txt(labels[i], cx, py + 4, 12, on ? '#fff' : '#6f6556', 'center', true);
+  });
+  txt('弱点：' + RAID_SIDE_NAME[G.raid.exposed] + ' 侧 · 其余 -90% 减伤', W / 2, py + 22, 9, '#a0483a', 'center');
 }
 
 function overlay(title, desc, actions) {
