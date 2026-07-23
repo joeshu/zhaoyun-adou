@@ -33,12 +33,7 @@ console.log('Found .app:', appPath);
 fs.rmSync(path.join(dir, 'Payload'), { recursive: true, force: true });
 fs.rmSync(path.join(dir, appName + '.ipa'), { force: true });
 
-// ditto 复制（保留 bundle 完整性）
-execSync(`ditto "${appPath}" "${path.join(dir, 'Payload', appName + '.app')}"`, {
-  cwd: dir, stdio: 'inherit',
-  // ditto 不会自动建 Payload 目录，先建
-});
-// 上一步 ditto 在 Payload 目录不存在时会失败，改用 mkdir + ditto
+// 建 Payload 目录并 ditto 复制（保留 bundle 完整性）
 fs.mkdirSync(path.join(dir, 'Payload'), { recursive: true });
 execSync(`ditto "${appPath}" "Payload/${appName}.app"`, { cwd: dir, stdio: 'inherit' });
 

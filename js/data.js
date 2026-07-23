@@ -85,6 +85,14 @@ function wpick(pairs) {
   return pairs[0][0];
 }
 
+/* 特殊玩法同屏怪物数量上限（性能护栏，避免长局堆怪拖慢 Canvas）。
+   与 modecfg.js 中各玩法的 mobCap 语义一致（fire=10 / escort,puzzle=12 / 其余不限）。 */
+function mobCap(mode) {
+  if (mode === 'fire') return 10;
+  if (mode === 'escort' || mode === 'puzzle') return 12;
+  return 999;
+}
+
 /* ---------- 兵种（7 种）×品级（白绿蓝紫橙） ---------- */
 const TIER_MUL = [1, 2, 4, 8, 16];
 const TIER_NAME = ['白', '绿', '蓝', '紫', '橙'];
@@ -282,7 +290,7 @@ const ACHIEVEMENTS = [
   { id: 'first_summon', name: '初出茅庐', desc: '完成第一次抽卡', reward: { gold: 30 },
     check: () => (SAVE.stats && SAVE.stats.summons > 0) || (G && G.P && G.P.summons > 0) || SAVE.tutorial >= 99 },
   { id: 'first_hero', name: '得良将', desc: '合成首位武将', reward: { gold: 50, mat: 1 },
-    check: () => SAVE.weapons !== undefined && Object.keys(SAVE.equips || {}).length >= 0 },
+    check: () => !!(SAVE.stats && SAVE.stats.heroes > 0) },
   { id: 'first_win', name: '首战告捷', desc: '通关第1关', reward: { gold: 50 },
     check: () => SAVE.stage >= 2 },
   { id: 'stage10', name: '十连斩', desc: '通关第10关', reward: { gold: 100, mat: 2 },

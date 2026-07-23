@@ -8,9 +8,15 @@ let saveConfirm = false, saveMsg = '';   // 存档页：清除二次确认 / 保
 let canvas, ctx, scaleF = 1;
 const DT60 = 1 / 60;
 
+// 字体字符串缓存：txt() 每帧被调用上百次，避免重复拼接与重复设置 ctx.font
+const _fontCache = new Map();
+let _lastFont = '';
 function txt(s, x, y, size, col, align = 'left', bold = false) {
+  const key = size + (bold ? 'b' : '');
+  let f = _fontCache.get(key);
+  if (!f) { f = `${bold ? 'bold ' : ''}${size}px "PingFang SC","Microsoft YaHei",sans-serif`; _fontCache.set(key, f); }
+  if (f !== _lastFont) { ctx.font = f; _lastFont = f; }
   ctx.fillStyle = col;
-  ctx.font = `${bold ? 'bold ' : ''}${size}px "PingFang SC","Microsoft YaHei",sans-serif`;
   ctx.textAlign = align;
   ctx.fillText(s, x, y);
 }
@@ -194,12 +200,11 @@ function drawSave() {
   btn(30, 300, 150, 34, '继续游戏', () => { startBattle(SAVE.stage, SAVE.endless, selMap); scr = 'game'; }, { bg: '#1c7ed6', size: 13 });
   btn(195, 300, 150, 34, '存到目录', () => {
     const s = exportSave();
-    // 拉取 token 后再写盘（同源信任）
-    fetch('/api/token').then(r => r.json()).then(tj =>
-      fetch('/api/save?slot=' + curSlot + '&token=' + encodeURIComponent(tj.token || ''), {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: s
-      }).then(r => r.json()).then(j => { saveMsg = j.ok ? '已存到项目目录 ✓' : '保存失败：' + (j.error || ''); })
-    ).catch(() => { saveMsg = '保存失败：服务未连接'; });
+    // 服务仅绑定 127.0.0.1，本机直连即可写盘（已去掉一次性 token 机制）
+    fetch('/api/save?slot=' + curSlot, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: s
+    }).then(r => r.json()).then(j => { saveMsg = j.ok ? '已存到项目目录 ✓' : '保存失败：' + (j.error || ''); })
+      .catch(() => { saveMsg = '保存失败：服务未连接'; });
   }, { bg: '#495057', size: 13 });
   btn(30, 344, 150, 34, '导入存档', () => {
     fetch('/api/load?slot=' + curSlot).then(r => r.json()).then(j => {
@@ -232,11 +237,11 @@ function startGhostPlayback(rec) {
   scr = 'game';
 }
 function uploadGhost(rec) {
-  fetch('/api/token').then(r => r.json()).then(tj =>
-    fetch('/api/ghost?token=' + encodeURIComponent(tj.token || ''), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rec)
-    }).then(r => r.json()).then(j => { ghostMsg = j.ok ? '已上传到共享池 ✓' : '上传失败：' + (j.error || ''); })
-  ).catch(() => { ghostMsg = '上传失败：服务未连接'; });
+  // 服务仅绑定 127.0.0.1，本机直连即可上传（已去掉一次性 token 机制）
+  fetch('/api/ghost', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rec)
+  }).then(r => r.json()).then(j => { ghostMsg = j.ok ? '已上传到共享池 ✓' : '上传失败：' + (j.error || ''); })
+    .catch(() => { ghostMsg = '上传失败：服务未连接'; });
 }
 function downloadGhost(id) {
   fetch('/api/ghost?id=' + encodeURIComponent(id)).then(r => r.json()).then(rec => {

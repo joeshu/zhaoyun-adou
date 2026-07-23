@@ -30,15 +30,20 @@ for (const f of fs.readdirSync(jsSrc)) {
   if (f.endsWith('.js')) fs.copyFileSync(path.join(jsSrc, f), path.join(jsDst, f));
 }
 
-// 复制 saves/ 目录（仅占位结构，存档槽 localStorage 各自独立）
-const savesSrc = path.join(ROOT, 'saves');
+// 若已构建生产 bundle（npm run build:bundle），把多文件 <script> 替换为单个 bundle.js
+const bundlePath = path.join(WWW, 'bundle.js');
+if (fs.existsSync(bundlePath)) {
+  const htmlPath = path.join(WWW, 'index.html');
+  const patched = fs.readFileSync(htmlPath, 'utf8')
+    .replace(/<script src="js\/[^"]+\.js"><\/script>\s*/g, '')
+    .replace('</body>', '<script src="bundle.js"></script></body>');
+  fs.writeFileSync(htmlPath, patched);
+  console.log('已用生产 bundle.js 替换多文件脚本');
+}
+
+// 仅创建空 saves/ 占位目录（存档走 localStorage，不把本机存档打进包）
 const savesDst = path.join(WWW, 'saves');
 fs.mkdirSync(savesDst, { recursive: true });
-if (fs.existsSync(savesSrc)) {
-  for (const f of fs.readdirSync(savesSrc)) {
-    try { fs.copyFileSync(path.join(savesSrc, f), path.join(savesDst, f)); } catch (e) { /* 忽略单文件失败 */ }
-  }
-}
 
 // 不复制 server.js / smoke.js / .bak_* / node_modules
 console.log('www/ prepared:', fs.readdirSync(WWW).join(', '));

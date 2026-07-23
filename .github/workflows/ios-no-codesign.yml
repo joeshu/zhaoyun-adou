@@ -33,13 +33,19 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 'lts/*'
-          # 不启用 cache: npm，因为本项目无 package-lock.json（Capacitor 依赖在 CI 现装现用）
+          cache: 'npm'
+          # 已提交 package-lock.json，CI 用 npm ci 复现安装
 
-      - name: Install npm dependencies (Capacitor)
-        run: npm install --no-audit --no-fund --no-package-lock
+      - name: Install npm dependencies (Capacitor, from lock)
+        run: npm ci --no-audit --no-fund
 
-      - name: Prepare www/ (复制静态资源)
-        run: node scripts/prepare-www.js
+      - name: Lint & Test
+        run: |
+          npm run lint
+          npm test
+
+      - name: Prepare www/ (打包+复制静态资源)
+        run: npm run build:bundle && node scripts/prepare-www.js
 
       - name: Add iOS platform (if not exists)
         run: |
@@ -47,6 +53,13 @@ jobs:
             npx cap add ios
           fi
           npx cap copy ios
+
+      - name: Add Android platform (configure only, no APK build)
+        run: |
+          if [ ! -d android ]; then
+            npx cap add android
+          fi
+          npx cap sync android
 
       - name: Configure iOS app name + icon + launch screen
         run: |

@@ -11,6 +11,10 @@ function boom(x, y, col) {
     G.parts.push({ x, y, vx: rnd(-70, 70), vy: rnd(-100, 10), t: rnd(0.3, 0.7), col, r: rnd(1.5, 3.5) });
 }
 
+// 复用数组，消除战斗热路径每帧 Array.filter 分配（降低 iOS WebView GC 压力）
+const _rangeScratch = [];
+const _aliveScratch = [];
+
 /* ---------- 伤害结算 ---------- */
 function dealDmg(S, m, dmg, byUnit, cell) {
   if (m.hp <= 0) return;
@@ -54,7 +58,7 @@ function dealDmg(S, m, dmg, byUnit, cell) {
   if (S.killCnt >= pk) {
     S.killCnt = 0;
     const opp = S === G.P ? G.E : G.P;
-    const cap = G && G.mode === 'fire' ? 10 : G && (G.mode === 'escort' || G.mode === 'puzzle') ? 12 : 999;
+    const cap = mobCap(G.mode);
     if (opp.mobs.length < cap) {
       spawnMob(opp, '卒', G.hpMul * 2, true);
       if (opp.side > 0) fl(opp.path[0][0] + 20, opp.path[0][1], '压力怪!', '#c0392b');
@@ -104,23 +108,32 @@ function updSnake(S, sn, dt) {
   if (sn.buffT > 0) sn.buffT -= dt;
   sn.acc += dt * (sn.buffT > 0 ? 2 : 1);
   if (sn.acc < 1) return;
-  const ts = S.mobs.filter(m => m.hp > 0 && Math.hypot(m.x - sn.x, m.y - sn.y) <= 44);
-  if (!ts.length) return;
+  _aliveScratch.length = 0;
+  for (const m of S.mobs) if (m.hp > 0 && Math.hypot(m.x - sn.x, m.y - sn.y) <= 44) _aliveScratch.push(m);
+  if (!_aliveScratch.length) return;
   sn.acc = 0;
-  dealDmg(S, ts[0], 8);
-  if (Math.random() < 0.25 && ts[0].hp > 0) ts[0].stun = Math.max(ts[0].stun, 0.6);
+  dealDmg(S, _aliveScratch[0], 8);
+  if (Math.random() < 0.25 && _aliveScratch[0].hp > 0) _aliveScratch[0].stun = Math.max(_aliveScratch[0].stun, 0.6);
 }
 
 /* ---------- 单位攻击 ---------- */
 function inRangeMobs(S, x, y, rng) {
-  return S.mobs.filter(m => m.hp > 0 && Math.hypot(m.x - x, m.y - y) <= rng)
-    .sort((a, b) => b.d - a.d);
+  _rangeScratch.length = 0;
+  const r2 = rng * rng;
+  for (const m of S.mobs) {
+    if (m.hp <= 0) continue;
+    const dx = m.x - x, dy = m.y - y;
+    if (dx * dx + dy * dy <= r2) _rangeScratch.push(m);
+  }
+  _rangeScratch.sort((a, b) => b.d - a.d);   // 沿路径更靠前(距离基地更近)者优先，保持原排序语义
+  return _rangeScratch;
 }
 function heroHits(S, u, cell, n, mul) {         // 随机 n 段打击
+  _aliveScratch.length = 0;
+  for (const m of S.mobs) if (m.hp > 0) _aliveScratch.push(m);
   for (let i = 0; i < n; i++) {
-    const alive = S.mobs.filter(m => m.hp > 0);
-    if (!alive.length) return;
-    const m = alive[(Math.random() * alive.length) | 0];
+    if (!_aliveScratch.length) return;
+    const m = _aliveScratch[(Math.random() * _aliveScratch.length) | 0];
     dealDmg(S, m, unitStats(u, S).dmg * mul, u, cell);
     G.fx.push({ type: 'line', x1: cell.x, y1: cell.y, x2: m.x, y2: m.y, t: 0.15, t0: 0.15, col: '#e8a005' });
   }
@@ -151,13 +164,12 @@ function castSkill(S, cell, u) {
     G.fx.push({ type: 'ring', x: cell.x, y: cell.y, r: sk.r, t: 0.35, t0: 0.35, col: '#9c36b5' });
     if (sk.id === 'dahe' && u.weapon === 'shemao') for (const sn of S.snakes) sn.buffT = 5;
   } else if (sk.id === 'tiaopi') {                          // 跳劈：强化接下来 n 击
-    if (S.side > 0 && u.name === '关羽') {
-      var cSkin = (typeof currentSkin === 'function') ? (currentSkin('关羽') || {}).id : 'default';
-      if (cSkin === 'gold' || cSkin === 'red') { u.buffN = (sk.n || 2) + 1; fl(cell.x, cell.y - 22, '武圣加持', '#a61e4e'); }
-    }
-    if (!S.mobs.some(m => m.hp > 0)) return false;
-    if (!S.mobs.some(m => m.hp > 0)) return false;
-    u.buffN = sk.n;
+      if (S.side > 0 && u.name === '关羽') {
+        var cSkin = (typeof currentSkin === 'function') ? (currentSkin('关羽') || {}).id : 'default';
+        if (cSkin === 'gold' || cSkin === 'red') { u.buffN = (sk.n || 2) + 1; fl(cell.x, cell.y - 22, '武圣加持', '#a61e4e'); }
+      }
+      if (!S.mobs.some(m => m.hp > 0)) return false;
+      u.buffN = sk.n;
   } else if (sk.id === 'huojian') {                         // 火箭烈：全屏
     if (!S.mobs.some(m => m.hp > 0)) return false;
     for (const m of S.mobs) if (m.hp > 0) {

@@ -252,7 +252,7 @@ function update(dt) {
   } else if (G.spawnQ.length) {
     G.spawnT += dt;
     while (G.spawnQ.length && G.spawnQ[0].t <= G.spawnT) {
-      const cap = G.mode === 'fire' ? 10 : G.mode === 'escort' || G.mode === 'puzzle' ? 12 : 999;
+      const cap = mobCap(G.mode);
       if (G.mode && Math.max(G.P.mobs.length, G.E.mobs.length) >= cap) break;
       const s = G.spawnQ.shift();
       spawnMob(G.P, s.type, s.hpMul);
@@ -264,8 +264,8 @@ function update(dt) {
     rogueOffer();
   } else {
     // 特别玩法的镜像对抗也需要敌军上限，避免长局堆怪拖慢 Canvas。
-    const mobCap = G.mode === 'fire' ? 10 : G.mode === 'escort' ? 12 : G.mode === 'puzzle' ? 12 : 999;
-    if (G.mode && Math.max(G.P.mobs.length, G.E.mobs.length) >= mobCap) {
+    const cap = mobCap(G.mode);
+    if (G.mode && Math.max(G.P.mobs.length, G.E.mobs.length) >= cap) {
       G.betweenT = Math.max(G.betweenT, 2);
     } else {
       G.betweenT -= dt;
@@ -278,6 +278,10 @@ function update(dt) {
   if (G.aiT <= 0) { G.aiT = G.aiIv; aiAct(G.E); }
   // 双侧模拟
   for (const S of [G.P, G.E]) {
+    // 每侧每帧只算一次光环总和，供 unitStats 缓存读取（原实现每单位都遍历 cells 算刘备光环）
+    let auraSum = 1;
+    for (const c of S.cells) if (c.unit && c.unit.t === 'hero' && HEROES[c.unit.name].aura) auraSum += HEROES[c.unit.name].aura;
+    S.auraSum = auraSum;
     if (S.comboT > 0) { S.comboT -= dt; if (S.comboT <= 0) S.combo = 0; }   // 连杀窗口衰减
     sideIncome(S, dt);
     if (S.slowT > 0) S.slowT -= dt;

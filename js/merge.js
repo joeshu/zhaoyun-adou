@@ -84,9 +84,14 @@ function unitStats(u, S) {
   if (w === 'longdan') { dmg *= 1.25; rate *= 0.85; }   // 龙胆·赵云专武：+25% 攻 +15% 速
   if (w === 'shemao') { dmg *= 1.3; rng *= 1.15; }      // 丈八蛇矛·张飞专武：+30% 攻 +15% 射程
   if (w === 'yitian') dmg *= 1.1;                       // 倚天剑·刘备专武：+10% 攻（cd*0.7 已在 skillCd）
-  // 刘备光环：全队增伤
+  // 刘备光环：全队增伤（优先用每帧缓存的 S.auraSum，避免每单位遍历 cells）
   let aura = 1;
-  for (const c of S.cells) if (c.unit && c.unit.t === 'hero' && HEROES[c.unit.name].aura && c.unit !== u) aura += HEROES[c.unit.name].aura;
+  if (S && typeof S.auraSum === 'number') {
+    const ua = (u.t === 'hero' && HEROES[u.name].aura) ? HEROES[u.name].aura : 0;
+    aura = S.auraSum - ua;
+  } else if (S) {
+    for (const c of S.cells) if (c.unit && c.unit.t === 'hero' && HEROES[c.unit.name].aura && c.unit !== u) aura += HEROES[c.unit.name].aura;
+  }
   return { ...b, dmg: dmg * fb.dmg * aura * modeDmg, rng, rate: rate * fb.rate * comboMul * modeRate, splash, maxhp: b.hp * HERO_LVL_HP(u.lvl) * awMul };
 }
 function skillCd(u) {

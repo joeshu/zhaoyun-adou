@@ -5,16 +5,23 @@
   "private": true,
   "scripts": {
     "prepare:www": "node scripts/prepare-www.js",
+    "build:bundle": "node scripts/build-bundle.js",
     "cap:copy": "npm run prepare:www && npx cap copy ios",
     "cap:add:ios": "npx cap add ios",
-    "build:ios:no-sign": "npm run prepare:www && npx cap copy ios && cd ios && xcodebuild -workspace App.xcworkspace -scheme App -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO build",
-    "package:ipa": "node scripts/package-ipa.js"
+    "build:ios:no-sign": "npm run build:bundle && npm run prepare:www && npx cap copy ios && cd ios && xcodebuild -workspace App.xcworkspace -scheme App -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO build",
+    "package:ipa": "node scripts/package-ipa.js",
+    "test": "node smoke.js && node tests/events.test.js && node tests/layout.test.js",
+    "lint": "eslint js --ext .js"
   },
   "dependencies": {
     "@capacitor/core": "^6.1.2",
-    "@capacitor/ios": "^6.1.2"
+    "@capacitor/ios": "^6.1.2",
+    "@capacitor/android": "^6.1.2"
   },
   "devDependencies": {
-    "@capacitor/cli": "^6.1.2"
+    "@capacitor/cli": "^6.1.2",
+    "esbuild": "^0.23.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.3.0"
   }
 }
