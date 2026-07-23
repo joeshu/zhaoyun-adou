@@ -86,7 +86,7 @@ function hpBar(x, y, w, p, col) {
 }
 // 瓷面按钮：纵向渐变 + 顶部高光 + 描边；opt.grad 显式双色 或 opt.bg 自动加深
 function btn(x, y, w, h, label, fn, opt = {}) {
-  btns.push({ x, y: y - g_scrollY, w, h, fn, disabled: opt.disabled });
+  btns.push({ x, y: y - g_scrollY, w, h, fn, disabled: opt.disabled, label: String(label) });   // label 仅用于调试/自动化检测（如重叠扫描），不影响点击
   const r = opt.r !== undefined ? opt.r : 9;
   const grad = opt.grad || [opt.bg || '#4b5563', shade(opt.bg || '#4b5563', 0.78)];
   const g = ctx.createLinearGradient(0, y, 0, y + h);
@@ -631,13 +631,16 @@ function drawRoster() {
   txt('群英谱', W / 2, 48, 24, '#2f3540', 'center', true);
   txt('征战记录 · 英雄挑战', W / 2, 70, 10, '#8a7e6c', 'center');
   txt('前6位英雄有4套专属皮肤，其余2套通用', W / 2, 82, 9, '#90949a', 'center');
+  var rowH = 44, top = 88, listH = 500;   // 18 英雄超屏→可滚动（与 equip 同款 clipList），否则末行皮肤钮撞返回键
+  clipList(20, top, 335, listH, top + HERO_LIST.length * rowH);
   HERO_LIST.forEach(function(name, i) {
     var rec = typeof heroRecord === 'function' ? heroRecord(name) : { kills: 0, deployments: 0, wins: 0 };
-    var y = 88 + i * 44, own = SAVE.ownedHeroes[name], star = heroStar ? heroStar(name) : 0;
+    var y = top + i * rowH, own = SAVE.ownedHeroes[name], star = heroStar ? heroStar(name) : 0;
     panel(20, y, 335, 38, { bg: own ? '#fffdf9' : '#f0ece4', stroke: own ? '#dfc98d' : '#ded8ce', r: 8, blur: 2 });
     var c = HEROES[name].grade === 4 ? '#b78324' : '#8050a0';
     txt(name, 32, y + 17, 14, own ? c : '#8f969c', 'left', true);
     txt('杀 ' + rec.kills + '  出 ' + rec.deployments + '  ' + (own ? '★' + star : '未拥有'), 32, y + 32, 9, '#656d76');
+    var ch = typeof heroChallenges === 'function' ? heroChallenges().find(function(x) { return x.hero === name; }) : null;
     // 皮肤切换按钮：群英谱内直接预览、切换已解锁皮肤
     if (typeof heroSkins === 'function' && typeof currentSkin === 'function') {
       var curSkin = currentSkin(name);
@@ -647,14 +650,16 @@ function drawRoster() {
         var next = cycleSkin(name);
         if (next && typeof sfx === 'function') sfx('click');
       }, { size: 10, bg: curSkin && curSkin.col ? curSkin.col : '#7c8792' });
-      txt('当前:' + skiName, 238, y + 26, 9, curSkin && curSkin.col ? curSkin.col : '#8a7e6c');
+      // 有挑战的英雄右侧让给挑战文字（避免与肤按钮重叠）；无挑战的显示当前皮肤名
+      if (!ch) txt('当前:' + skiName, 240, y + 26, 9, curSkin && curSkin.col ? curSkin.col : '#8a7e6c');
     }
-    var ch = typeof heroChallenges === 'function' ? heroChallenges().find(function(x) { return x.hero === name; }) : null;
     if (ch) {
-      txt(ch.desc, 185, y + 24, 9, SAVE.heroChallenges[name] ? '#318c4a' : '#868e96');
-      txt(SAVE.heroChallenges[name] ? '✓' : '未完成', 185, y + 17, 10, SAVE.heroChallenges[name] ? '#318c4a' : '#a48b63', 'center');
+      // 挑战文字移到肤按钮右侧（旧版在 x=185 与肤按钮同位，文字压在按钮上）
+      txt(ch.desc, 240, y + 14, 8, SAVE.heroChallenges[name] ? '#318c4a' : '#868e96');
+      txt(SAVE.heroChallenges[name] ? '✓ 已完成' : '未完成', 240, y + 30, 9, SAVE.heroChallenges[name] ? '#318c4a' : '#a48b63', 'left', true);
     }
   });
+  unclip();
   btn(128, 596, 120, 34, '返回', function() { scr = 'menu'; }, { bg: '#7c8792' });
 }
 
