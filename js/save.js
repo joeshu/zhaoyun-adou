@@ -1,7 +1,7 @@
 /* v2 存档：金币/材料/主线/武器/穿戴/道具/彩蛋/无尽（多槽 + 导出导入 + 版本/校验） */
 'use strict';
 
-const SAVE_VER = 7;                                // v7：分层存档与日/周挑战
+const SAVE_VER = 8;                                // v8：武将觉醒默认开启（FIX-JUEXING-001）；v7=分层存档与日/周挑战
 
 let curSlot = 0;                                  // 当前存档槽 0/1/2
 const SLOT_KEY = n => (n === 0 ? 'zyad2' : 'zyad2_slot' + n);   // 槽0兼容旧档 key
@@ -18,7 +18,7 @@ function defaultSave() {
     bossPhase: false,             // BOSS阶段技能开关（重型，默认关，菜单开；boss按血量切3阶段）
     endlessOn: false,              // 无尽纪元快捷开关（重型，默认关，菜单开；绕过30关门槛直接进无尽）
     newHeros: false,               // 新增6橙将开关（重型，默认关，菜单开；开启后6名新橙将注入抽卡池）
-    awaken: false,                 // 武将觉醒开关（重型，默认关，菜单开；开启后觉醒丹可觉醒武将）
+    awaken: true,                 // 武将觉醒开关（FIX-JUEXING-001：默认开启；菜单可手动关闭；开启后觉醒丹可觉醒武将）
     gearOn: false,                 // 装备扩展开关（重型，默认关，菜单开；开启后防具减伤/饰品攻速生效）
     equipArmor: null,              // 玩家防具 id（ARMORS 键，null=无）
     equipAcc: null,                // 玩家饰品 id（ACCESSORIES 键，null=无）
@@ -113,6 +113,13 @@ function migrateSave(s) {
     if (!s.heroChallenges || typeof s.heroChallenges !== 'object') s.heroChallenges = {};
     if (!s.dailyTask || typeof s.dailyTask !== 'object') s.dailyTask = { progress: 0, reward: false, seed: 0 };
     s.ver = 7;
+  }
+  // v7 → v8：武将觉醒默认开启（FIX-JUEXING-001）。
+  //   旧存档曾以 false 为默认并写盘，仅改 defaultSave() 无法覆盖已存的 false；
+  //   故迁移时强制置 true。用户若曾手动关闭，可在菜单「武将觉醒」重新关闭（一次性）。
+  if (v < 8) {
+    s.awaken = true;
+    s.ver = 8;
   }
   return s;
 }

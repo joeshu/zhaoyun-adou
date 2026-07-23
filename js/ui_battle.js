@@ -772,13 +772,20 @@ function drawGame() {
   btn(74, ay, 62, ah, '十连 ' + tenCostNow, () => drawTen(G.P),
     { size: 11, bg: '#a61e4e', disabled: G.P.mantou < tenCostNow || barFree(G.P) < 0 });
 
-  /* Active items */
+  /* Active items — 单独一行（合成栏下方、操作栏上方 y=ay-ah），
+     显示全部已装备/持有 uses 的主动道具，去掉 slice(0,2) 限制，确保觉醒丹（ITEMS 第 6 位）等也可点。 */
   const acts = Object.keys(ITEMS).filter(id => ITEMS[id].act && (G.itemUses[id] || SAVE.loadout.includes(id)));
-  acts.slice(0, 2).forEach((id, i) => {
-    const n = G.itemUses[id] || 0;
-    btn(140 + i * 58, ay, 54, ah, ITEMS[id].name + '×' + n, () => useActive(id),
-      { size: 9, bg: G.targeting === id ? '#e8a005' : '#5f3dc4', disabled: !n });
-  });
+  if (acts.length) {
+    const AY2 = ay - ah;                                  // 与操作栏同高、上移一行，避免遮挡抽卡/十连/大招/撤销/回收槽
+    const AM = 4, AG = 4;                                 // 左右边距 / 按钮间距
+    const AW2 = Math.min(54, Math.floor((W - AM * 2 - (acts.length - 1) * AG) / acts.length));
+    acts.forEach((id, i) => {
+      const n = G.itemUses[id] || 0;
+      const ax = AM + i * (AW2 + AG);
+      btn(ax, AY2, AW2, ah, ITEMS[id].name + '×' + n, () => useActive(id),
+        { size: 9, bg: G.targeting === id ? '#e8a005' : '#5f3dc4', disabled: !n });
+    });
+  }
 
   /* Recycle slot */
   const rc = RECYCLE;
