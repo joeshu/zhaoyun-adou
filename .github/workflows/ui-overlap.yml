@@ -9,6 +9,7 @@ on:
       - 'index.html'
       - 'js/**'
       - 'server.js'
+      - 'smoke.js'
       - 'scripts/check-overlap.js'
       - '.github/workflows/ui-overlap.yml'
   pull_request:
@@ -17,6 +18,7 @@ on:
       - 'index.html'
       - 'js/**'
       - 'server.js'
+      - 'smoke.js'
       - 'scripts/check-overlap.js'
       - '.github/workflows/ui-overlap.yml'
 
