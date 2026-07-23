@@ -1,0 +1,866 @@
+a/js/ui_battle.js b/js/ui_battle.js
+index a01c24d..8011e33 100644
+--- a/js/ui_battle.js
++++ b/js/ui_battle.js
+@@ -1,6 +1,244 @@
+ /* v2 战场渲染：三段式布局 / 单位 / 怪物 / 特效 / 结算 */
++/* 视觉升级：MAP_THEMES / 地图背景缓存 / 双线路径 / 瓷面格 / 阿斗牌匾 / 朱砂横幅 */
+ 'use strict';
+ 
++/* ========== MAP_THEMES: per-map visual identity ==========
++   Index matches MAPS[] in data.js:
++   0 = 长坂坡 (dust/sand)  1 = 赤壁 (river)  2 = 街亭 (pass)  3 = 函谷关 (cliff)
++   Each theme defines: bg gradient, accent color, motif painter, path color, cell style. */
++var MAP_THEMES = [
++  {                                   /* 0 长坂坡 — 漫天黄沙 */
++    name: '长坂坡',
++    bgTop: '#f5ede0', bgBot: '#e6dcc8',
++    bgBoldTop: '#e0d4bc', bgBoldBot: '#cfb898',
++    accent: '#c4a26c', accentBold: '#a07840',
++    motif: 'dust',
++    pathCol: '#b09060', pathColBold: '#8a6838',
++    pathInner: '#d4bc98', pathInnerBold: '#c4a878',
++    cellFill: '#fdfaf3', cellBorder: '#d8ccb8',
++    cellFillBold: '#f5efe0', cellBorderBold: '#bfa978',
++    barrenFill: '#f0ebe0', barrenBorder: '#c9bca8',
++    dustColor: '#d4b896', dustColorBold: '#b89868',
++  },
++  {                                   /* 1 赤壁 — 江风水势 */
++    name: '赤壁',
++    bgTop: '#dde6ec', bgBot: '#cfd8e2',
++    bgBoldTop: '#c4d0dc', bgBoldBot: '#a8b8c8',
++    accent: '#7a98a8', accentBold: '#587890',
++    motif: 'river',
++    pathCol: '#6a8898', pathColBold: '#486878',
++    pathInner: '#a8c0cc', pathInnerBold: '#88a8b8',
++    cellFill: '#f5f8fc', cellBorder: '#b8c4d0',
++    cellFillBold: '#eaf0f6', cellBorderBold: '#98a8b8',
++    barrenFill: '#e8eef2', barrenBorder: '#a8b8c8',
++    riverColor: '#a8c0d0', riverColorBold: '#7898b0',
++  },
++  {                                   /* 2 街亭 — 山岭要道 */
++    name: '街亭',
++    bgTop: '#e8e0d2', bgBot: '#dad0bc',
++    bgBoldTop: '#d8ceb6', bgBoldBot: '#c4b498',
++    accent: '#a09068', accentBold: '#807048',
++    motif: 'pass',
++    pathCol: '#9a8860', pathColBold: '#786840',
++    pathInner: '#c4b498', pathInnerBold: '#b4a488',
++    cellFill: '#faf8f0', cellBorder: '#d0c4ae',
++    cellFillBold: '#f2ead8', cellBorderBold: '#b8a888',
++    barrenFill: '#ece6da', barrenBorder: '#beb098',
++    passColor: '#c4b090', passColorBold: '#a09070',
++  },
++  {                                   /* 3 函谷关 — 险峻峡谷 */
++    name: '函谷关',
++    bgTop: '#dcdfe6', bgBot: '#caced6',
++    bgBoldTop: '#c8cdd8', bgBoldBot: '#a8b0c0',
++    accent: '#788090', accentBold: '#58606e',
++    motif: 'cliff',
++    pathCol: '#687080', pathColBold: '#48505e',
++    pathInner: '#98a4b4', pathInnerBold: '#788898',
++    cellFill: '#f2f3f5', cellBorder: '#b8bec8',
++    cellFillBold: '#e8eaee', cellBorderBold: '#98a0ae',
++    barrenFill: '#e4e6ea', barrenBorder: '#a8aeb8',
++    cliffColor: '#98a4b4', cliffColorBold: '#788898',
++  },
++];
++
++/* ========== Offscreen map-background cache ==========
++   Key format: "mapIdx:intensity". Avoids repainting every frame. */
++var _mapBgCache = {};
++
++function getMapBg(mapIdx, intensity) {
++  var key = mapIdx + ':' + (intensity | 0);
++  if (_mapBgCache[key]) return _mapBgCache[key];
++  var c = document.createElement('canvas');
++  c.width = W; c.height = H;
++  var cx = c.getContext('2d');
++  paintMapBg(cx, W, H, mapIdx, intensity | 0);
++  _mapBgCache[key] = c;
++  return c;
++}
++
++function paintMapBg(cx, w, h, mapIdx, intensity) {
++  var mt = MAP_THEMES[mapIdx] || MAP_THEMES[0];
++  var bold = intensity >= 1;
++  var tTop = bold ? mt.bgBoldTop : mt.bgTop;
++  var tBot = bold ? mt.bgBoldBot : mt.bgBot;
++  var g = cx.createLinearGradient(0, 0, 0, h);
++  g.addColorStop(0, tTop); g.addColorStop(1, tBot);
++  cx.fillStyle = g; cx.fillRect(0, 0, w, h);
++  drawMapMotif(cx, w, h, mapIdx, intensity);
++}
++
++/* Per-map motif dispatcher */
++function drawMapMotif(cx, w, h, mapIdx, intensity) {
++  switch (mapIdx) {
++    case 0: paintDust(cx, w, h, intensity); break;     /* 长坂坡 → 黄沙 */
++    case 1: paintRiver(cx, w, h, intensity); break;    /* 赤壁 → 水纹 */
++    case 2: paintPass(cx, w, h, intensity); break;     /* 街亭 → 山道 */
++    case 3: paintCliff(cx, w, h, intensity); break;     /* 函谷关 → 峭壁 */
++  }
++}
++
++/* --- Motif: 长坂坡 Dust (warm sand tone) ---
++   APPROVED look: mostly sand color, subtle atmospheric patches, no heavy silhouettes. */
++function paintDust(cx, w, h, intensity) {
++  var mt = MAP_THEMES[0];
++  var col = intensity >= 1 ? mt.dustColorBold : mt.dustColor;
++  var aBase = intensity >= 1 ? 0.18 : 0.10;
++  cx.save();
++  cx.globalAlpha = aBase;
++  /* Soft sand-tone blobs for atmospheric warmth */
++  var spots = [
++    [w * 0.15, TOP + 40, 120, 80], [w * 0.75, TOP + 100, 140, 90],
++    [w * 0.4, TOP + 180, 160, 70], [w * 0.85, TOP + 220, 110, 60],
++    [w * 0.1, 340, 130, 75], [w * 0.6, 420, 150, 85], [w * 0.3, 500, 120, 65],
++  ];
++  for (var i = 0; i < spots.length; i++) {
++    var s = spots[i];
++    cx.beginPath(); cx.ellipse(s[0], s[1], s[2], s[3], 0, 0, 7);
++    cx.fillStyle = col; cx.fill();
++  }
++  /* Fine sand speckles */
++  cx.globalAlpha = aBase * 0.5; cx.fillStyle = col;
++  for (var d = 0; d < 40; d++) {
++    var sx = Math.random() * w; var sy = TOP + Math.random() * (h - TOP);
++    var sr = 0.5 + Math.random() * 1.5;
++    cx.beginPath(); cx.arc(sx, sy, sr, 0, 7); cx.fill();
++  }
++  cx.restore();
++  /* Subtle horizon line */
++  cx.save(); cx.globalAlpha = intensity >= 1 ? 0.12 : 0.07;
++  cx.strokeStyle = col; cx.lineWidth = 1;
++  cx.beginPath(); cx.moveTo(0, TOP + 8); cx.lineTo(w, TOP + 12); cx.stroke();
++  cx.restore();
++}
++
++/* --- Motif: 赤壁 River (water / mist layers) --- */
++function paintRiver(cx, w, h, intensity) {
++  var mt = MAP_THEMES[1];
++  var col = intensity >= 1 ? mt.riverColorBold : mt.riverColor;
++  var aBase = intensity >= 1 ? 0.15 : 0.08;
++  cx.save(); cx.globalAlpha = aBase;
++  /* Horizontal wave bands suggesting water/mist */
++  var bands = [
++    { y: TOP + 30, h: 20, a: 1.0 }, { y: TOP + 90, h: 28, a: 0.7 },
++    { y: TOP + 170, h: 22, a: 0.85 }, { y: 340, h: 25, a: 0.75 },
++    { y: 430, h: 18, a: 0.6 }, { y: 510, h: 20, a: 0.5 },
++  ];
++  for (var i = 0; i < bands.length; i++) {
++    var b = bands[i]; cx.globalAlpha = aBase * b.a;
++    cx.fillStyle = col; cx.fillRect(0, b.y, w, b.h);
++  }
++  /* Mist wisps */
++  cx.globalAlpha = aBase * 0.6;
++  var mists = [
++    [w * 0.2, TOP + 55, 90, 35], [w * 0.7, TOP + 145, 110, 40],
++    [w * 0.35, 360, 100, 30], [w * 0.8, 450, 80, 28],
++  ];
++  for (var j = 0; j < mists.length; j++) {
++    var m = mists[j];
++    cx.beginPath(); cx.ellipse(m[0], m[1], m[2], m[3], 0, 0, 7); cx.fill();
++  }
++  cx.restore();
++}
++
++/* --- Motif: 街亭 Pass (mountain road + flags) --- */
++function paintPass(cx, w, h, intensity) {
++  var mt = MAP_THEMES[2];
++  var col = intensity >= 1 ? mt.passColorBold : mt.passColor;
++  var aBase = intensity >= 1 ? 0.14 : 0.08;
++  cx.save(); cx.globalAlpha = aBase;
++  /* Distant mountain silhouettes */
++  var peaks = [
++    { x: w * 0.1, h: 28, base: 18 }, { x: w * 0.35, h: 38, base: 24 },
++    { x: w * 0.65, h: 32, base: 20 }, { x: w * 0.88, h: 24, base: 16 },
++  ];
++  cx.fillStyle = col;
++  for (var i = 0; i < peaks.length; i++) {
++    var p = peaks[i];
++    cx.beginPath(); cx.moveTo(p.x - p.base, TOP + 6);
++    cx.lineTo(p.x, TOP + 6 - p.h); cx.lineTo(p.x + p.base, TOP + 6); cx.closePath(); cx.fill();
++  }
++  /* Road-side marker flags */
++  cx.globalAlpha = aBase * 1.2;
++  var flagCol = intensity >= 1 ? '#bf3b2d' : '#c94a3a';
++  _drawMiniFlag(cx, 12, TOP + 70, flagCol); _drawMiniFlag(cx, 8, 200, flagCol);
++  _drawMiniFlag(cx, 14, 360, flagCol); _drawMiniFlag(cx, 10, 480, flagCol);
++  _drawMiniFlag(cx, w - 16, TOP + 50, flagCol); _drawMiniFlag(cx, w - 12, 190, flagCol);
++  _drawMiniFlag(cx, w - 14, 350, flagCol); _drawMiniFlag(cx, w - 10, 490, flagCol);
++  cx.restore();
++}
++
++function _drawMiniFlag(cx, x, y, col) {
++  cx.strokeStyle = col; cx.lineWidth = 1.2;
++  cx.beginPath(); cx.moveTo(x, y - 12); cx.lineTo(x, y + 8); cx.stroke();
++  cx.fillStyle = col;
++  cx.beginPath(); cx.moveTo(x, y - 12); cx.lineTo(x + 8, y - 7); cx.lineTo(x, y - 2); cx.closePath(); cx.fill();
++}
++
++/* --- Motif: 函谷关 Cliff (narrow canyon walls + strata) --- */
++function paintCliff(cx, w, h, intensity) {
++  var mt = MAP_THEMES[3];
++  var col = intensity >= 1 ? mt.cliffColorBold : mt.cliffColor;
++  var aBase = intensity >= 1 ? 0.16 : 0.09;
++  cx.save();
++  /* Left canyon wall */
++  cx.globalAlpha = aBase;
++  var lg = cx.createLinearGradient(0, 0, 40, 0);
++  lg.addColorStop(0, col); lg.addColorStop(1, 'rgba(0,0,0,0)');
++  cx.fillStyle = lg; cx.fillRect(0, TOP, 40, h - TOP);
++  /* Right canyon wall */
++  var rg = cx.createLinearGradient(w - 40, 0, w, 0);
++  rg.addColorStop(0, 'rgba(0,0,0,0)'); rg.addColorStop(1, col);
++  cx.fillStyle = rg; cx.fillRect(w - 40, TOP, 40, h - TOP);
++  /* Rock strata lines */
++  cx.globalAlpha = aBase * 0.6; cx.strokeStyle = col; cx.lineWidth = 1;
++  var strataY = [TOP + 45, TOP + 110, 180, 260, 340, 420, 500, 570];
++  for (var i = 0; i < strataY.length; i++) {
++    cx.beginPath(); cx.moveTo(0, strataY[i]);
++    cx.quadraticCurveTo(w * 0.33, strataY[i] + (i % 2 ? 2 : -2), w * 0.66, strataY[i] + (i % 2 ? -1 : 1));
++    cx.lineTo(w, strataY[i] + (i % 3 ? 1 : 0)); cx.stroke();
++  }
++  /* Rocky texture spots */
++  cx.globalAlpha = aBase * 0.4; cx.fillStyle = col;
++  var rocks = [
++    [25, TOP + 60, 8, 5], [w - 30, TOP + 90, 10, 6],
++    [20, 250, 7, 4], [w - 28, 300, 9, 5],
++    [22, 430, 8, 5], [w - 25, 500, 11, 7],
++  ];
++  for (var r = 0; r < rocks.length; r++) {
++    var rk = rocks[r];
++    cx.beginPath(); cx.ellipse(rk[0], rk[1], rk[2], rk[3], 0, 0, 7); cx.fill();
++  }
++  cx.restore();
++}
++
++/* Decorative map accents (reserved for future overlays) */
++function drawMapAccent(mapIdx, cx, w, h, intensity) {
++  /* Motifs are painted inline by paintMapBg; this hook exists for optional post-process ornaments. */
++}
++
++
++/* ========== Unit helpers (unchanged signatures) ========== */
++
+ function unitGlyph(u) {
+   return u.t === 'troop' ? u.type : u.t === 'char' || u.t === 'ifrag' ? u.ch : u.t === 'shovel' ? '铲' : u.name;
+ }
+@@ -9,15 +247,16 @@ function unitCol(u) {
+   if (u.t === 'char') return '#9c36b5';
+   if (u.t === 'ifrag') return '#1c7ed6';
+   if (u.t === 'shovel') return '#846358';
+-  // P2-1 皮肤系统：武将颜色由当前皮肤决定
++  /* P2-1 皮肤系统：武将颜色由当前皮肤决定 */
+   if (u.t === 'hero' && typeof currentSkin === 'function') {
+     const sk = currentSkin(u.name);
+     if (sk && sk.col) return sk.col;
+   }
+   return HEROES[u.name].grade === 4 ? '#b0801f' : '#9c36b5';
+ }
+-/* 棋子底衬：给每个单位加一枚底牌（圆/盾/菱/方按类型区分），
+-   保留汉字居中，从"表格"变"棋局"；色弱模式加高对比描边。 */
++
++/* 棋子底衬：圆/盾/菱/方按类型区分；色弱模式加高对比描边。
++   浓墨模式(=limited-skin)额外添加柔和光晕角标。 */
+ function drawBase(u) {
+   const hero = u.t === 'hero';
+   const g = hero ? (HEROES[u.name].grade === 4 ? '#e8a005' : '#9c36b5') : null;
+@@ -29,6 +268,16 @@ function drawBase(u) {
+   } else if (hero) {
+     rr(-19, -19, 38, 38, 9); ctx.fillStyle = g; ctx.globalAlpha = 0.20; ctx.fill();
+     ctx.globalAlpha = 1; ctx.lineWidth = 2.5; ctx.strokeStyle = g; rr(-19, -19, 38, 38, 9); ctx.stroke();
++    /* 浓墨模式：柔和光晕环 */
++    if (SAVE.mapSkin === 1) {
++      ctx.globalAlpha = 0.12; ctx.strokeStyle = g; ctx.lineWidth = 3;
++      rr(-23, -23, 46, 46, 11); ctx.stroke();
++      ctx.globalAlpha = 1;
++      /* 角标水印 */
++      ctx.fillStyle = g; ctx.globalAlpha = 0.25;
++      ctx.font = '8px "PingFang SC","Microsoft YaHei",sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
++      ctx.fillText('★', 17, 17); ctx.globalAlpha = 1;
++    }
+   } else if (u.t === 'char') {
+     rr(-16, -16, 32, 32, 7); ctx.fillStyle = '#9c36b5'; ctx.globalAlpha = 0.18; ctx.fill();
+     ctx.globalAlpha = 1; ctx.lineWidth = 2; ctx.strokeStyle = '#9c36b5'; rr(-16, -16, 32, 32, 7); ctx.stroke();
+@@ -39,7 +288,7 @@ function drawBase(u) {
+     ctx.beginPath(); ctx.moveTo(0, -17); ctx.lineTo(17, 0); ctx.lineTo(0, 17); ctx.lineTo(-17, 0); ctx.closePath(); ctx.stroke();
+   }
+   ctx.restore();
+-  if (SAVE.colorblind) {                          // 色弱：统一加黑色高对比描边
++  if (SAVE.colorblind) {
+     ctx.save(); ctx.lineWidth = 1; ctx.strokeStyle = '#222';
+     if (hero) rr(-19, -19, 38, 38, 9);
+     else if (u.t === 'char') rr(-16, -16, 32, 32, 7);
+@@ -48,6 +297,7 @@ function drawBase(u) {
+     ctx.stroke(); ctx.restore();
+   }
+ }
++
+ function drawUnitAt(u, x, y, S) {
+   const pop = u.animT > 0 ? 1 + u.animT * 0.6 : 1;
+   ctx.save(); ctx.translate(x, y); ctx.scale(pop, pop);
+@@ -56,18 +306,15 @@ function drawUnitAt(u, x, y, S) {
+   if (u.t === 'hero') {
+     txt(u.name, 0, 4, 14 + u.lvl, col, 'center', true);
+     txt('Lv' + u.lvl + (u.weapon ? '·' + WEAPONS[u.weapon].name[0] : ''), 0, 17, 8, col, 'center');
+-    // 武将技能冷却环：如果该武将拥有主动技能，绘制一个圆形进度表示冷却状态。
+     if (HEROES[u.name].skill) {
+       var cdMax = (typeof skillCd === 'function') ? skillCd(u) : HEROES[u.name].skill.cd;
+       var cdRatio = 1 - Math.min(1, Math.max(0, (u.cd || 0) / cdMax));
+       ctx.strokeStyle = cdRatio >= 1 ? '#2f9e44' : '#5f3dc4'; ctx.lineWidth = 2;
+       ctx.beginPath(); ctx.arc(0, -5, 21, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * cdRatio); ctx.stroke();
+     }
+-    // 觉醒等级：橙色小圆点（觉醒丹叠加的全属性加成，unitStats 已乘 1.3^awaken）
+     if (u.awaken > 0) {
+       for (let k = 0; k < u.awaken; k++) { ctx.fillStyle = '#e8590c'; ctx.beginPath(); ctx.arc(-8 + k * 8, 20, 2.4, 0, 7); ctx.fill(); }
+     }
+-    // P2-1 皮肤装饰：按当前皮肤的 decor 显示角标
+     if (typeof currentSkin === 'function') {
+       const sk = currentSkin(u.name);
+       if (sk && sk.decor && sk.decor !== 'none') {
+@@ -82,7 +329,6 @@ function drawUnitAt(u, x, y, S) {
+   } else if (u.t === 'char') {
+     txt(u.ch, 0, 7, 22, col, 'center', true);
+     txt('将字', 0, 18, 7, '#adb5bd', 'center');
+-    // 将字配对预览：在玩家侧显示能与当前字配对的另一个字，降低拼字记忆门槛。
+     if (S && S.side > 0) {
+       var paired = null;
+       for (var i = 0; i < HERO_LIST.length && !paired; i++) {
+@@ -93,10 +339,10 @@ function drawUnitAt(u, x, y, S) {
+   } else if (u.t === 'ifrag') {
+     txt(u.ch, 0, 7, 22, u.wish ? '#ffd700' : col, 'center', true);
+     txt(ITEMS[IFRAGS[u.ch].item].name + ' ' + u.n + '/' + IFRAGS[u.ch].need, 0, 18, 7, '#adb5bd', 'center');
+-    if (u.wish) txt('★', 14, -10, 12, '#ffd700', 'center');   // 心愿碎片金色星标（1.2.4 视觉反馈）
++    if (u.wish) txt('★', 14, -10, 12, '#ffd700', 'center');
+   } else txt('铲', 0, 7, 20, col, 'center', true);
+   ctx.restore();
+-  // buff 标识（Phase 3 #39）：玩家侧单位增益小图标 + 手动大招就绪脉冲
++  /* buff 标识（Phase 3 #39） */
+   if (S && S.side > 0) {
+     let _bx = x - 20;
+     if (u.rateMul > 1) { txt('⚡', _bx, y - 22, 11, '#f59f00', 'center', true); _bx += 12; }
+@@ -110,49 +356,138 @@ function drawUnitAt(u, x, y, S) {
+   if (S && (u.t === 'troop' || u.t === 'hero')) {
+     const st = unitStats(u, S);
+     if (u.hp < st.maxhp) hpBar(x - 18, y + 21, 36, u.hp / st.maxhp, '#2f9e44');
+-    if (u.animT > 0) { ctx.strokeStyle = 'rgba(255,107,107,.7)'; ctx.lineWidth = 2; ctx.strokeRect(x - 22, y - 14, 44, 30); }   // 受击红描边（全局坐标）
++    if (u.animT > 0) { ctx.strokeStyle = 'rgba(255,107,107,.7)'; ctx.lineWidth = 2; ctx.strokeRect(x - 22, y - 14, 44, 30); }
+   }
+   if (u.stun > 0) txt('✦', x + 16, y - 14, 10, '#5f3dc4', 'center');
+ }
++
++/* ========== Celadon cell rendering (瓷面格) ==========
++   Gradient fill + top highlight + ink border + bottom-right shadow.
++   Barren cells get dashed outline + gravel dots. */
+ function drawCell(c, S, hide) {
+   const x = c.x - CELL / 2, y = c.y - CELL / 2;
+   rr(x, y, CELL, CELL, 6);
++
++  /* Resolve per-map cell style from MAP_THEMES */
++  var mi = (G && G.mapIdx !== undefined) ? G.mapIdx : 0;
++  var mt = MAP_THEMES[mi] || MAP_THEMES[0];
++  var bold = SAVE.mapSkin === 1;
++  var cFill = bold ? mt.cellFillBold : mt.cellFill;
++  var cBord = bold ? mt.cellBorderBold : mt.cellBorder;
++
+   if (!c.open) {
+-    // 荒格降权（Phase 0 #31）：低饱和、虚线描边、小字，不再用大色块抢单位焦点
+-    ctx.fillStyle = '#f1eee8'; ctx.fill();
+-    ctx.setLineDash([3, 3]); ctx.strokeStyle = '#d9d3c7'; ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
+-    txt('荒', c.x, c.y - 1, 10, '#c9c2b4', 'center');
+-    if (S && S.side > 0) txt('馒' + cellCost(S), c.x, c.y + 13, 8, '#c2bcae', 'center');   // 点击花馒头开荒
++    /* 荒地：低饱和底色 + 虚线描边 + 「荒」字 + 碎石点 */
++    var bf = bold ? shade(mt.barrenFill, 0.94) : mt.barrenFill;
++    var bb = bold ? shade(mt.barrenBorder, 0.88) : mt.barrenBorder;
++    /* Gradient fill */
++    var bg = ctx.createLinearGradient(x, y, x, y + CELL);
++    bg.addColorStop(0, bf); bg.addColorStop(1, shade(bf, 0.92));
++    ctx.fillStyle = bg; ctx.fill();
++    /* Dashed outline */
++    ctx.setLineDash([3, 3]); ctx.strokeStyle = bb; ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
++    txt('荒', c.x, c.y - 1, 10, shade(bb, 0.75), 'center');
++    if (S && S.side > 0) txt('馒' + cellCost(S), c.x, c.y + 13, 8, shade(bb, 0.65), 'center');
++    /* Gravel dots */
++    ctx.fillStyle = shade(bb, 0.5); ctx.globalAlpha = 0.35;
++    var gx = [x + 8, x + CELL - 10, x + CELL/2], gy = [y + CELL - 8, y + CELL - 6, y + CELL - 10];
++    for (let gi = 0; gi < 3; gi++) { ctx.beginPath(); ctx.arc(gx[gi], gy[gi], 1.2, 0, 7); ctx.fill(); }
++    ctx.globalAlpha = 1;
+     return;
+   }
+-  ctx.fillStyle = '#ffffffcc'; ctx.fill();
++
++  /* Open cell: celadon gradient fill */
++  var cg = ctx.createLinearGradient(x, y, x, y + CELL);
++  cg.addColorStop(0, cFill); cg.addColorStop(1, shade(cFill, 0.94));
++  ctx.fillStyle = cg; ctx.fill();
++
++  /* Top highlight strip (瓷面高光) */
++  ctx.save();
++  var hl = ctx.createLinearGradient(x, y, x, y + CELL * 0.45);
++  hl.addColorStop(0, 'rgba(255,255,255,.28)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
++  rr(x + 1, y + 1, CELL - 2, (CELL - 2) * 0.45, 5);
++  ctx.fillStyle = hl; ctx.fill();
++  ctx.restore();
++
++  /* Ink border */
+   ctx.lineWidth = 1.5;
+-  ctx.strokeStyle = !c.unit ? '#dee2e6' : unitCol(c.unit);
++  ctx.strokeStyle = !c.unit ? cBord : unitCol(c.unit);
+   ctx.stroke();
++
++  /* Bottom-right inner shadow */
++  ctx.save();
++  ctx.shadowColor = 'rgba(0,0,0,.07)'; ctx.shadowBlur = 3; ctx.shadowOffsetX = 1.5; ctx.shadowOffsetY = 1.5;
++  rr(x + 2, y + 2, CELL - 4, CELL - 4, 4);
++  ctx.strokeStyle = 'rgba(0,0,0,.05)'; ctx.lineWidth = 0.5; ctx.stroke();
++  ctx.restore();
++
+   if (c.unit && !hide) drawUnitAt(c.unit, c.x, c.y, S);
+   if (S && S.side > 0 && G && G.targeting && typeof canTargetItem === 'function' && canTargetItem(G.targeting, c.unit)) {
+-    ctx.strokeStyle = '#e8a005'; ctx.lineWidth = 3; ctx.setLineDash([3, 2]); ctx.strokeRect(x - 2, y - 2, CELL + 4, CELL + 4); ctx.setLineDash([]);
++    ctx.strokeStyle = '#e8a005'; ctx.lineWidth = 3; ctx.setLineDash([3, 2]);
++    ctx.strokeRect(x - 2, y - 2, CELL + 4, CELL + 4); ctx.setLineDash([]);
+   }
+ }
++
+ function drawBarSlot(s, hide) {
+   const x = s.x - CELL / 2, y = s.y - CELL / 2;
+   rr(x, y, CELL, CELL, 6);
+-  ctx.fillStyle = '#fff'; ctx.fill();
++  var mi = (G && G.mapIdx !== undefined) ? G.mapIdx : 0;
++  var mt = MAP_THEMES[mi] || MAP_THEMES[0];
++  var bold = SAVE.mapSkin === 1;
++  var cFill = bold ? mt.cellFillBold : mt.cellFill;
++  var cBord = bold ? mt.cellBorderBold : mt.cellBorder;
++  var cg = ctx.createLinearGradient(x, y, x, y + CELL);
++  cg.addColorStop(0, cFill); cg.addColorStop(1, shade(cFill, 0.94));
++  ctx.fillStyle = cg; ctx.fill();
++  ctx.save();
++  var hl = ctx.createLinearGradient(x, y, x, y + CELL * 0.45);
++  hl.addColorStop(0, 'rgba(255,255,255,.28)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
++  rr(x + 1, y + 1, CELL - 2, (CELL - 2) * 0.45, 5); ctx.fillStyle = hl; ctx.fill();
++  ctx.restore();
+   ctx.lineWidth = 1.5;
+-  ctx.strokeStyle = s.unit ? unitCol(s.unit) : '#ced4da';
++  ctx.strokeStyle = s.unit ? unitCol(s.unit) : cBord;
+   if (s.unit && noDeploy(s.unit)) ctx.setLineDash([3, 3]);
+   ctx.stroke(); ctx.setLineDash([]);
+   if (s.unit && !hide) drawUnitAt(s.unit, s.x, s.y, null);
+   if (G && G.targeting && typeof canTargetItem === 'function' && canTargetItem(G.targeting, s.unit)) {
+-    ctx.strokeStyle = '#e8a005'; ctx.lineWidth = 3; ctx.setLineDash([3, 2]); ctx.strokeRect(x - 2, y - 2, CELL + 4, CELL + 4); ctx.setLineDash([]);
++    ctx.strokeStyle = '#e8a005'; ctx.lineWidth = 3; ctx.setLineDash([3, 2]);
++    ctx.strokeRect(x - 2, y - 2, CELL + 4, CELL + 4); ctx.setLineDash([]);
+   }
+ }
++
++/* ========== Path: double-line fix (bug #1) ==========
++   Outer 5px faction/map color + inner 3px lighter + 1px center dashed.
++   Replaces old ugly 18px solid line. */
+ function drawPath(S) {
+-  ctx.strokeStyle = '#e3ded2'; ctx.lineWidth = 18; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
++  if (!S || !S.path || !S.path.length) return;
++  var mi = (G && G.mapIdx !== undefined) ? G.mapIdx : 0;
++  var mt = MAP_THEMES[mi] || MAP_THEMES[0];
++  var bold = SAVE.mapSkin === 1;
++  var outerCol = bold ? mt.pathColBold : mt.pathCol;
++  var innerCol = bold ? mt.pathInnerBold : mt.pathInner;
++
++  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
++
++  /* Outer line: 5px map-themed color */
++  ctx.strokeStyle = outerCol; ctx.lineWidth = 5;
++  ctx.beginPath();
++  S.path.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
++  ctx.stroke();
++
++  /* Inner line: 3px lighter tone */
++  ctx.strokeStyle = innerCol; ctx.lineWidth = 3;
++  ctx.beginPath();
++  S.path.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
++  ctx.stroke();
++
++  /* Center dash: 1px cream/white dashed */
++  ctx.strokeStyle = 'rgba(255,252,245,.55)'; ctx.lineWidth = 1;
++  ctx.setLineDash([5, 4]);
+   ctx.beginPath();
+   S.path.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+   ctx.stroke();
++  ctx.setLineDash([]);
+ }
++
+ function drawMob(m) {
+   const size = m.boss ? 28 : 16;
+   const col = m.flash > 0 ? '#f59f00' : m.boss ? '#a61e4e' : m.press ? '#5c1e1e' : '#c0392b';
+@@ -167,16 +502,39 @@ function drawMob(m) {
+   if (m.stun > 0) txt('✦', m.x + size * 0.6, m.y - size * 0.5, 10, '#e8a005', 'center');
+   if (m.slowT > 0) txt('泥', m.x - size * 0.7, m.y - size * 0.5, 8, '#846358', 'center');
+ }
++
++/* ========== Adou plaque (bug fix: faction plaque + seal + label) ========== */
+ function drawAdou(S) {
+   const mine = S.side > 0;
+-  // 玩家阿斗的实际终点仍在底部或函谷关左偏，状态标记上移避免被合成栏遮挡。
+   const y = mine ? S.adou.y - (G && (G.mapIdx === 3 || G.mapIdx === 2) ? 42 : 38) : S.adou.y;
+-  // 阵营小标签：解决顶/底双「阿斗」歧义（旧实现玩家与敌方只靠颜色区分，新玩家看不懂）
+-  txt(mine ? '我方' : '敌军', S.adou.x, y - 6, 9, mine ? '#2f9e44' : '#e03131', 'center', true);
+-  txt('阿斗', S.adou.x, y + 7, 20, mine ? '#343a40' : '#c0392b', 'center', true);
+-  txt('♥' + Math.max(0, S.hp), S.adou.x + 36, y + 5, 12, '#e03131', 'left', true);
++
++  /* Faction-colored rounded plaque background */
++  var plaqueCol = mine ? '#2f9e44' : '#e03131';
++  var textCol = mine ? '#343a40' : '#c0392b';
++  var labelCol = mine ? '#2f9e44' : '#e03131';
++
++  ctx.save();
++  /* Plaque body: rounded capsule behind 阿斗 */
++  var pw = 58, ph = 28, pr = 14;
++  rr(S.adou.x - pw / 2, y - 6, pw, ph, pr);
++  ctx.fillStyle = mine ? 'rgba(47,158,68,.10)' : 'rgba(224,49,49,.10)';
++  ctx.fill();
++  ctx.strokeStyle = plaqueCol; ctx.lineWidth = 1.5; ctx.stroke();
++
++  /* Seal stamp on left side of plaque */
++  seal(S.adou.x - 18, y + 8, 7, mine ? '友' : '敌', plaqueCol);
++
++  /* 「我方/敌军」label above plaque */
++  txt(mine ? '我方' : '敌军', S.adou.x, y - 6, 9, labelCol, 'center', true);
++
++  /* 阿斗 name + HP inside plaque */
++  txt('阿斗', S.adou.x + 2, y + 7, 18, textCol, 'center', true);
++  txt('♥' + Math.max(0, S.hp), S.adou.x + 34, y + 5, 12, '#e03131', 'left', true);
++  ctx.restore();
++
+   if (S.hp < ADOU_HP) hpBar(S.adou.x - 18, y + 14, 36, Math.max(0, S.hp) / ADOU_HP, '#e03131');
+-  // 护盾：每波+1、无伤+1（上限2），画成阿斗头上的小盾标
++
++  /* Shield icons */
+   for (let i = 0; i < (S.shield || 0); i++) {
+     const sx = S.adou.x - 18 + i * 14;
+     ctx.fillStyle = '#1c7ed6';
+@@ -187,29 +545,31 @@ function drawAdou(S) {
+   }
+ }
+ 
++
++/* ========== Main game renderer (drawGame) ==========
++   Key upgrades over baseline:
++   - Background from cached getMapBg() instead of flat fills
++   - 备战 banner → 朱砂/墨色 capsule (bug fix #3, was blue)
++   - 羁绊 banners → central safe zone at y=288 as 朱砂 capsule #bf3b2d (bug fix #2)
++   - All other rendering preserved. */
+ function drawGame() {
+-  // 各战场底纹可由用户切换为四种地图皮肤，与机制无关，纯视觉区分。
+   var sh = G.shake || 0;
+   ctx.save();
+-  if (sh > 0) ctx.translate((Math.random() * 2 - 1) * sh, (Math.random() * 2 - 1) * sh);  // 屏震：仅战场层
+-  var skinId = SAVE.mapSkin || 0;
+-  var skins = [
+-    { e:'#fff5f0', p:'#fbf7ed', b:'#edf0f2', band:'#b9a995', name:'羊皮纸' },
+-    { e:'#f4f0e6', p:'#ece5d8', b:'#d9d2c5', band:'#a6937c', name:'古卷' },
+-    { e:'#eaf2e3', p:'#d9ead3', b:'#c5d5be', band:'#7b9a6d', name:'竹林' },
+-    { e:'#e6e8f0', p:'#d3d8e6', b:'#bec2d4', band:'#6d759a', name:'霜夜' },
+-  ];
+-  var s = skins[skinId] || skins[0];
+-  ctx.fillStyle = s.e; ctx.fillRect(0, TOP, W, 296 - TOP);
+-  ctx.fillStyle = s.p; ctx.fillRect(0, 300, W, 532 - 300);
+-  ctx.fillStyle = s.b; ctx.fillRect(0, 532, W, H - 532);
+-  ctx.fillStyle = s.band; ctx.fillRect(0, 296, W, 3);
++  if (sh > 0) ctx.translate((Math.random() * 2 - 1) * sh, (Math.random() * 2 - 1) * sh);
++
++  /* ---- Cached map background (replaces old skins array) ---- */
++  var intensity = SAVE.mapSkin || 0;
++  var mapCanvas = getMapBg(G.mapIdx, intensity);
++  ctx.drawImage(mapCanvas, 0, 0);
++
++  /* ---- Path (double-line, bug #1 fixed) ---- */
+   drawPath(G.E); drawPath(G.P);
++
++  /* ---- Adou plaques ---- */
+   drawAdou(G.E);
+   G.E.cells.forEach(c => drawCell(c, G.E, false));
+   G.P.cells.forEach((c, i) => {
+     drawCell(c, G.P, drag && drag.area === 'board' && drag.from === i);
+-    // 拖拽落点高亮：绿=可合成 / 蓝=可部署 / 红=不可放置 / 橙=合成武将 / 黄=开荒
+     if (drag && drag.hintType) {
+       const hit = Math.abs(drag.x - c.x) <= CELL / 2 && Math.abs(drag.y - c.y) <= CELL / 2;
+       if (hit) {
+@@ -234,31 +594,66 @@ function drawGame() {
+       }
+     }
+   });
+-  // 玩家阿斗状态置于手牌绘制之后，确保不会被底部栏遮挡。
++
++  /* Player Adou (over cards) */
+   drawAdou(G.P);
+-  // 主将整备状态置于手牌上方，返场时间可见而不遮挡操作。
++
++  /* Hero respawn status */
+   if (G.heroRespawns && G.heroRespawns.length) {
+     const r = G.heroRespawns[0];
+     panel(10, 504, 118, 20, { bg: 'rgba(255,253,249,.92)', stroke: '#d9c8ec', r: 6, blur: 1, offsetY: 0 });
+     txt(r.name + '整备 ' + Math.ceil(Math.max(0, r.t)) + '秒', 18, 518, 10, '#7250b8', 'left', true);
+   }
++
++  /* Snakes */
+   for (const sn of G.P.snakes) { txt('蛇', sn.x, sn.y + 5, 15, '#2f9e44', 'center', true); hpBar(sn.x - 12, sn.y + 12, 24, sn.hp / 150, '#2f9e44'); }
+   for (const sn of G.E.snakes) txt('蛇', sn.x, sn.y + 5, 15, '#2f9e44', 'center', true);
++
++  /* Mobs */
+   for (const m of G.E.mobs) drawMob(m);
+   for (const m of G.P.mobs) drawMob(m);
++
++  /* Egg */
+   if (G.egg) {
+     const f = 0.7 + Math.sin(G.time * 5) * 0.3;
+     ctx.globalAlpha = f;
+     txt(G.egg.ch, G.egg.x, G.egg.y + 6, 20, '#e8a005', 'center', true);
+     ctx.globalAlpha = 1;
+   }
+-  if (G.orders && G.orders.length) {
+-    panel(10, 302, 220, 22, { bg: 'rgba(255,253,249,.88)', stroke: '#e6dbc8', r: 6, blur: 1, offsetY: 0 });
+-    const brief = G.orders.map(o => (o.done ? '✓' : '') + o.name + ' ' + o.value + '/' + o.need).join(' · ');
+-    txt(brief, 16, 317, 9, '#7250b8', 'left', true);
++
++  /* ---- Orders + Fate unified into 朱砂/墨色 divider band (bug fixes #2 & #3) ---- */
++  var hasOrders = G.orders && G.orders.length;
++  var hasFate = G.P.fate.list && G.P.fate.list.length;
++  if (hasOrders || hasFate) {
++    var bandY = 288; /* Central safe divider band */
++    var bandH = 24;
++    var bandW = W - 20;
++    var bandX = 10;
++
++    /* 朱砂 capsule background (#bf3b2d) */
++    ctx.save();
++    rr(bandX, bandY, bandW, bandH, 12);
++    var bandGrad = ctx.createLinearGradient(bandX, bandY, bandX, bandY + bandH);
++    bandGrad.addColorStop(0, '#bf3b2d'); bandGrad.addColorStop(1, '#a33225');
++    ctx.fillStyle = bandGrad; ctx.fill();
++    ctx.strokeStyle = 'rgba(180,50,35,.6)'; ctx.lineWidth = 1; ctx.stroke();
++    ctx.restore();
++
++    /* Content layout within capsule */
++    var curX = bandX + 10;
++    if (hasOrders) {
++      const brief = G.orders.map(o => (o.done ? '✓' : '') + o.name + ' ' + o.value + '/' + o.need).join(' · ');
++      txt(brief, curX, bandY + bandH / 2 + 4, 9, 'rgba(255,245,240,.92)', 'left', true);
++      curX += ctx.measureText ? ctx.measureText(brief).width + 12 : 160;
++    }
++    if (hasFate) {
++      /* Separator dot if both present */
++      if (hasOrders) { txt(' · ', curX, bandY + bandH / 2 + 4, 9, 'rgba(255,200,190,.6)', 'left', true); curX += 14; }
++      txt('羁绊：' + G.P.fate.list.join('·'), curX, bandY + bandH / 2 + 4, 9, 'rgba(255,235,225,.92)', 'left', true);
++    }
+   }
+-  if (G.P.fate.list.length) txt('羁绊：' + G.P.fate.list.join('·'), 240, 317, 9, '#b78324', 'left', true);
+-  // 特效
++
++  /* Effects */
+   for (const f of G.fx) {
+     ctx.globalAlpha = clamp(f.t / f.t0, 0, 1) * 0.8;
+     if (f.type === 'line') {
+@@ -275,6 +670,8 @@ function drawGame() {
+     f.t -= DT60;
+   }
+   G.fx = G.fx.filter(f => f.t > 0);
++
++  /* Particles */
+   for (const p of G.parts) {
+     ctx.globalAlpha = clamp(p.t / 0.7, 0, 1);
+     ctx.fillStyle = p.col;
+@@ -283,6 +680,8 @@ function drawGame() {
+   }
+   ctx.globalAlpha = 1;
+   G.parts = G.parts.filter(p => p.t > 0);
++
++  /* Float texts */
+   for (const f of G.floats) {
+     ctx.globalAlpha = clamp(f.t / 0.8, 0, 1);
+     txt(f.txt, f.x, f.y, 10, f.col, 'center', true);
+@@ -290,24 +689,30 @@ function drawGame() {
+   }
+   ctx.globalAlpha = 1;
+   G.floats = G.floats.filter(f => f.t > 0);
+-  // 顶栏：资源、关卡与快捷控制保持同一阅读基线（不随屏震抖动）
++
++  /* ---- Top bar (not affected by screen shake) ---- */
+   if (G.shake > 0) G.shake = Math.max(0, G.shake - 0.6);
+   ctx.restore();
++
+   ctx.fillStyle = '#fffdf9'; ctx.fillRect(0, 0, W, TOP);
+   ctx.fillStyle = '#e4d9c8'; ctx.fillRect(0, TOP - 3, W, 3);
+-  // 资源图标化（Phase 0 #32）：左对齐紧凑药丸，扫视更快
++
++  /* Resource chips */
+   resChip('馒 ' + G.P.mantou, 6, 7, '#8b5e3c');
+   resChip('金 ' + SAVE.gold, 76, 7, '#b0801f');
+-  // 关卡/波次：右对齐于按钮区左侧，彻底避开右侧圆按钮（Phase 0 #30）
++
++  /* Stage/wave info */
+   txt((G.mode ? G.modeLabel : (G.endless ? '无尽' : '第' + G.stage + '关')) + '·第' + G.wave + '波' + (SAVE.invincible ? ' ·无敌' : ''), 232, 20, 12, '#495057', 'right', true);
+-  // 下一波预告：基于当前关卡配置预览下一波的兵种构成（提前布防）
++
++  /* Next wave preview */
+   if (G.previewQ && G.previewQ.pool && G.previewQ.pool.length) {
+     const p = G.previewQ;
+     const parts = p.pool.map(x => x[0] + '×' + Math.round(p.per * x[1] / 100)).filter(s => !s.endsWith('×0'));
+     let s = '下波 ▸ ' + parts.join(' ') + (p.boss ? '  ☠BOSS' : '');
+     txt(s, 8, 44, 10, '#8a7e6c', 'left');
+   }
+-  // 特别玩法状态条：保留战斗视野，不弹出额外常驻面板。
++
++  /* Mode status bars */
+   if (G.mode === 'fire') {
+     txt('🔥 ' + G.wind + ' · 守城 ' + Math.ceil(Math.max(0, G.modeTime)) + ' 秒', W / 2, 48, 11, '#bd4a31', 'center', true);
+     drawBuildings();
+@@ -321,14 +726,15 @@ function drawGame() {
+   } else if (G.mode === 'rogue') {
+     txt('⚔ 五虎试炼 · 第 ' + G.rogue.floor + '/' + G.rogue.maxFloor + ' 战 · 军略 ' + G.rogue.picks, W / 2, 48, 11, '#7250b8', 'center', true);
+   }
+-  // 右侧紧凑圆按钮组（起始 x=240，4 个各 32 宽，不再与关卡文字重叠）
++
++  /* Right-side control buttons */
+   btn(240, 4, 32, 24, '×' + G.speed, () => { G.speed = G.speed >= 4 ? 1 : G.speed + 1; }, { bg: '#495057', size: 11 });
+   btn(273, 4, 32, 24, G.paused ? '▶' : 'Ⅱ', () => { G.paused = !G.paused; }, { bg: '#495057', size: 11 });
+-  // 静音切换（P1-3）
+   btn(306, 4, 32, 24, SAVE.mute ? '🔇' : '🔊', () => { SAVE.mute = !SAVE.mute; saveSave(); sfx('click'); if (typeof stopBgm === 'function') stopBgm(); },
+     { bg: SAVE.mute ? '#e03131' : '#2f9e44', size: 12 });
+   btn(339, 4, 32, 24, '菜单', () => { scr = 'menu'; }, { bg: '#868e96', size: 9 });
+-  // 临时背包：空时完全隐藏；有溢出卡时用右下「包」打开抽屉，避免常驻挤占手牌区。
++
++  /* Temp bag */
+   if (G.P.tempBag && G.P.tempBag.length > 0) {
+     btn(256, UI_LAYOUT.actionBar.y, 28, UI_LAYOUT.actionBar.h, '包' + G.P.tempBag.length, () => { G.tempOpen = !G.tempOpen; }, { size: 8, bg: '#7250b8' });
+     if (G.tempOpen) {
+@@ -352,8 +758,11 @@ function drawGame() {
+       btn(dl.x + 218, dl.y + 24, 42, 28, '收起', () => { G.tempOpen = false; }, { size: 9, bg: '#7c8792' });
+     }
+   } else G.tempOpen = false;
++
++  /* Action bar */
+   const ay = UI_LAYOUT.actionBar.y, ah = UI_LAYOUT.actionBar.h;
+-  // 手动大招（Phase 2 #36）：实验室开启后，玩家每波手动点「大招」释放武将技能
++
++  /* Manual ultimate */
+   if (SAVE.manualUlt) {
+     let _ready = 0;
+     for (const _c of G.P.cells) if (_c.unit && _c.unit.t === 'hero' && HEROES[_c.unit.name].skill && _c.unit.cd <= 0) _ready++;
+@@ -366,30 +775,35 @@ function drawGame() {
+   const tenCostNow = SAVE.firstTen ? (DRAW.tenCost / 2 | 0) : DRAW.tenCost;
+   btn(74, ay, 62, ah, '十连 ' + tenCostNow, () => drawTen(G.P),
+     { size: 11, bg: '#a61e4e', disabled: G.P.mantou < tenCostNow || barFree(G.P) < 0 });
++
++  /* Active items */
+   const acts = Object.keys(ITEMS).filter(id => ITEMS[id].act && (G.itemUses[id] || SAVE.loadout.includes(id)));
+   acts.slice(0, 2).forEach((id, i) => {
+     const n = G.itemUses[id] || 0;
+     btn(140 + i * 58, ay, 54, ah, ITEMS[id].name + '×' + n, () => useActive(id),
+       { size: 9, bg: G.targeting === id ? '#e8a005' : '#5f3dc4', disabled: !n });
+   });
++
++  /* Recycle slot */
+   const rc = RECYCLE;
+   rr(rc.x, rc.y, rc.w, rc.h, 6);
+   ctx.fillStyle = '#e9ecef'; ctx.fill();
+   ctx.setLineDash([4, 3]); ctx.strokeStyle = '#868e96'; ctx.stroke(); ctx.setLineDash([]);
+   txt('回收♻', rc.x + rc.w / 2, rc.y + rc.h / 2 + 4, 11, '#868e96', 'center', true);
+   txt('拖单位回收', rc.x + rc.w / 2, rc.y + rc.h - 3, 8, '#adb5bd', 'center');
++
++  /* Targeting context */
+   if (G.targeting) {
+     const label = ITEMS[G.targeting] ? ITEMS[G.targeting].name : '道具';
+-    // 道具上下文操作移至敌我战场分隔带，不再侵占底部手牌与回收区。
+     txt(label + '：点金色虚线目标', W / 2, 282, 10, '#b78324', 'center', true);
+     btn(86, 292, 96, 22, '自动施放', () => autoTargetActive(), { size: 10, bg: '#e8a005' });
+     btn(194, 292, 96, 22, '取消', () => { G.targeting = null; }, { size: 10, bg: '#868e96' });
+   }
+-  // 拖拽跟随：单位 + 提示标签 + 半透明预览产物
++
++  /* Drag follow */
+   if (drag) {
+     const u = (drag.area === 'bar' ? G.P.bar : G.P.cells)[drag.from].unit;
+     if (u) {
+-      // 预览产物：在落点附近绘制合成结果虚影
+       if (drag.preview && (drag.hintType === 'upgrade' || drag.hintType === 'hero')) {
+         ctx.globalAlpha = 0.45;
+         drawUnitAt(drag.preview, drag.x, drag.y - 36, G.P);
+@@ -407,10 +821,10 @@ function drawGame() {
+       ctx.globalAlpha = 1;
+     }
+   }
+-  // 横幅 / 闪光 / 武将登场
++
++  /* Banner / flash / summon FX / card reveal */
+   if (G.banner) {
+     ctx.globalAlpha = clamp(G.banner.t, 0, 1);
+-    // 教学提示常驻显示（t>10 表示教学横幅，不衰减）
+     const isTut = G.banner.t > 10;
+     txt(G.banner.txt, W / 2, 288, 17, isTut ? '#1c7ed6' : '#343a40', 'center', true);
+     ctx.globalAlpha = 1;
+@@ -429,7 +843,6 @@ function drawGame() {
+     ctx.globalAlpha = 1;
+     s.t -= DT60; if (s.t <= 0) G.summonFx = null;
+   }
+-  // 十连翻牌仪式：逐张弹入，突出保底武将
+   if (G.cardReveal && G.cardReveal.t > 0) {
+     const cr = G.cardReveal, prog = 1 - cr.t / 1.1, n = cr.list.length;
+     const cw = 30, gap = 4, total = n * cw + (n - 1) * gap, x0 = (W - total) / 2, y = 235;
+@@ -446,15 +859,16 @@ function drawGame() {
+     ctx.globalAlpha = 1;
+     cr.t -= DT60; if (cr.t <= 0) G.cardReveal = null;
+   }
+-  // 结算 / 暂停 / 军略选择（rogue 试炼 或 主线遗物系统共用）
++
++  /* Overlay states: win / lose / paused / rogue choices / chapter */
+   if (G.rogueChoices) {
+     ctx.fillStyle = 'rgba(26,24,35,.72)'; ctx.fillRect(0, 0, W, H);
+     panel(24, 210, 327, 190, { bg: '#fffdf9', stroke: '#dacdf0', r: 14 });
+     txt('选择一条军略', W / 2, 244, 21, '#503b83', 'center', true);
+     txt(G.rogue ? '本局生效 · 选择后继续远征' : '本局遗物 · 选择后继续作战', W / 2, 264, 10, '#8f8a9c', 'center');
+     G.rogueChoices.forEach((c, i) => {
+-      const y = 279 + i * 35;
+-      btn(42, y, 291, 29, c.n + ' · ' + c.d, () => chooseRogue(i), { size: 11, bg: '#7250b8' });
++      const cy = 279 + i * 35;
++      btn(42, cy, 291, 29, c.n + ' · ' + c.d, () => chooseRogue(i), { size: 11, bg: '#7250b8' });
+     });
+   }
+   if (G.chapterFire) {
+@@ -489,6 +903,7 @@ function drawGame() {
+     ]);
+   }
+ }
++
+ function overlay(title, desc, actions) {
+   ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0, 0, W, H);
+   btns = [];
+
+a/js/save.js b/js/save.js
+index 7d84d73..89c9f86 100644
+--- a/js/save.js
++++ b/js/save.js
+@@ -45,7 +45,7 @@ function defaultSave() {
+     adviser: 'zhuge',             // 当前军师
+     heroRecords: {},              // 群英谱：{武将名: {kills,deployments,wins}}
+     heroChallenges: {},            // 英雄挑战完成记录 {武将名:true}
+-    mapSkin: 0,                   // 地图皮肤编号 0..3
++    mapSkin: 0,                   // 画面浓度：0=标准，1=浓墨
+     colorblind: false,            // 色弱可读性：单位底牌改用形状/高对比描边区分
+     relicsOn: false,              // 遗物系统：主线/无尽每5波可选一条本局军略（roguelike 元进度）
+     manualUlt: false,              // 手动大招：关闭时武将技能自动释放（默认）；开启时玩家每波手动点「大招」触发（Phase 2）
+
+a/js/ui.js b/js/ui.js
+index 2303e1b..7e5a9bd 100644
+--- a/js/ui.js
++++ b/js/ui.js
+@@ -217,8 +217,7 @@ function drawMenu() {
+   // 4 张地图压成 1 行 4 颗（80×27），避免原 2 行布局与 mapEffect / 皮肤·开战 重叠
+   MAPS.forEach((m, i) => btn(24 + i * 82, 243, 80, 27, m.name, () => { selMap = i; }, { size: 11, grad: selMap === i ? THEME.vermilion : THEME.slate, r: 8 }));
+   const mapEffect = MAPS[selMap].effect; if (mapEffect) txt('战场机制 · ' + mapEffect.name, W / 2, 280, 10, THEME.inkSub, 'center');
+-  var skinNames = ['羊皮纸','古卷','竹林','霜夜']; var curSkin = SAVE.mapSkin || 0;
+-  btn(30, 290, 150, 26, '皮肤:' + skinNames[curSkin], () => { SAVE.mapSkin = (curSkin + 1) % 4; saveSave(); }, { size: 10, grad: THEME.purple, r: 8 });
++  btn(30, 290, 150, 26, '画面:' + (SAVE.mapSkin ? '浓墨' : '标准'), () => { SAVE.mapSkin = SAVE.mapSkin ? 0 : 1; saveSave(); }, { size: 10, grad: SAVE.mapSkin ? THEME.vermilion : THEME.slate, r: 8 });
+   btn(195, 290, 150, 26, '开 战', () => { startBattle(selStage, false, selMap); scr = 'game'; }, { size: 18, grad: THEME.vermilion, r: 8 });
+   btn(30, 344, 154, 30, '特别玩法', () => { scr = 'modes'; }, { size: 11, grad: THEME.vermilion, r: 9 });
+   btn(191, 344, 154, 30, SAVE.endless ? '无尽挑战 · ' + SAVE.bestWave + '波' : '无尽挑战（30关解锁）', () => { startBattle(STAGE_MAX, true, selMap); scr = 'game'; }, { size: 10, grad: THEME.indigo, disabled: !(SAVE.endless || SAVE.endlessOn), r: 9 });

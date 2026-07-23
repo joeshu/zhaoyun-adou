@@ -1,0 +1,22 @@
+'use strict';
+const path = require('path');
+const fs = require('fs');
+const { chromium } = require('C:/Users/35002/.workbuddy/binaries/node/workspace/node_modules/playwright-core');
+const EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
+const URL = 'http://localhost:8384/';
+const OUT = path.resolve(__dirname, 'shots_maps');
+fs.mkdirSync(OUT, { recursive: true });
+(async () => {
+  const browser = await chromium.launch({ executablePath: EDGE, args: ['--no-sandbox'] });
+  const page = await browser.newPage({ viewport: { width: 375, height: 667 }, deviceScaleFactor: 1 });
+  await page.goto(URL, { waitUntil: 'networkidle' });
+  await page.waitForSelector('#cv');
+  await page.evaluate(() => { SAVE.mapSkin = 0; scr = 'menu'; try { draw(); } catch (e) {} });
+  await page.waitForTimeout(300);
+  await page.locator('#cv').screenshot({ path: path.join(OUT, 'menu_finish_std.png') });
+  await page.evaluate(() => { SAVE.mapSkin = 1; try { draw(); } catch (e) {} });
+  await page.waitForTimeout(200);
+  await page.locator('#cv').screenshot({ path: path.join(OUT, 'menu_finish_bold.png') });
+  await browser.close();
+  console.log('menu shots done');
+})().catch(e => { console.error(e); process.exit(1); });

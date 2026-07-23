@@ -1,0 +1,24 @@
+feat(ui): 4-map differentiation, board polish, skin prominence, 2-level finish
+
+- 4 maps now visually distinct: 长坂坡 (sand/dust palette), 赤壁 (water
+  ripples), 街亭 (green mountain ridges + vermilion army flags), 函谷关
+  (stone gate / cliff silhouettes).
+- Battle board: cells upgrade to ceramic-tile style with gradients,
+  highlights, ink borders and corner shadows; wasteland (荒) cells get
+  dashed borders and stone-dust texture. Path lines thinned from
+  12-16px highways to 5-6px double-line (camp stroke + inner fill +
+  1px dashed center) so tiles regain visual center.
+- 破阵 / 羁绊 banners: relocated to safe center band (y=288) in
+  vermillion capsule style; no longer overlap top/bottom 阿斗 plaques.
+  Bottom 备战 banner switched from old blue to theme (vermillion/ink).
+- Hero skins: unit base now reads skin color (unitCol); limited skins
+  get a soft outer glow + corner watermark so skin variants are
+  readable at a glance (赵云金甲 / 关羽帝君 / 张飞黑骑 / 黄忠神射).
+- 画面 finish: replaced 4-way global finish (羊皮纸/古卷/竹林/霜夜)
+  with a 2-level toggle (标准/浓墨) on menu, stored as SAVE.mapSkin
+  (0/1). Bold level bakes stronger vignette and dimmer background
+  into the cached map bg; dynamic accent light +50%.
+
+Verified: 4 maps + 2 menu shots (shots_maps/), no overlap, path does
+not dominate tiles. 长坂坡 motif lands as palette (sand tint); distinct
+refugee silhouettes deferred.

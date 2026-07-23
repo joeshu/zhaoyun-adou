@@ -425,12 +425,13 @@ function aiAct(S) {
   if (bi >= 0) {
     const u = S.bar[bi].unit;
     const ranged = (u.t === 'troop' && u.type === '弓') || (u.t === 'hero' && HEROES[u.name].wq === '弓');
-    const order = ranged ? [2, 1, 0] : [0, 1, 2];
-    for (const r of order)
-      for (let c = 0; c < 5; c++) {
-        const idx = r * 5 + c;
-        if (S.cells[idx].open && !S.cells[idx].unit) { dropUnit(S, 'bar', bi, 'board', idx); return; }
-      }
+    // 地图无关：按棋盘实际格数部署，避免 2 行地图（map2/map3）越界崩溃
+    const candidates = S.cells.filter(c => c.open && !c.unit);
+    if (candidates.length) {
+      candidates.sort((a, b) => ranged ? (b.y - a.y) : (a.y - b.y));
+      const idx = S.cells.indexOf(candidates[0]);
+      if (idx >= 0) { dropUnit(S, 'bar', bi, 'board', idx); return; }
+    }
   }
   // 栏满且无操作 → 回收将字/碎片腾位
   if (barFree(S) < 0) {

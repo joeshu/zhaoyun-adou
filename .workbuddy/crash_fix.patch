@@ -1,0 +1,45 @@
+a/js/actions.js b/js/actions.js
+index 37cf3ed..937e38a 100644
+--- a/js/actions.js
++++ b/js/actions.js
+@@ -425,12 +425,13 @@ function aiAct(S) {
+   if (bi >= 0) {
+     const u = S.bar[bi].unit;
+     const ranged = (u.t === 'troop' && u.type === '弓') || (u.t === 'hero' && HEROES[u.name].wq === '弓');
+-    const order = ranged ? [2, 1, 0] : [0, 1, 2];
+-    for (const r of order)
+-      for (let c = 0; c < 5; c++) {
+-        const idx = r * 5 + c;
+-        if (S.cells[idx].open && !S.cells[idx].unit) { dropUnit(S, 'bar', bi, 'board', idx); return; }
+-      }
++    // 地图无关：按棋盘实际格数部署，避免 2 行地图（map2/map3）越界崩溃
++    const candidates = S.cells.filter(c => c.open && !c.unit);
++    if (candidates.length) {
++      candidates.sort((a, b) => ranged ? (b.y - a.y) : (a.y - b.y));
++      const idx = S.cells.indexOf(candidates[0]);
++      if (idx >= 0) { dropUnit(S, 'bar', bi, 'board', idx); return; }
++    }
+   }
+   // 栏满且无操作 → 回收将字/碎片腾位
+   if (barFree(S) < 0) {
+
+a/js/ui.js b/js/ui.js
+index 2303e1b..7e5a9bd 100644
+--- a/js/ui.js
++++ b/js/ui.js
+@@ -851,12 +850,9 @@ let lastT = 0;
+ function loop(now) {
+   const dt = Math.min(0.05, (now - lastT) / 1000);
+   lastT = now;
+-  if (scr === 'game' && G) {
+-    if (G.state === 'play' && !G.paused)
+-      for (let i = 0; i < G.speed; i++) update(dt);
+-    else if (G.state === 'win') eggAccTick(dt);
+-  }
+-  draw();
++  // 帧级容错：单帧异常不再中断 rAF 链，避免整局冻结
++  try { if (scr === 'game' && G) { if (G.state === 'play' && !G.paused) for (let i = 0; i < G.speed; i++) update(dt); else if (G.state === 'win') eggAccTick(dt); } } catch (e) { console.error('loop frame error', e); }
++  try { draw(); } catch (e) { console.error('loop frame error', e); }
+   requestAnimationFrame(loop);
+ }
+ function fit() {

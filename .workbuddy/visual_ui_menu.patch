@@ -1,0 +1,14 @@
+diff --git a/js/ui.js b/js/ui.js
+index 2303e1b..d02759d 100644
+--- a/js/ui.js
++++ b/js/ui.js
+@@ -217,8 +217,7 @@ function drawMenu() {
+   // 4 张地图压成 1 行 4 颗（80×27），避免原 2 行布局与 mapEffect / 皮肤·开战 重叠
+   MAPS.forEach((m, i) => btn(24 + i * 82, 243, 80, 27, m.name, () => { selMap = i; }, { size: 11, grad: selMap === i ? THEME.vermilion : THEME.slate, r: 8 }));
+   const mapEffect = MAPS[selMap].effect; if (mapEffect) txt('战场机制 · ' + mapEffect.name, W / 2, 280, 10, THEME.inkSub, 'center');
+-  var skinNames = ['羊皮纸','古卷','竹林','霜夜']; var curSkin = SAVE.mapSkin || 0;
+-  btn(30, 290, 150, 26, '皮肤:' + skinNames[curSkin], () => { SAVE.mapSkin = (curSkin + 1) % 4; saveSave(); }, { size: 10, grad: THEME.purple, r: 8 });
++  btn(30, 290, 150, 26, '画面:' + (SAVE.mapSkin ? '浓墨' : '标准'), () => { SAVE.mapSkin = SAVE.mapSkin ? 0 : 1; saveSave(); }, { size: 10, grad: SAVE.mapSkin ? THEME.vermilion : THEME.slate, r: 8 });
+   btn(195, 290, 150, 26, '开 战', () => { startBattle(selStage, false, selMap); scr = 'game'; }, { size: 18, grad: THEME.vermilion, r: 8 });
+   btn(30, 344, 154, 30, '特别玩法', () => { scr = 'modes'; }, { size: 11, grad: THEME.vermilion, r: 9 });
+   btn(191, 344, 154, 30, SAVE.endless ? '无尽挑战 · ' + SAVE.bestWave + '波' : '无尽挑战（30关解锁）', () => { startBattle(STAGE_MAX, true, selMap); scr = 'game'; }, { size: 10, grad: THEME.indigo, disabled: !(SAVE.endless || SAVE.endlessOn), r: 9 });

@@ -851,12 +851,9 @@ let lastT = 0;
 function loop(now) {
   const dt = Math.min(0.05, (now - lastT) / 1000);
   lastT = now;
-  if (scr === 'game' && G) {
-    if (G.state === 'play' && !G.paused)
-      for (let i = 0; i < G.speed; i++) update(dt);
-    else if (G.state === 'win') eggAccTick(dt);
-  }
-  draw();
+  // 帧级容错：单帧异常不再中断 rAF 链，避免整局冻结
+  try { if (scr === 'game' && G) { if (G.state === 'play' && !G.paused) for (let i = 0; i < G.speed; i++) update(dt); else if (G.state === 'win') eggAccTick(dt); } } catch (e) { console.error('loop frame error', e); }
+  try { draw(); } catch (e) { console.error('loop frame error', e); }
   requestAnimationFrame(loop);
 }
 function fit() {

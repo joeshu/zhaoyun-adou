@@ -1,0 +1,22 @@
+fix(battle): prevent crash when AI deploys on 2-row maps
+
+aiAct() deployed units using a hardcoded 3x5 board index (idx = r*5+c)
+which assumed all maps have 3 rows. On 2-row maps (街亭/函谷关) with only
+10 cells, when the AI filled the first two rows of open cells, the next
+iteration accessed S.cells[10..14] which are undefined, throwing
+TypeError on .open access. The exception propagated out of update() and
+broke loop()'s requestAnimationFrame chain, freezing the entire game
+(perceived as "app 卡死" before the first wave at 25s).
+
+Repro: stage=30 map=3 (函谷关) FROZEN at ~0.7s with
+  TypeError: Cannot read properties of undefined (reading 'open')
+    at aiAct (js/actions.js:432)
+    at update (js/game.js:282)
+
+Fix: make deploy loop map-agnostic by iterating S.cells and sorting
+candidates by .y (front for melee, back for ranged). Also harden
+loop() with try/catch around update/draw so any single-frame exception
+no longer kills the entire game loop (defense in depth).
+
+Verified: stage 1-30 x 4 maps (36 combos) all pass; previously
+stage=30 map=3 was FROZEN.
