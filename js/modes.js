@@ -91,19 +91,33 @@ function rogueOffer() {
   G.rogueChoices = all.sort(() => Math.random() - .5).slice(0, 3);
   G.paused = true;
 }
-/* 遗物系统（#27）：主线/无尽每 5 波触发，复用 rogueChoices 选择 UI。
-   增益作用于本局玩家全军（playerDmgMul 等由 unitStats 读取）。 */
+/* 遗物系统（#27 / Phase 2 #37）：主线/无尽每 5 波触发，复用 rogueChoices 选择 UI。
+   增益作用于本局玩家全军（playerDmgMul 等由 unitStats 读取）。
+   Phase 2 加权衡：纯增益 + 双刃（有代价），倍率随波次放大，且每轮保底至少 1 个纯增益。 */
 function offerRelic() {
   if (!G) return;
-  const pool = [
-    { n: '龙胆军略', d: '全军伤害 +25%', apply: () => { G.playerDmgMul *= 1.25; } },
-    { n: '疾风军略', d: '全军攻速 +15%', apply: () => { G.playerRateMul *= 1.15; } },
-    { n: '铁壁军略', d: '全军血量 +20%', apply: () => { G.playerHpMul *= 1.2; G.P.cells.forEach(c => { if (c.unit) c.unit.hp *= 1.2; }); } },
+  const scale = 1 + Math.min(0.5, (G.wave - 5) / 60);   // 倍率随波次放大（第5波=1，第35波≈1.5）
+  // 纯增益（保底至少 1 个）
+  const pos = [
+    { n: '龙胆军略', d: '全军伤害 +' + Math.round(25 * scale) + '%', apply: () => { G.playerDmgMul *= 1 + 0.25 * scale; } },
+    { n: '疾风军略', d: '全军攻速 +' + Math.round(15 * scale) + '%', apply: () => { G.playerRateMul *= 1 + 0.15 * scale; } },
+    { n: '铁壁军略', d: '全军血量 +' + Math.round(20 * scale) + '%', apply: () => { G.playerHpMul *= 1 + 0.2 * scale; G.P.cells.forEach(c => { if (c.unit) c.unit.hp *= 1 + 0.2 * scale; }); } },
     { n: '屯田令', d: '立即 +30 馒头', apply: () => { G.P.mantou += 30; } },
     { n: '资军略', d: '立即 +50 馒头', apply: () => { G.P.mantou += 50; } },
     { n: '回血军略', d: '阿斗回复 3 血', apply: () => { G.P.hp = Math.min(G.P.maxhp, G.P.hp + 3); } },
   ];
-  G.rogueChoices = pool.sort(() => Math.random() - .5).slice(0, 3);
+  // 双刃（有代价，逼出真抉择）
+  const dual = [
+    { n: '背水军略', d: '伤害+' + Math.round(30 * scale) + '% 但阿斗-2血', apply: () => { G.playerDmgMul *= 1 + 0.3 * scale; G.P.hp = Math.max(1, G.P.hp - 2); G.P.maxhp = Math.max(1, G.P.maxhp - 2); } },
+    { n: '孤注军略', d: '攻速+' + Math.round(25 * scale) + '% 但阿斗上限-1', apply: () => { G.playerRateMul *= 1 + 0.25 * scale; G.P.maxhp = Math.max(1, G.P.maxhp - 1); G.P.hp = Math.min(G.P.hp, G.P.maxhp); } },
+    { n: '疲兵军略', d: '血量+' + Math.round(25 * scale) + '% 但攻速-10%', apply: () => { G.playerHpMul *= 1 + 0.25 * scale; G.playerRateMul *= 0.9; } },
+  ];
+  const pool = pos.concat(dual);
+  // 保证至少 1 个纯增益：先固定 1 个 positive，再随机 2 个（可能仍是 positive 或 dual）
+  const pick = [pos[(Math.random() * pos.length) | 0]];
+  for (let i = 0; i < 2; i++) pick.push(pool[(Math.random() * pool.length) | 0]);
+  pick.sort(() => Math.random() - 0.5);                 // 打乱展示顺序
+  G.rogueChoices = pick;
   G.paused = true;
 }
 function chooseRogue(i) {

@@ -28,6 +28,22 @@ function undoAction() {
   sfx('click');
 }
 
+/* ---------- 手动大招（Phase 2 #36）：实验室开启后，玩家每波手动触发武将技能 ---------- */
+function manualUlt(S) {
+  if (!S || !G || G.state !== 'play' || G.paused || G.ghostMode) return false;
+  // 选 CD 最低且已就绪的玩家武将释放技能
+  let best = null, bestCd = 1e9;
+  for (const c of S.cells) {
+    const u = c.unit;
+    if (!u || u.t !== 'hero' || !HEROES[u.name].skill || u.cd > 0) continue;
+    if (u.cd < bestCd) { bestCd = u.cd; best = { c, u }; }
+  }
+  if (!best) { fl(187, 300, '无大招就绪', '#868e96'); return false; }
+  const ok = castSkill(S, best.c, best.u);
+  if (ok) { best.u.cd = skillCd(best.u); sfx('skill'); }
+  return ok;
+}
+
 /* ---------- P1-4 录像录制：玩家操作记录到 G.rec.ops ---------- */
 // 仅录玩家侧（G.P）的操作；ghostMode 回放时不再录（避免循环）
 function recOp(op) {
@@ -190,7 +206,14 @@ function dropUnit(S, a1, i1, a2, i2) {
       G.banner = { txt: '【教学3/3 完成】单位已上阵！点 ×2 加速游戏体验', t: 3 };
       SAVE.tutorial = 99; saveSave();
     }
-    if (S.side > 0) recOp({ op: 'drop', a1, i1, a2, i2 });
+    if (S.side > 0) {
+      recOp({ op: 'drop', a1, i1, a2, i2 });
+      // 新手引导：首次部署后一次性提示「撤销」（仅非教学局，教学已有 3 步引导）
+      if (a2 === 'board' && !(typeof G !== 'undefined' && G && G.tutorial) && !SAVE.tutUndoShown) {
+        SAVE.tutUndoShown = true; saveSave();
+        if (G && G.banner) G.banner = { txt: '误操作可点「撤销」回退上一步', t: 2.5 };
+      }
+    }
     return 'move';
   }
   const o = mergeUnit(dst.unit, src.unit);
@@ -336,7 +359,15 @@ function applyTarget(id, area, idx) {
   } else if (id === 'juexing') {
     if (!SAVE.awaken || u.t !== 'hero' || u.awaken >= 3) return false;
     u.awaken++;
-    fl(s.x, s.y - 24, u.name + ' 觉醒' + u.awaken + '!', '#e8590c'); boom(s.x, s.y, '#e8590c');
+    // 觉醒高光演出（Phase 3 #41）：放大弹跳 + 金色光环 + 横幅（复用统一特效 API）
+    u.animT = 0.6;
+    if (G) {
+      fxRing(s.x, s.y, 26, '#ffd43b', 0.5);
+      boomRadial(s.x, s.y, '#ffd43b');
+      addShake(2);
+      G.banner = { txt: u.name + ' 觉醒' + u.awaken + '！全属性 ×' + Math.pow(1.3, u.awaken).toFixed(2), t: 1.6 };
+    }
+    fl(s.x, s.y - 24, '觉醒' + u.awaken + '!', '#e8590c'); boom(s.x, s.y, '#e8590c');
   } else return false;
   G.itemUses[id]--;
   G.targeting = null;

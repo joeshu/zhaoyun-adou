@@ -57,3 +57,12 @@ function startWave() {
   if (G.endless && G.wave > SAVE.bestWave) { SAVE.bestWave = G.wave; saveSave(); }
   if (!G.mode && typeof chapterWaveEvent === 'function') chapterWaveEvent();
 }
+
+/* 难度曲线建模（Phase 2 #35）：BOSS 血量沿 200→2600 跨度的推荐曲线与可调杠杆。
+   仅作平衡参考与调参入口，未直接覆盖 MOBS 基础值，避免回归现有手感。
+   指数曲线（k^1.6）比线性更平滑：前期慢涨、后期陡升；改 1.6 即可调通胀速度。 */
+const BOSS_HP_MIN = 200, BOSS_HP_MAX = 2600, BOSS_HP_SPAN = STAGE_MAX;
+function bossCurveHp(stage) {
+  const k = clamp((stage - 1) / (BOSS_HP_SPAN - 1), 0, 1);
+  return Math.round(BOSS_HP_MIN + (BOSS_HP_MAX - BOSS_HP_MIN) * Math.pow(k, 1.6));
+}

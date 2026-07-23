@@ -21,6 +21,11 @@ function boomRadial(x, y, col) {
 // 屏震：累积最大幅度，drawGame 每帧衰减
 function addShake(m) { if (G) G.shake = Math.max(G.shake || 0, m); }
 
+// 统一特效辅助（Phase 3 #38）：把 ring/line/lane 推入 G.fx，带默认时长，供各演出复用
+function fxRing(x, y, r, col, t) { if (G) G.fx.push({ type: 'ring', x, y, r, t: t || 0.3, t0: t || 0.3, col }); }
+function fxLine(x1, y1, x2, y2, col, t) { if (G) G.fx.push({ type: 'line', x1, y1, x2, y2, t: t || 0.12, t0: t || 0.12, col }); }
+function fxLane(y, col, t) { if (G) G.fx.push({ type: 'lane', y, t: t || 0.25, t0: t || 0.25, col }); }
+
 // 复用数组，消除战斗热路径每帧 Array.filter 分配（降低 iOS WebView GC 压力）
 const _rangeScratch = [];
 const _aliveScratch = [];
@@ -32,13 +37,20 @@ function dealDmg(S, m, dmg, byUnit, cell) {
   const atkSide = byUnit && G.P.cells.some(c => c.unit === byUnit) ? 1 : -1;
   // 克制
   const mb = MOBS[m.type];
+  let crit = false;
   if (byUnit) {
-    if (mb.armor && ((byUnit.t === 'troop' && byUnit.type === '枪') || (byUnit.t === 'hero' && HEROES[byUnit.name].wq === '枪'))) { dmg *= 2; if (atkSide > 0) { boom(m.x, m.y, '#ffd43b'); fl(m.x, m.y - 18, '暴击!', '#ffd43b'); } }
-    if (m.type === '弩' && byUnit.t === 'troop' && byUnit.type === '骑') { dmg *= 2; if (atkSide > 0) { boom(m.x, m.y, '#ffd43b'); fl(m.x, m.y - 18, '暴击!', '#ffd43b'); } }
-    if (m.type === '骑' && byUnit.t === 'hero' && HEROES[byUnit.name].vs骑) { dmg *= HEROES[byUnit.name].vs骑; if (atkSide > 0) { boom(m.x, m.y, '#ffd43b'); fl(m.x, m.y - 18, '暴击!', '#ffd43b'); } }
+    if (mb.armor && ((byUnit.t === 'troop' && byUnit.type === '枪') || (byUnit.t === 'hero' && HEROES[byUnit.name].wq === '枪'))) { dmg *= 2; crit = crit || atkSide > 0; if (atkSide > 0) { boom(m.x, m.y, '#ffd43b'); fl(m.x, m.y - 18, '暴击!', '#ffd43b'); } }
+    if (m.type === '弩' && byUnit.t === 'troop' && byUnit.type === '骑') { dmg *= 2; crit = crit || atkSide > 0; if (atkSide > 0) { boom(m.x, m.y, '#ffd43b'); fl(m.x, m.y - 18, '暴击!', '#ffd43b'); } }
+    if (m.type === '骑' && byUnit.t === 'hero' && HEROES[byUnit.name].vs骑) { dmg *= HEROES[byUnit.name].vs骑; crit = crit || atkSide > 0; if (atkSide > 0) { boom(m.x, m.y, '#ffd43b'); fl(m.x, m.y - 18, '暴击!', '#ffd43b'); } }
   }
   if (mb.armor) dmg *= 1 - mb.armor;
   m.hp -= dmg; m.flash = 0.12;
+  // 暴击白闪 + BOSS 破防高光（Phase 3 #41）
+  if (atkSide > 0 && crit) boom(m.x, m.y, '#ffffff');
+  if (m.boss && !m.breakShown && m.hp > 0 && m.hp / m.maxhp < 0.5) {
+    m.breakShown = true;
+    if (atkSide > 0) { addShake(4); boomRadial(m.x, m.y, '#ffffff'); fl(m.x, m.y - 20, '破防!', '#ffffff'); if (G) G.flash = Math.max(G.flash, 0.3); }
+  }
   // 被动概率眩晕（马超/关兴/张苞）
   if (byUnit && byUnit.t === 'hero' && HEROES[byUnit.name].stunP && Math.random() < HEROES[byUnit.name].stunP && m.hp > 0)
     m.stun = Math.max(m.stun, 1);
@@ -215,7 +227,12 @@ function updUnit(S, cell, dt) {
   // 技能冷却
   if (u.t === 'hero' && HEROES[u.name].skill) {
     u.cd -= dt;
-    if (u.cd <= 0 && castSkill(S, cell, u)) u.cd = skillCd(u);
+    if (u.cd <= 0) {
+      // 手动大招（Phase 2 #36）：实验室开启时玩家侧不自动释放，等待玩家点「大招」
+      const manual = (typeof SAVE !== 'undefined' && SAVE.manualUlt && S.side > 0);
+      if (manual) { if (u.cd < 0) u.cd = 0; }            // 保持就绪，不自动放
+      else if (castSkill(S, cell, u)) u.cd = skillCd(u);
+    }
   }
   u.acc = Math.min(1, u.acc + dt * st.rate);
   if (u.acc < 1) return;

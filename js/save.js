@@ -28,7 +28,9 @@ function defaultSave() {
     wish: '',                     // 心愿单：玩家选定的橙将名（如'赵云'），空=未启用（仅玩家侧生效）
     savedAt: 0,                   // 上次手动保存时间戳（0=从未手动保存）
     tutorial: 0,                  // 新手引导进度：0=未开始 1/2/3=对应步骤 99=完成（P0-1）
-    mute: false,                  // 静音开关（P1-3）
+    tutUndoShown: false,          // 新手引导：是否已展示过「撤销」提示（仅展示一次）
+    mute: false,                  // 静音开关（P1-3）：音效+音乐一起静音
+    music: true,                  // 音乐开关（Phase 1）：BGM 独立控制
     ach: {},                      // 已完成成就 id→true（P1-1）
     lastDaily: '',                // 上次签到日期 YYYY-MM-DD（P1-2）
     dailyStreak: 0,               // 连续签到天数（P1-2）
@@ -46,6 +48,7 @@ function defaultSave() {
     mapSkin: 0,                   // 地图皮肤编号 0..3
     colorblind: false,            // 色弱可读性：单位底牌改用形状/高对比描边区分
     relicsOn: false,              // 遗物系统：主线/无尽每5波可选一条本局军略（roguelike 元进度）
+    manualUlt: false,              // 手动大招：关闭时武将技能自动释放（默认）；开启时玩家每波手动点「大招」触发（Phase 2）
     forgeSeries: '',              // 锻造选系：''=随机，否则限定武器系（枪/刀/弓/剑）
     forgeDupStreak: 0,            // 锻造连续重复计数（保底：达阈值必出新武器）
     dailyTask: { progress: 0, reward: false, seed: 0 }, // 每日随机任务进度

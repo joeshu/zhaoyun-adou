@@ -57,6 +57,12 @@ function btn(x, y, w, h, label, fn, opt = {}) {
   lines.forEach((ln, i) =>
     txt(ln, x + w / 2, y + h / 2 + size * 0.35 + (i - (lines.length - 1) / 2) * (size + 3), size, opt.col || '#fff', 'center', true));
 }
+// 资源小药丸（Phase 0 #32 图标化）：色点 + 文字，扫视更快
+function resChip(label, x, y, dot) {
+  rr(x, y, 64, 18, 9); ctx.fillStyle = '#fffdf9'; ctx.fill();
+  ctx.fillStyle = dot; ctx.beginPath(); ctx.arc(x + 11, y + 9, 5, 0, 7); ctx.fill();
+  txt(label, x + 22, y + 13, 11, '#495057', 'left', true);
+}
 
 /* ---------- 菜单 ---------- */
 function drawMenu() {
@@ -65,7 +71,8 @@ function drawMenu() {
   txt('赵云与阿斗', W / 2, 66, 32, SAVE.eggs.all ? '#d29a22' : ink, 'center', true);
   txt('文字合成塔防 · 全量复刻版', W / 2, 90, 12, '#90949a', 'center');
   panel(64, 105, 247, 35, { bg: '#fffaf0', stroke: '#eadfcb', r: 17, blur: 4 });
-  txt('金 ' + SAVE.gold + '     材料 ' + SAVE.mat, W / 2, 128, 15, gold, 'center', true);
+  resChip('金 ' + SAVE.gold, 72, 113, '#b0801f');
+  resChip('材 ' + SAVE.mat, 204, 113, '#1c7ed6');
 
   // 第一层：开始战斗
   selStage = clamp(selStage, 1, SAVE.stage);
@@ -123,6 +130,8 @@ function drawLab() {
   sw(30,286,'装备扩展',SAVE.gearOn,()=>{SAVE.gearOn=!SAVE.gearOn;saveSave();});
   sw(195,286,'色弱模式',SAVE.colorblind,()=>{SAVE.colorblind=!SAVE.colorblind;saveSave();});
   sw(30,326,'遗物系统',SAVE.relicsOn,()=>{SAVE.relicsOn=!SAVE.relicsOn;saveSave();});
+  sw(30,366,'音乐 BGM',SAVE.music,()=>{SAVE.music=!SAVE.music;saveSave();if(typeof toggleMusic==='function')toggleMusic(SAVE.music);});
+  sw(195,366,'手动大招',SAVE.manualUlt,()=>{SAVE.manualUlt=!SAVE.manualUlt;saveSave();if(G&&G.banner)G.banner={txt:'手动大招 '+(SAVE.manualUlt?'开启 · 点「大招」释放武将技能':'关闭 · 技能自动释放'),t:1.6};});
   btn(128,590,120,34,'返回',()=>{scr='menu';},{bg:'#7c8792'});
 }
 

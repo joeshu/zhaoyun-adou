@@ -87,10 +87,37 @@ function playSfx(name) {
   try { if (SFX[name]) SFX[name](); } catch (e) { /* 静默 */ }
 }
 
+/* ---------- BGM（Phase 1）：程序化五声音阶循环，零资源依赖 ---------- */
+let bgmGain = null, bgmTimer = null, bgmStep = 0;
+const BGM_SEQ = [523.25, 587.33, 659.25, 783.99, 659.25, 587.33];   // C5 D5 E5 G5 E5 D5 轻快五声
+function startBgm() {
+  if (!enabled || !audioCtx || isMuted() || !(typeof SAVE !== 'undefined' && SAVE.music)) return;
+  if (bgmTimer) return;
+  if (!bgmGain) { bgmGain = audioCtx.createGain(); bgmGain.gain.value = 0.10; bgmGain.connect(audioCtx.destination); }
+  const beat = 0.42;
+  bgmTimer = setInterval(() => {
+    if (!enabled || !audioCtx || isMuted() || !(typeof SAVE !== 'undefined' && SAVE.music)) { stopBgm(); return; }
+    const f = BGM_SEQ[bgmStep % BGM_SEQ.length]; bgmStep++;
+    const t0 = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+    osc.type = 'triangle'; osc.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.5, t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + beat * 0.9);
+    osc.connect(g); g.connect(bgmGain); osc.start(t0); osc.stop(t0 + beat);
+  }, beat * 1000);
+}
+function stopBgm() { if (bgmTimer) { clearInterval(bgmTimer); bgmTimer = null; } }
+function toggleMusic(on) {
+  if (typeof SAVE !== 'undefined') SAVE.music = on;
+  if (on) { if (!audioCtx) initAudio(); startBgm(); } else stopBgm();
+  if (typeof saveSave === 'function') saveSave();
+}
+
 /* 用户首次交互后才能 resume（浏览器策略） */
 function resumeAudio() {
   if (!audioCtx) initAudio();
   if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  startBgm();                       // 首次交互后启动 BGM（受 music 开关与静音控制）
 }
 
 /* 对外统一入口：防止 node 环境调用报错 */

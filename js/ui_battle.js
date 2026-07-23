@@ -96,6 +96,17 @@ function drawUnitAt(u, x, y, S) {
     if (u.wish) txt('★', 14, -10, 12, '#ffd700', 'center');   // 心愿碎片金色星标（1.2.4 视觉反馈）
   } else txt('铲', 0, 7, 20, col, 'center', true);
   ctx.restore();
+  // buff 标识（Phase 3 #39）：玩家侧单位增益小图标 + 手动大招就绪脉冲
+  if (S && S.side > 0) {
+    let _bx = x - 20;
+    if (u.rateMul > 1) { txt('⚡', _bx, y - 22, 11, '#f59f00', 'center', true); _bx += 12; }
+    if (u.buffN > 0) { txt('⚔', _bx, y - 22, 11, '#e8590c', 'center', true); _bx += 12; }
+    if (SAVE.manualUlt && u.t === 'hero' && HEROES[u.name].skill && u.cd <= 0) {
+      const _pr = 22 + Math.sin((G ? G.time : 0) * 6) * 2;
+      ctx.strokeStyle = 'rgba(232,160,5,.85)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(x, y - 5, _pr, 0, 7); ctx.stroke();
+    }
+  }
   if (S && (u.t === 'troop' || u.t === 'hero')) {
     const st = unitStats(u, S);
     if (u.hp < st.maxhp) hpBar(x - 18, y + 21, 36, u.hp / st.maxhp, '#2f9e44');
@@ -107,10 +118,11 @@ function drawCell(c, S, hide) {
   const x = c.x - CELL / 2, y = c.y - CELL / 2;
   rr(x, y, CELL, CELL, 6);
   if (!c.open) {
-    ctx.fillStyle = '#d9d2c2'; ctx.fill();
-    ctx.strokeStyle = '#c6bda8'; ctx.lineWidth = 1; ctx.stroke();
-    txt('荒', c.x, c.y - 1, 12, '#b3a888', 'center');
-    if (S && S.side > 0) txt('馒' + cellCost(S), c.x, c.y + 15, 8, '#b3a888', 'center');   // 点击花馒头开荒
+    // 荒格降权（Phase 0 #31）：低饱和、虚线描边、小字，不再用大色块抢单位焦点
+    ctx.fillStyle = '#f1eee8'; ctx.fill();
+    ctx.setLineDash([3, 3]); ctx.strokeStyle = '#d9d3c7'; ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
+    txt('荒', c.x, c.y - 1, 10, '#c9c2b4', 'center');
+    if (S && S.side > 0) txt('馒' + cellCost(S), c.x, c.y + 13, 8, '#c2bcae', 'center');   // 点击花馒头开荒
     return;
   }
   ctx.fillStyle = '#ffffffcc'; ctx.fill();
@@ -281,10 +293,11 @@ function drawGame() {
   ctx.restore();
   ctx.fillStyle = '#fffdf9'; ctx.fillRect(0, 0, W, TOP);
   ctx.fillStyle = '#e4d9c8'; ctx.fillRect(0, TOP - 3, W, 3);
-  txt('馒 ' + G.P.mantou, 8, 22, 14, '#8b5e3c', 'left', true);
-  txt('金 ' + SAVE.gold, 78, 22, 12, '#b0801f', 'left', true);
-  txt((G.mode ? G.modeLabel : (G.endless ? '无尽' : '第' + G.stage + '关')) + '·第' + G.wave + '波', 175, 22, 12, '#495057', 'center');
-  if (SAVE.invincible) txt('无敌', 200, 22, 12, '#2f9e44', 'center', true);
+  // 资源图标化（Phase 0 #32）：左对齐紧凑药丸，扫视更快
+  resChip('馒 ' + G.P.mantou, 6, 7, '#8b5e3c');
+  resChip('金 ' + SAVE.gold, 76, 7, '#b0801f');
+  // 关卡/波次：右对齐于按钮区左侧，彻底避开右侧圆按钮（Phase 0 #30）
+  txt((G.mode ? G.modeLabel : (G.endless ? '无尽' : '第' + G.stage + '关')) + '·第' + G.wave + '波' + (SAVE.invincible ? ' ·无敌' : ''), 232, 20, 12, '#495057', 'right', true);
   // 下一波预告：基于当前关卡配置预览下一波的兵种构成（提前布防）
   if (G.previewQ && G.previewQ.pool && G.previewQ.pool.length) {
     const p = G.previewQ;
@@ -306,12 +319,13 @@ function drawGame() {
   } else if (G.mode === 'rogue') {
     txt('⚔ 五虎试炼 · 第 ' + G.rogue.floor + '/' + G.rogue.maxFloor + ' 战 · 军略 ' + G.rogue.picks, W / 2, 48, 11, '#7250b8', 'center', true);
   }
-  btn(234, 4, 33, 24, '×' + G.speed, () => { G.speed = G.speed >= 4 ? 1 : G.speed + 1; }, { bg: '#495057', size: 11 });
-  btn(269, 4, 33, 24, G.paused ? '▶' : 'Ⅱ', () => { G.paused = !G.paused; }, { bg: '#495057', size: 11 });
+  // 右侧紧凑圆按钮组（起始 x=240，4 个各 32 宽，不再与关卡文字重叠）
+  btn(240, 4, 32, 24, '×' + G.speed, () => { G.speed = G.speed >= 4 ? 1 : G.speed + 1; }, { bg: '#495057', size: 11 });
+  btn(273, 4, 32, 24, G.paused ? '▶' : 'Ⅱ', () => { G.paused = !G.paused; }, { bg: '#495057', size: 11 });
   // 静音切换（P1-3）
-  btn(304, 4, 33, 24, SAVE.mute ? '🔇' : '🔊', () => { SAVE.mute = !SAVE.mute; saveSave(); sfx('click'); },
+  btn(306, 4, 32, 24, SAVE.mute ? '🔇' : '🔊', () => { SAVE.mute = !SAVE.mute; saveSave(); sfx('click'); if (typeof stopBgm === 'function') stopBgm(); },
     { bg: SAVE.mute ? '#e03131' : '#2f9e44', size: 12 });
-  btn(339, 4, 33, 24, '菜单', () => { scr = 'menu'; }, { bg: '#868e96', size: 9 });
+  btn(339, 4, 32, 24, '菜单', () => { scr = 'menu'; }, { bg: '#868e96', size: 9 });
   // 临时背包：空时完全隐藏；有溢出卡时用右下「包」打开抽屉，避免常驻挤占手牌区。
   if (G.P.tempBag && G.P.tempBag.length > 0) {
     btn(256, UI_LAYOUT.actionBar.y, 28, UI_LAYOUT.actionBar.h, '包' + G.P.tempBag.length, () => { G.tempOpen = !G.tempOpen; }, { size: 8, bg: '#7250b8' });
@@ -337,6 +351,12 @@ function drawGame() {
     }
   } else G.tempOpen = false;
   const ay = UI_LAYOUT.actionBar.y, ah = UI_LAYOUT.actionBar.h;
+  // 手动大招（Phase 2 #36）：实验室开启后，玩家每波手动点「大招」释放武将技能
+  if (SAVE.manualUlt) {
+    let _ready = 0;
+    for (const _c of G.P.cells) if (_c.unit && _c.unit.t === 'hero' && HEROES[_c.unit.name].skill && _c.unit.cd <= 0) _ready++;
+    btn(196, ay, 54, ah, '大招×' + _ready, () => manualUlt(G.P), { size: 10, bg: '#e8a005', disabled: !_ready });
+  }
   btn(254, ay, 32, ah, '撤销', () => undoAction(),
     { size: 9, bg: '#8e98a3', disabled: G.ghostMode || !G.undoStack || !G.undoStack.length });
   btn(8, ay, 62, ah, '抽卡 馒' + DRAW.cost, () => doSummon(G.P),

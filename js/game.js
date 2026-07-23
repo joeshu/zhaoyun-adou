@@ -223,6 +223,7 @@ function tickMapEffect(dt) {
 
 function update(dt) {
   G.time += dt;
+  if (typeof Tween !== 'undefined') Tween.update(dt);   // 统一缓动框架驱动（Phase 1）
   // P2-2 统计：累计游戏时长（仅玩家正常对局，不含 ghostMode 回放）
   if (!G.ghostMode && SAVE.stats) SAVE.stats.playTime += dt;
   tickMapEffect(dt);
