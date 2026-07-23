@@ -222,7 +222,7 @@ eval(src + `
   // 旧档迁移：构造 v3 存档验证迁移到最新版
   const v3 = { ver: 3, gold: 100, stage: 1, eggs: { flag: false, vine: false, acc: false, all: false } };
   const v5 = migrateSave(JSON.parse(JSON.stringify(v3)));
-  A(v5 && v5.ver === 7, '军师与群英谱迁移 v3→v7 升版');
+  A(v5 && v5.ver === SAVE_VER, '军师与群英谱迁移 v3→最新版升版');
   A(v5.skins && typeof v5.skins === 'object', '迁移补 skins');
   A(v5.stats && v5.stats.kills === 0 && v5.stats.wins === 0, '迁移补 stats 默认值');
   A(v5.ownedHeroes['赵云'] && v5.leadHero === '赵云', '迁移赠送赵云初始主将');
