@@ -243,9 +243,14 @@ eval(src + `
     A(G.mode === id, id + ' 模式初始化');
     A(G.modeLabel === specialMode(id).name, id + ' 模式标签');
   });
+  // 群雄演武（残局）：禁抽卡/禁合成，固定敌阵 + 有限重试，歼灭即胜
   startBattle(12, false, 0, null, { mode: 'puzzle' });
-  G.P.totalKills = G.puzzle.target; modeTick(0.1);
-  A(G.state === 'win', '残局挑战达到击杀目标结算');
+  puzzleLoadLevel(0);
+  puzzleStartAttempt();
+  A(G.P.mobs.length > 0, '残局敌阵已生成');
+  G.P.mobs.forEach(m => m.hp = 0);
+  modeTick(0.1);
+  A(G.state === 'win', '残局挑战歼灭敌阵结算胜利');
   startBattle(12, false, 1, null, { mode: 'fire' });
   SAVE.invincible = true;
   for (let i = 0; i < 60 * 70 && G.state === 'play'; i++) update(1 / 60);
