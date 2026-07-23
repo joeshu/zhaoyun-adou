@@ -6,20 +6,39 @@ let btns = [], drag = null, selStage = 1, selMap = 0, forgeMsg = '';
 let ghostList = [], ghostMsg = '';   // P1-4 录像列表 / 反馈
 let saveConfirm = false, saveMsg = '';   // 存档页：清除二次确认 / 保存反馈
 let canvas, ctx, scaleF = 1;
+// 轻量滚动（列表超屏时启用，如 equip 18 武将）：btn 记录的 y 减去 g_scrollY 以贴合屏幕坐标
+let g_scrollY = 0, listScroll = 0, listScrollMax = 0, LIST_AREA = null, scrollDrag = null;
 let _lastScr = '', _wipe = 0;                 // 过场淡入：切屏时短暂遮罩
 const DT60 = 1 / 60;
 
 // 字体字符串缓存：txt() 每帧被调用上百次，避免重复拼接与重复设置 ctx.font
 const _fontCache = new Map();
-let _lastFont = '';
 function txt(s, x, y, size, col, align = 'left', bold = false) {
   const key = size + (bold ? 'b' : '');
   let f = _fontCache.get(key);
   if (!f) { f = `${bold ? 'bold ' : ''}${size}px "PingFang SC","Microsoft YaHei",sans-serif`; _fontCache.set(key, f); }
-  if (f !== _lastFont) { ctx.font = f; _lastFont = f; }
+  ctx.font = f;        // 始终设置：避免与 ctx.save/restore 之间 _lastFont 状态泄漏（旧实现下 ghost 第二颗按钮偶发叠字）
   ctx.fillStyle = col;
   ctx.textAlign = align;
   ctx.fillText(s, x, y);
+}
+// 字符级换行：中文按字符、英文按词；返回总占用高度
+function wrapText(s, x, y, size, col, maxW, bold = false) {
+  const key = size + (bold ? 'b' : '');
+  let f = _fontCache.get(key);
+  if (!f) { f = `${bold ? 'bold ' : ''}${size}px "PingFang SC","Microsoft YaHei",sans-serif`; _fontCache.set(key, f); }
+  ctx.font = f; ctx.fillStyle = col; ctx.textAlign = 'left';
+  const lh = size + 5, chars = Array.from(s);
+  let line = '', yOff = 0;
+  for (const ch of chars) {
+    const test = line + ch;
+    if (ctx.measureText(test).width > maxW && line) {
+      ctx.fillText(line, x, y + yOff);
+      line = ch; yOff += lh;
+    } else line = test;
+  }
+  if (line) ctx.fillText(line, x, y + yOff);
+  return yOff + lh;
 }
 function rr(x, y, w, h, r) {
   ctx.beginPath();
@@ -49,13 +68,18 @@ function hpBar(x, y, w, p, col) {
   ctx.fillRect(x, y, w * clamp(p, 0, 1), 3);
 }
 function btn(x, y, w, h, label, fn, opt = {}) {
-  btns.push({ x, y, w, h, fn, disabled: opt.disabled });
+  btns.push({ x, y: y - g_scrollY, w, h, fn, disabled: opt.disabled });
   rr(x, y, w, h, 7);
   ctx.fillStyle = opt.disabled ? '#dee2e6' : (opt.bg || '#343a40');
   ctx.fill();
+  // 文字：显式 textBaseline='middle'，与 y+h/2 配合实现真正的视觉居中（之前 y+h/2+size*0.35 偏移量在 headless 渲染下偶发偏下/叠字）
+  ctx.save();
   const size = opt.size || 14, lines = String(label).split('\n');
+  const prevBaseline = ctx.textBaseline; ctx.textBaseline = 'middle';
   lines.forEach((ln, i) =>
-    txt(ln, x + w / 2, y + h / 2 + size * 0.35 + (i - (lines.length - 1) / 2) * (size + 3), size, opt.col || '#fff', 'center', true));
+    txt(ln, x + w / 2, y + h / 2 + (i - (lines.length - 1) / 2) * (size + 3), size, opt.col || '#fff', 'center', true));
+  ctx.textBaseline = prevBaseline;
+  ctx.restore();
 }
 // 资源小药丸（Phase 0 #32 图标化）：色点 + 文字，扫视更快
 function resChip(label, x, y, dot) {
@@ -63,6 +87,23 @@ function resChip(label, x, y, dot) {
   ctx.fillStyle = dot; ctx.beginPath(); ctx.arc(x + 11, y + 9, 5, 0, 7); ctx.fill();
   txt(label, x + 22, y + 13, 11, '#495057', 'left', true);
 }
+
+// 列表滚动容器：裁剪绘制区 + 应用 g_scrollY 偏移 + 右侧滚动条；contentH 为内容总高
+function clipList(x, y, w, h, contentH) {
+  listScrollMax = Math.max(0, contentH - h);
+  listScroll = clamp(listScroll, 0, listScrollMax);
+  LIST_AREA = { x, y, w, h };
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  g_scrollY = listScroll;
+  ctx.translate(0, -listScroll);
+  if (listScrollMax > 0) {
+    const barH = Math.max(18, h * h / contentH);
+    const barY = y + (listScroll / listScrollMax) * (h - barH);
+    rr(x + w - 5, barY, 3, barH, 2); ctx.fillStyle = 'rgba(60,50,35,.25)'; ctx.fill();
+  }
+}
+function unclip() { g_scrollY = 0; ctx.restore(); }
 
 /* ---------- 菜单 ---------- */
 function drawMenu() {
@@ -77,15 +118,16 @@ function drawMenu() {
   // 第一层：开始战斗
   selStage = clamp(selStage, 1, SAVE.stage);
   const ch = CHAPTERS[Math.min(3, ((selStage - 1) / 10) | 0)];
-  sectionLabel('开始战斗', 30, 164); panel(20, 174, 335, 114, { bg: '#fffdf9', stroke: '#ebe3d6' });
+  sectionLabel('开始战斗', 30, 164); panel(20, 174, 335, 148, { bg: '#fffdf9', stroke: '#ebe3d6' });
   btn(34, 190, 42, 42, '◀', () => selStage--, { disabled: selStage <= 1, bg: '#8e98a3', size: 15 });
   btn(299, 190, 42, 42, '▶', () => selStage++, { disabled: selStage >= SAVE.stage, bg: '#8e98a3', size: 15 });
   txt('第 ' + selStage + ' 关 · ' + ch + (selStage % 10 === 0 ? ' · BOSS' : ''), W / 2, 215, 16, ink, 'center', true);
-  MAPS.forEach((m, i) => btn(24 + (i % 2) * 166, 243 + ((i / 2) | 0) * 32, 160, 27, m.name, () => { selMap = i; }, { size: 11, bg: selMap === i ? red : slate }));
-  const mapEffect = MAPS[selMap].effect; if (mapEffect) txt('战场机制 · ' + mapEffect.name, W / 2, 284, 10, '#8a7e6c', 'center');
+  // 4 张地图压成 1 行 4 颗（80×27），避免原 2 行布局与 mapEffect / 皮肤·开战 重叠
+  MAPS.forEach((m, i) => btn(24 + i * 82, 243, 80, 27, m.name, () => { selMap = i; }, { size: 11, bg: selMap === i ? red : slate }));
+  const mapEffect = MAPS[selMap].effect; if (mapEffect) txt('战场机制 · ' + mapEffect.name, W / 2, 280, 10, '#8a7e6c', 'center');
   var skinNames = ['羊皮纸','古卷','竹林','霜夜']; var curSkin = SAVE.mapSkin || 0;
-  btn(30, 292, 150, 26, '皮肤:' + skinNames[curSkin], () => { SAVE.mapSkin = (curSkin + 1) % 4; saveSave(); }, { size: 10, bg: '#7250b8' });
-  btn(195, 292, 150, 26, '开 战', () => { startBattle(selStage, false, selMap); scr = 'game'; }, { size: 18, bg: red });
+  btn(30, 290, 150, 26, '皮肤:' + skinNames[curSkin], () => { SAVE.mapSkin = (curSkin + 1) % 4; saveSave(); }, { size: 10, bg: '#7250b8' });
+  btn(195, 290, 150, 26, '开 战', () => { startBattle(selStage, false, selMap); scr = 'game'; }, { size: 18, bg: red });
   btn(30, 344, 154, 30, '特别玩法', () => { scr = 'modes'; }, { size: 11, bg: '#bd4a31' });
   btn(191, 344, 154, 30, SAVE.endless ? '无尽挑战 · ' + SAVE.bestWave + '波' : '无尽挑战（30关解锁）', () => { startBattle(STAGE_MAX, true, selMap); scr = 'game'; }, { size: 10, bg: '#6850ba', disabled: !(SAVE.endless || SAVE.endlessOn) });
 
@@ -138,32 +180,35 @@ function drawLab() {
 /* ---------- 玩法说明 ---------- */
 function drawHelp() {
   txt('玩法说明', W / 2, 46, 22, '#343a40', 'center', true);
-  const lines = [
-    '🎯【核心目标】守住阿斗（♥3），打完全部波次即通关；阿斗掉血归零则失败。',
-    '',
-    '🎴【抽卡合成】',
-    '· 抽卡消耗馒头，得「将字」碎片；将字按正确顺序拖合成武将（赵+云=赵云）。',
-    '· 碎片集齐可合成道具；十连有保底。',
-    '',
-    '⚔️【布阵作战】',
-    '· 把武将/兵种从底部栏拖到棋盘才参战；点荒地花馒头开荒扩格。',
-    '· 拖到回收站可换回馒头。',
-    '· 兵种相克：盾嘲讽、甲减伤、枪破甲、骑克弩。',
-    '',
-    '🔗【羁绊与装备】',
-    '· 桃园/五虎/父子等羁绊触发增益；专武在锻造页打造、武将装备页穿戴。',
-    '· BOSS 关与章末关掉落材料，用于锻造。',
-    '',
-    '⚙️【功能开关】',
-    '· 菜单「兵种无敌」可开启（仅玩家作战单位免伤，阿斗仍会掉血）。',
-    '· 通关 30 关解锁无尽模式，每 10 波轮换一名历史名将 BOSS。',
+  // 分组：每组首行为标题（带【】），其余为正文；空行/分组线作为视觉间距
+  const groups = [
+    ['🎯【核心目标】守住阿斗（♥3），打完全部波次即通关；阿斗掉血归零则失败。'],
+    ['🎴【抽卡合成】',
+     '· 抽卡消耗馒头，得「将字」碎片；将字按正确顺序拖合成武将（赵+云=赵云）。',
+     '· 碎片集齐可合成道具；十连有保底。'],
+    ['⚔️【布阵作战】',
+     '· 把武将/兵种从底部栏拖到棋盘才参战；点荒地花馒头开荒扩格。',
+     '· 拖到回收站可换回馒头。',
+     '· 兵种相克：盾嘲讽、甲减伤、枪破甲、骑克弩。'],
+    ['🔗【羁绊与装备】',
+     '· 桃园/五虎/父子等羁绊触发增益；专武在锻造页打造、武将装备页穿戴。',
+     '· BOSS 关与章末关掉落材料，用于锻造。'],
+    ['⚙️【功能开关】',
+     '· 菜单「兵种无敌」可开启（仅玩家作战单位免伤，阿斗仍会掉血）。',
+     '· 通关 30 关解锁无尽模式，每 10 波轮换一名历史名将 BOSS。'],
   ];
-  lines.forEach((t, i) => {
-    const isHead = t.includes('【');
-    if (t && !isHead && lines[i - 1] && lines[i - 1].includes('【')) {
-      rr(20, 78 + i * 22 - 14, 335, 1, 1); ctx.fillStyle = '#dee2e6'; ctx.fill();   // 分段线
+  let y = 78;
+  const leftX = 20, maxW = 335;
+  groups.forEach((g, gi) => {
+    if (gi > 0) {
+      rr(20, y, 335, 1, 1); ctx.fillStyle = '#dee2e6'; ctx.fill();  // 分组线
+      y += 8;
     }
-    txt(t, 20, 78 + i * 22, 12, isHead ? '#343a40' : '#495057', 'left', isHead);
+    g.forEach((t, ti) => {
+      if (ti === 0) y += wrapText(t, leftX, y, 13, '#343a40', maxW, true) + 1;
+      else          y += wrapText(t, leftX, y, 12, '#495057', maxW, false);
+    });
+    y += 4;
   });
   btn(128, 604, 120, 34, '返回', () => { scr = 'menu'; }, { bg: '#868e96' });
 }
@@ -174,8 +219,15 @@ function drawWish() {
   ctx.fillStyle = '#3b2f2f'; ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'center';
   ctx.fillText('心愿单', W / 2, 70);
   ctx.font = '14px sans-serif'; ctx.fillStyle = '#666';
-  ctx.fillText('选择一名橙将，抽卡时该将碎片字出现概率提升（50%加权）', W / 2, 96);
-  ctx.fillText('当前：' + (SAVE.wish ? SAVE.wish : '未设置'), W / 2, 120);
+  ctx.fillText('选择一名橙将，抽卡时该将字出现概率 ×1.5', W / 2, 96);
+  // 状态行：未设置时给红色引导，已设置时显示当前+取消提示（旧实现「全空无引导」问题修复）
+  if (!SAVE.wish) {
+    ctx.font = 'bold 13px sans-serif'; ctx.fillStyle = '#bf3b2d';
+    ctx.fillText('👇 点下方任一橙将设为心愿（仅可设1名）', W / 2, 120);
+  } else {
+    ctx.font = 'bold 13px sans-serif'; ctx.fillStyle = '#b8860b';
+    ctx.fillText('当前心愿：' + SAVE.wish + '（再点一次可取消）', W / 2, 120);
+  }
   const cols = 3, bw = 104, bh = 40, gap = 8, x0 = (W - (cols * bw + (cols - 1) * gap)) / 2, y0 = 150;
   HERO_ORANGE.forEach((id, i) => {
     const cx = x0 + (i % cols) * (bw + gap), cy = y0 + ((i / cols) | 0) * (bh + gap);
@@ -190,7 +242,11 @@ function drawWish() {
 function drawSave() {
   txt('存档管理', W / 2, 46, 22, '#343a40', 'center', true);
   txt('当前进度：' + fmtSaved(), W / 2, 78, 13, '#868e96', 'center');
-  txt('金币 ' + SAVE.gold + ' · 关卡 ' + SAVE.stage + ' · 武器 ' + SAVE.weapons.length + ' 把 · 材料 ' + SAVE.mat, W / 2, 96, 11, '#adb5bd', 'center');
+  // 资源条：4 个 resChip 一行（与战斗顶栏统一风格）
+  resChip('金 ' + SAVE.gold, 18, 94, '#b0801f');
+  resChip('关 ' + SAVE.stage, 102, 94, '#1c7ed6');
+  resChip('武 ' + SAVE.weapons.length, 186, 94, '#5f3dc4');
+  resChip('材 ' + SAVE.mat, 270, 94, '#8b5e3c');
   // 三槽切换
   for (let n = 0; n < 3; n++) {
     const x = 30 + n * 112;
@@ -268,13 +324,13 @@ function drawGhost() {
   txt('本地 ' + (Array.isArray(SAVE.ghosts) ? SAVE.ghosts.length : 0) + ' 条 / 共享 ' + ghostList.filter(g => g.src === 'remote').length + ' 条', W / 2, 70, 11, '#868e96', 'center');
   txt('点击录像进入回放（自动重现玩家操作）', W / 2, 86, 10, '#adb5bd', 'center');
   // 上传按钮：上传本地最新一条到共享池
-  btn(20, 96, 165, 28, '↑ 上传最新到共享', () => {
+  btn(20, 96, 162, 28, '上传最新到共享', () => {
     const arr = Array.isArray(SAVE.ghosts) ? SAVE.ghosts : [];
     if (!arr.length) { ghostMsg = '本地暂无录像'; return; }
     uploadGhost(arr[0]);
-  }, { size: 11, bg: '#2f9e44' });
+  }, { size: 12, bg: '#2f9e44' });
   // 刷新列表
-  btn(195, 96, 165, 28, '↻ 刷新共享列表', () => { loadGhostList(); ghostMsg = '已刷新'; }, { size: 11, bg: '#495057' });
+  btn(195, 96, 162, 28, '刷新共享列表', () => { loadGhostList(); ghostMsg = '已刷新'; }, { size: 12, bg: '#495057' });
   // 列表（按关卡降序、步数升序排名，命令行首显示名次）
   if (!ghostList.length) txt('暂无录像（胜利后自动保存）', W / 2, 160, 12, '#adb5bd', 'center');
   const DIFF_NAMES = { easy: '简单', normal: '普通', hard: '困难' };
@@ -356,9 +412,12 @@ function drawStats() {
 /* ---------- 商店（购买 + 携带 ≤6，主动 ≤2） ---------- */
 function drawShop() {
   txt('道具商店', W / 2, 46, 22, '#343a40', 'center', true);
-  txt('金 ' + SAVE.gold + ' · 携带 ' + SAVE.loadout.length + '/' + LOADOUT_MAX + '（主动≤' + LOADOUT_ACT_MAX + '）', W / 2, 70, 12, '#b0801f', 'center');
+  // 资源条：与战斗顶栏 resChip 风格统一
+  resChip('金 ' + SAVE.gold, 60, 58, '#b0801f');
+  resChip('携 ' + SAVE.loadout.length + '/' + LOADOUT_MAX, 220, 58, '#5f3dc4');
+  txt('主动道具上限 ' + LOADOUT_ACT_MAX + ' · 被动不限', W / 2, 82, 9, '#8a7e6c', 'center');
   Object.keys(ITEMS).forEach((id, i) => {
-    const it = ITEMS[id], y = 88 + i * 42;
+    const it = ITEMS[id], y = 88 + i * 38;
     const owned = SAVE.itemsOwned[id], on = SAVE.loadout.includes(id);
     rr(14, y, 347, 36, 6); ctx.fillStyle = on ? '#fff9db' : '#f8f9fa'; ctx.fill();
     ctx.strokeStyle = on ? '#e8a005' : '#dee2e6'; ctx.lineWidth = 1; ctx.stroke();
@@ -375,7 +434,10 @@ function drawShop() {
 /* ---------- 锻造 ---------- */
 function drawForge() {
   txt('锻造装备', W / 2, 46, 22, '#343a40', 'center', true);
-  txt('金 ' + SAVE.gold + ' · 材料 ' + SAVE.mat + '（BOSS与章末关掉落）', W / 2, 70, 12, '#b0801f', 'center');
+  // 资源条：与战斗顶栏 resChip 风格统一（Phase 0 #32 资源图标化）
+  resChip('金 ' + SAVE.gold, 60, 58, '#b0801f');
+  resChip('材 ' + SAVE.mat, 220, 58, '#1c7ed6');
+  txt('BOSS与章末关掉落材料', W / 2, 80, 9, '#8a7e6c', 'center');
   btn(88, 86, 200, 40, '锻造  ' + FORGE_COST.gold + '金 + ' + FORGE_COST.mat + '材料', () => {
     const r = forge();
     forgeMsg = !r ? '资源不足!' : (r.dup ? '重复·' + WEAPONS[r.id].name + ' 转 30 金' : '获得 ' + Q_NAME[WEAPONS[r.id].q] + '·' + WEAPONS[r.id].name + '!');
@@ -399,8 +461,10 @@ function drawForge() {
 function drawEquip() {
   txt('武将装备', W / 2, 46, 22, '#343a40', 'center', true);
   txt('点武将行换武器 · 点右侧皮肤按钮换肤', W / 2, 68, 11, '#868e96', 'center');
+  const rowH = 42, top = 82, listH = 512;
+  clipList(14, top, 347, listH, top + HERO_LIST.length * rowH);
   HERO_LIST.forEach((name, i) => {
-    const h = HEROES[name], y = 82 + i * 42;
+    const h = HEROES[name], y = top + i * rowH;
     const eq = SAVE.equips[name];
     // 左侧：武器切换（14-258）
     btn(14, y, 244, 36, '', () => cycleEquip(name), { bg: '#f8f9fa' });
@@ -423,6 +487,7 @@ function drawEquip() {
       if (next && typeof sfx === 'function') sfx('click');
     }, { size: 10, bg: (skinBtn && skinBtn.col) ? skinBtn.col : '#5f3dc4' });
   });
+  unclip();
   btn(128, 604, 120, 34, '返回', () => { scr = 'menu'; }, { bg: '#868e96' });
 }
 
@@ -522,7 +587,7 @@ function draw() {
   ctx.fillStyle = '#f3eee3'; ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = '#e1d4bf'; ctx.fillRect(0, 0, W, 4);
   btns = [];
-  if (scr !== _lastScr) { _lastScr = scr; _wipe = 0.25; }   // 切屏触发淡入
+  if (scr !== _lastScr) { _lastScr = scr; _wipe = 0.25; listScroll = 0; scrollDrag = null; }   // 切屏触发淡入 + 滚动复位
   if (scr === 'menu') drawMenu();
   else if (scr === 'shop') drawShop();
   else if (scr === 'forge') drawForge();
@@ -565,17 +630,17 @@ function drawAch() {
     const done = ACHIEVEMENTS.filter(a => SAVE.ach[a.id]).length;
     txt('已解锁 ' + done + '/' + ACHIEVEMENTS.length, W / 2, 70, 12, '#868e96', 'center');
   }
-  const startY = 88, rowH = 36;
+  const startY = 88, rowH = 33;
   ACHIEVEMENTS.forEach((a, i) => {
     const y = startY + i * rowH, on = !!SAVE.ach[a.id];
-    rr(14, y, 347, 32, 6);
+    rr(14, y, 347, 30, 6);
     ctx.fillStyle = on ? '#fff9db' : '#f8f9fa'; ctx.fill();
     ctx.strokeStyle = on ? '#e8a005' : '#dee2e6'; ctx.lineWidth = 1; ctx.stroke();
-    txt(on ? '✓' : '·', 24, y + 21, 16, on ? '#2f9e44' : '#adb5bd', 'center', true);
-    txt(a.name, 42, y + 15, 13, on ? '#e8a005' : '#495057', 'left', true);
-    txt(a.desc, 42, y + 27, 10, '#868e96', 'left');
+    txt(on ? '✓' : '·', 24, y + 20, 16, on ? '#2f9e44' : '#adb5bd', 'center', true);
+    txt(a.name, 42, y + 14, 13, on ? '#e8a005' : '#495057', 'left', true);
+    txt(a.desc, 42, y + 26, 9, '#868e96', 'left');
     const r = (a.reward.gold ? '+' + a.reward.gold + '金' : '') + (a.reward.mat ? ' +' + a.reward.mat + '材' : '');
-    txt(r, 355, y + 21, 10, '#b0801f', 'right', true);
+    txt(r, 355, y + 20, 10, '#b0801f', 'right', true);
   });
   btn(128, 604, 120, 34, '返回', () => { scr = 'menu'; }, { bg: '#868e96' });
 }
@@ -641,6 +706,11 @@ function onDown(p) {
       return;
     }
   }
+  // 列表触屏滚动：点在裁剪区内且没命中按钮时，启动拖动滚动（仅菜单类屏幕，game 走单位拖拽）
+  if (listScrollMax > 0 && LIST_AREA && p.x >= LIST_AREA.x && p.x <= LIST_AREA.x + LIST_AREA.w && p.y >= LIST_AREA.y && p.y <= LIST_AREA.y + LIST_AREA.h) {
+    scrollDrag = { y0: p.y, s0: listScroll };
+    return;
+  }
   if (scr !== 'game' || !G || G.state !== 'play' || G.paused) return;
   // P1-4 ghost 回放模式：禁止玩家手动操作（仅允许 UI 按钮）
   if (G.ghostMode) return;
@@ -658,6 +728,7 @@ function onDown(p) {
 
 }
 function onUp(p) {
+  if (scrollDrag) { scrollDrag = null; return; }
   if (!drag) return;
   const d = drag; drag = null;
   if (p.x >= RECYCLE.x && p.x <= RECYCLE.x + RECYCLE.w && p.y >= RECYCLE.y - 8 && p.y <= RECYCLE.y + RECYCLE.h + 8) {
@@ -710,7 +781,10 @@ function boot() {
   const resumeOnce = () => { resumeAudio(); canvas.removeEventListener('pointerdown', resumeOnce); };
   canvas.addEventListener('pointerdown', resumeOnce);
   canvas.addEventListener('pointerdown', ev => { ev.preventDefault(); onDown(pt(ev)); });
-  canvas.addEventListener('pointermove', ev => { if (drag) { const p = pt(ev); drag.x = p.x; drag.y = p.y;
+  canvas.addEventListener('pointermove', ev => {
+    const p = pt(ev);
+    if (scrollDrag) { listScroll = clamp(scrollDrag.s0 + (scrollDrag.y0 - p.y), 0, listScrollMax); return; }
+    if (drag) { drag.x = p.x; drag.y = p.y;
     const tu = (drag.area === 'bar' ? G.P.bar : G.P.cells)[drag.from].unit;
     let hint = '', hintType = '';
     const bi = barAt(p), ci = boardAt(p);
@@ -740,6 +814,9 @@ function boot() {
     drag.hint = hint; drag.hintType = hintType; drag.preview = preview;
   } });
   addEventListener('pointerup', ev => onUp(pt(ev)));
+  canvas.addEventListener('wheel', ev => {
+    if (listScrollMax > 0) { ev.preventDefault(); listScroll = clamp(listScroll + ev.deltaY, 0, listScrollMax); }
+  }, { passive: false });
   requestAnimationFrame(loop);
 }
 if (typeof document !== 'undefined') boot();
