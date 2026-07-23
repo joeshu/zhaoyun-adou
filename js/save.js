@@ -45,7 +45,7 @@ function defaultSave() {
     adviser: 'zhuge',             // 当前军师
     heroRecords: {},              // 群英谱：{武将名: {kills,deployments,wins}}
     heroChallenges: {},            // 英雄挑战完成记录 {武将名:true}
-    mapSkin: 0,                   // 地图皮肤编号 0..3
+    mapSkin: 0,                   // 画面浓度：0=标准，1=浓墨
     colorblind: false,            // 色弱可读性：单位底牌改用形状/高对比描边区分
     relicsOn: false,              // 遗物系统：主线/无尽每5波可选一条本局军略（roguelike 元进度）
     manualUlt: false,              // 手动大招：关闭时武将技能自动释放（默认）；开启时玩家每波手动点「大招」触发（Phase 2）
