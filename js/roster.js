@@ -16,5 +16,18 @@ function heroChallenges() {
   ];
 }
 
-function refreshDailyTask() { var d = new Date().toDateString(); if (SAVE.dailyTask && SAVE.dailyTask.date === d) return; SAVE.dailyTask = { date: d, progress: 0, reward: false }; saveSave(); }
-function addDailyProgress(n) { refreshDailyTask(); if (!SAVE.dailyTask.reward) { SAVE.dailyTask.progress = Math.min(5, SAVE.dailyTask.progress + n); if (SAVE.dailyTask.progress >= 5 && !SAVE.dailyTask.reward) { SAVE.dailyTask.reward = true; SAVE.gold += 60; saveSave(); G.banner = { txt: '每日任务完成 +60金', t: 2 }; } else saveSave(); } }
+function checkPendingHeroChallenges() {
+  if (typeof heroChallenges !== 'function') return;
+  var challenges = heroChallenges();
+  for (var i = 0; i < challenges.length; i++) {
+    var ch = challenges[i];
+    if (SAVE.heroChallenges[ch.hero]) continue;
+    try { if (ch.check()) { SAVE.heroChallenges[ch.hero] = true; SAVE.gold += 40; saveSave(); if (typeof G !== 'undefined' && G) G.banner = { txt: ch.hero + '挑战达成！+40金', t: 2 }; } } catch(e) {}
+  }
+}
+
+function addDailyProgress(n) {
+  var d = new Date().toDateString();
+  if (typeof SAVE.dailyTask !== 'object' || SAVE.dailyTask.date !== d) SAVE.dailyTask = { date: d, progress: 0, reward: false };
+  if (!SAVE.dailyTask.reward) { SAVE.dailyTask.progress = Math.min(5, SAVE.dailyTask.progress + n); if (SAVE.dailyTask.progress >= 5 && !SAVE.dailyTask.reward) { SAVE.dailyTask.reward = true; SAVE.gold += 60; saveSave(); } else saveSave(); }
+}

@@ -130,6 +130,11 @@ function castSkill(S, cell, u) {
   if (sk.id === 'qjqc') {                                   // 七进七出
     if (!S.mobs.some(m => m.hp > 0)) return false;
     heroHits(S, u, cell, 7, 1.5);
+    // 皮肤专属战斗特效：赵云非默认皮肤释放额外飞枪
+    if (S.side > 0 && u.name === '赵云') {
+      var skinId = (typeof currentSkin === 'function') ? (currentSkin('赵云') || {}).id : 'default';
+      if (skinId && skinId !== 'default') { heroHits(S, u, cell, 3, 0.7); fl(cell.x, cell.y - 26, '飞枪!', '#1c7ed6'); }
+    }
     if (S.side > 0) { G.banner = { txt: u.name + '·七进七出!', t: 1.2 }; G.flash = 0.5; }
   } else if (sk.id === 'dahe' || sk.id === 'shengjian') {   // 大喝 / 圣剑
     const ts = inRangeMobs(S, cell.x, cell.y, sk.r);
@@ -138,9 +143,19 @@ function castSkill(S, cell, u) {
       dealDmg(S, m, st.dmg * (sk.id === 'dahe' ? 1.2 : 2), u, cell);
       if (m.hp > 0) m.stun = Math.max(m.stun, sk.stun);
     }
+    // 张飞非默认皮肤大喝效果提升
+    if (S.side > 0 && u.name === '张飞') {
+      var zSkin = (typeof currentSkin === 'function') ? (currentSkin('张飞')||{}).id : 'default';
+      if (zSkin && zSkin !== 'default') { for (var y = 0; y < ts.length; y++) if (ts[y].hp > 0) { ts[y].stun = Math.max(ts[y].stun, (sk.stun || 1.5) + 0.5); } }
+    }
     G.fx.push({ type: 'ring', x: cell.x, y: cell.y, r: sk.r, t: 0.35, t0: 0.35, col: '#9c36b5' });
     if (sk.id === 'dahe' && u.weapon === 'shemao') for (const sn of S.snakes) sn.buffT = 5;
   } else if (sk.id === 'tiaopi') {                          // 跳劈：强化接下来 n 击
+    if (S.side > 0 && u.name === '关羽') {
+      var cSkin = (typeof currentSkin === 'function') ? (currentSkin('关羽') || {}).id : 'default';
+      if (cSkin === 'gold' || cSkin === 'red') { u.buffN = (sk.n || 2) + 1; fl(cell.x, cell.y - 22, '武圣加持', '#a61e4e'); }
+    }
+    if (!S.mobs.some(m => m.hp > 0)) return false;
     if (!S.mobs.some(m => m.hp > 0)) return false;
     u.buffN = sk.n;
   } else if (sk.id === 'huojian') {                         // 火箭烈：全屏

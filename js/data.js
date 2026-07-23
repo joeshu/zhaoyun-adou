@@ -325,6 +325,7 @@ const SKINS = {
     { id: 'flag',    name: '旗将军', col: '#f59f00', decor: 'star',  cond: 'eggs.flag' },
     { id: 'gold',    name: '金甲', col: '#fab005', decor: 'gold',   cond: 'eggs_all' },
     { id: 'fire',    name: '常胜', col: '#e03131', decor: 'flame',  cond: 'stage_30' },
+    { id: 'heroic',  name: '龙胆', col: '#1c7ed6', decor: 'diamond', cond: 'hero_challenge:赵云' }
   ],
   '关羽': [
     { id: 'default', name: '汉寿', col: null, decor: 'none',    cond: 'default' },
@@ -381,6 +382,10 @@ function checkSkinUnlock(name, cond) {
     }
     if (cond.startsWith('ach:')) return !!SAVE.ach[cond.slice(4)];
     if (cond.startsWith('wish_')) return SAVE.wish === cond.slice(5);
+    if (cond.startsWith('hero_challenge:')) {
+      var target = cond.split(':')[1];
+      return !!(SAVE.heroChallenges && SAVE.heroChallenges[target]);
+    }
   } catch (e) { /* 防御 */ }
   return false;
 }

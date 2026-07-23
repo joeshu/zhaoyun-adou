@@ -455,6 +455,17 @@ function drawRoster() {
     var c = HEROES[name].grade === 4 ? '#b78324' : '#8050a0';
     txt(name, 32, y + 17, 14, own ? c : '#8f969c', 'left', true);
     txt('杀 ' + rec.kills + '  出 ' + rec.deployments + '  ' + (own ? '★' + star : '未拥有'), 32, y + 32, 9, '#656d76');
+    // 皮肤切换按钮：群英谱内直接预览、切换已解锁皮肤
+    if (typeof heroSkins === 'function' && typeof currentSkin === 'function') {
+      var curSkin = currentSkin(name);
+      var skiName = curSkin ? curSkin.name : '未知';
+      btn(185, y + 9, 48, 26, '肤', function() {
+        if (typeof cycleSkin !== 'function') return;
+        var next = cycleSkin(name);
+        if (next && typeof sfx === 'function') sfx('click');
+      }, { size: 10, bg: curSkin && curSkin.col ? curSkin.col : '#7c8792' });
+      txt('当前:' + skiName, 238, y + 26, 9, curSkin && curSkin.col ? curSkin.col : '#8a7e6c');
+    }
     var ch = typeof heroChallenges === 'function' ? heroChallenges().find(function(x) { return x.hero === name; }) : null;
     if (ch) {
       txt(ch.desc, 185, y + 24, 9, SAVE.heroChallenges[name] ? '#318c4a' : '#868e96');

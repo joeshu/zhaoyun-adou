@@ -173,6 +173,7 @@ function endBattle(win) {
   }
   sfx(win ? 'win' : 'lose');                        // 音效（P1-3）
   if (win && typeof evWin === 'function') evWin(G.stage, G.endless, G.mode, G.rewardTxt);
+  if (win && typeof checkPendingHeroChallenges === 'function') checkPendingHeroChallenges();
   saveSave();
 }
 
