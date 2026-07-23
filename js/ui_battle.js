@@ -1003,14 +1003,18 @@ function drawGame() {
     panel(24, 110, 327, 452, { bg: '#fffdf9', stroke: '#d9c8a0', r: 14 });
     txt('群雄演武 · 选关', W / 2, 146, 21, '#b78324', 'center', true);
     txt('禁抽卡/禁合成 · 仅布阵 · 歼灭敌阵', W / 2, 168, 10, '#868e96', 'center');
+    // 10 关 → 两列网格（2×5），保证 375×667 竖屏内完整显示、不溢出/不重叠（原单列 96px 间距会超屏）
+    const _cols = 2, _gapX = 10, _gapY = 9, _cw = 142, _ch = 64;
+    const _gx0 = 40, _gy0 = 180, _pitchY = _ch + _gapY;
     PUZZLE_LEVELS.forEach((lv, i) => {
-      const cy = 184 + i * 96;
+      const c = i % _cols, r = (i / _cols) | 0;
+      const cx = _gx0 + c * (_cw + _gapX), cy = _gy0 + r * _pitchY;
       const on = i === G.puzzle.levelIdx;
-      panel(40, cy, 295, 82, { bg: on ? '#fff8e8' : '#fffdf9', stroke: on ? '#e8a005' : '#e7dccb', r: 10 });
-      txt(lv.name, 54, cy + 26, 15, '#343a40', 'left', true);
-      txt('预设 ' + lv.playerPreset.map(p => p.troopId + '×' + p.count).join(' '), 54, cy + 48, 9, '#868e96', 'left');
-      txt('地形 ' + lv.terrain.map(t => (t.mod === 'high' ? '高地' : '隘口')).join('/') + ' · 尝试 ' + lv.par + ' 次', 54, cy + 64, 9, '#a0483a', 'left');
-      btn(248, cy + 26, 70, 32, '进入', () => puzzleLoadLevel(i), { size: 12, bg: '#318c4a' });
+      panel(cx, cy, _cw, _ch, { bg: on ? '#fff8e8' : '#fffdf9', stroke: on ? '#e8a005' : '#e7dccb', r: 10 });
+      txtFit(lv.name, cx + 10, cy + 20, 13, '#343a40', 'left', true, _cw - 56);
+      btn(cx + _cw - 44, cy + 8, 38, 22, '进入', () => puzzleLoadLevel(i), { size: 10, bg: '#318c4a' });
+      txtFit(lv.playerPreset.map(p => p.troopId + p.count).join(' '), cx + 10, cy + 39, 8, '#868e96', 'left', false, _cw - 20);
+      txtFit('地形 ' + lv.terrain.map(t => (t.mod === 'high' ? '高地' : '隘口')).join('/') + ' · 尝试' + lv.par + '次', cx + 10, cy + 54, 8, '#a0483a', 'left', false, _cw - 20);
     });
     btn(W - 30 - 99, H - 63, 99, 34, '返回', () => { goTo('menu'); }, { grad: THEME.slate });
   } else if (G.state === 'win') {

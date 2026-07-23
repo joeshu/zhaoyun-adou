@@ -239,30 +239,51 @@ const RAID_BOSS = {
    坐标复用现有棋盘格中心 (MAPS[0].COLS × ROWS_P)。 */
 const PUZZLE_HIGH_RANGE = 42;                 // 高地 +射程（数据驱动，复用于 unitStats 门控）
 const PUZZLE_LEVELS = [
-  {
-    name: '长坂突围', par: 3,
-    playerPreset: [ { troopId: '弓', count: 2 }, { troopId: '枪', count: 1 }, { troopId: '盾', count: 1 } ],
-    enemyFormation: [
-      { mobId: '兵', x: 119, y: 340 }, { mobId: '兵', x: 187, y: 340 }, { mobId: '兵', x: 255, y: 340 }, { mobId: '兵', x: 187, y: 372 },
-    ],
-    terrain: [ { x: 187, y: 408, mod: 'high' } ],
-  },
-  {
-    name: '潼关射义', par: 3,
-    playerPreset: [ { troopId: '弓', count: 2 }, { troopId: '枪', count: 2 }, { troopId: '盾', count: 1 } ],
-    enemyFormation: [
-      { mobId: '弩', x: 119, y: 340 }, { mobId: '弩', x: 255, y: 340 }, { mobId: '兵', x: 187, y: 360 }, { mobId: '兵', x: 187, y: 384 },
-    ],
-    terrain: [ { x: 119, y: 408, mod: 'high' }, { x: 255, y: 408, mod: 'high' }, { x: 187, y: 408, mod: 'pass' } ],
-  },
-  {
-    name: '虎牢关口', par: 4,
-    playerPreset: [ { troopId: '枪', count: 3 }, { troopId: '弓', count: 1 }, { troopId: '盾', count: 1 }, { troopId: '甲', count: 1 } ],
-    enemyFormation: [
-      { mobId: '斧', x: 187, y: 344 }, { mobId: '骑', x: 119, y: 364 }, { mobId: '骑', x: 255, y: 364 }, { mobId: '兵', x: 187, y: 388 },
-    ],
-    terrain: [ { x: 119, y: 352, mod: 'high' }, { x: 255, y: 352, mod: 'high' }, { x: 187, y: 408, mod: 'pass' } ],
-  },
+  // —— 教学段（par 4，单位 4）——
+  { name:'长坂初阵', par:4,
+    playerPreset:[{troopId:'弓',count:2},{troopId:'盾',count:1},{troopId:'枪',count:1}],
+    enemyFormation:[{mobId:'兵',x:64,y:384},{mobId:'兵',x:119,y:384},{mobId:'兵',x:255,y:384},{mobId:'兵',x:311,y:384}],
+    terrain:[{x:187,y:408,mod:'high'}] },
+  { name:'当阳列盾', par:4,
+    playerPreset:[{troopId:'盾',count:2},{troopId:'枪',count:1},{troopId:'弓',count:1}],
+    enemyFormation:[{mobId:'兵',x:64,y:384},{mobId:'兵',x:311,y:384},{mobId:'弩',x:119,y:352},{mobId:'弩',x:255,y:352}],
+    terrain:[{x:187,y:408,mod:'pass'}] },
+  { name:'双翼齐张', par:4,
+    playerPreset:[{troopId:'弓',count:2},{troopId:'枪',count:1},{troopId:'盾',count:1}],
+    enemyFormation:[{mobId:'兵',x:119,y:384},{mobId:'兵',x:187,y:384},{mobId:'兵',x:255,y:384},{mobId:'弩',x:187,y:352}],
+    terrain:[{x:64,y:408,mod:'high'},{x:311,y:408,mod:'high'}] },
+  { name:'一字长蛇', par:4,
+    playerPreset:[{troopId:'枪',count:2},{troopId:'弓',count:1},{troopId:'盾',count:1}],
+    enemyFormation:[{mobId:'兵',x:64,y:384},{mobId:'兵',x:119,y:384},{mobId:'兵',x:255,y:384},{mobId:'兵',x:311,y:384}],
+    terrain:[] },
+
+  // —— 进阶段（par 3，单位 5–6）——
+  { name:'潼关射义', par:3,
+    playerPreset:[{troopId:'弓',count:2},{troopId:'枪',count:2},{troopId:'盾',count:1}],
+    enemyFormation:[{mobId:'弩',x:64,y:384},{mobId:'弩',x:311,y:384},{mobId:'兵',x:119,y:352},{mobId:'兵',x:255,y:352},{mobId:'斧',x:187,y:320}],
+    terrain:[{x:119,y:408,mod:'high'},{x:255,y:408,mod:'high'},{x:187,y:408,mod:'pass'}] },
+  { name:'虎牢死锁', par:3,
+    playerPreset:[{troopId:'枪',count:2},{troopId:'弓',count:2},{troopId:'盾',count:1}],
+    enemyFormation:[{mobId:'斧',x:187,y:352},{mobId:'骑',x:64,y:384},{mobId:'骑',x:311,y:384},{mobId:'兵',x:187,y:384},{mobId:'弩',x:187,y:320}],
+    terrain:[{x:119,y:408,mod:'pass'},{x:255,y:408,mod:'pass'}] },
+  { name:'斜谷疑兵', par:3,
+    playerPreset:[{troopId:'盾',count:2},{troopId:'枪',count:2},{troopId:'弓',count:1}],
+    enemyFormation:[{mobId:'骑',x:64,y:384},{mobId:'骑',x:311,y:384},{mobId:'弩',x:187,y:320},{mobId:'兵',x:64,y:352},{mobId:'兵',x:311,y:352}],
+    terrain:[{x:187,y:352,mod:'high'},{x:119,y:408,mod:'pass'},{x:255,y:408,mod:'pass'}] },
+  { name:'麦城围杀', par:3,
+    playerPreset:[{troopId:'弓',count:2},{troopId:'枪',count:2},{troopId:'盾',count:1},{troopId:'甲',count:1}],
+    enemyFormation:[{mobId:'弩',x:64,y:352},{mobId:'弩',x:311,y:352},{mobId:'兵',x:119,y:384},{mobId:'兵',x:255,y:384},{mobId:'兵',x:187,y:408},{mobId:'骑',x:187,y:320}],
+    terrain:[{x:119,y:408,mod:'high'},{x:255,y:408,mod:'high'}] },
+
+  // —— 地狱段（par 2，单位 7）——
+  { name:'赤壁火墙', par:2,
+    playerPreset:[{troopId:'弓',count:2},{troopId:'枪',count:2},{troopId:'盾',count:2},{troopId:'甲',count:1}],
+    enemyFormation:[{mobId:'骑',x:64,y:384},{mobId:'骑',x:311,y:384},{mobId:'斧',x:187,y:320},{mobId:'兵',x:119,y:384},{mobId:'兵',x:255,y:384},{mobId:'弩',x:64,y:352},{mobId:'弩',x:311,y:352}],
+    terrain:[{x:119,y:352,mod:'high'},{x:255,y:352,mod:'high'},{x:187,y:408,mod:'pass'}] },
+  { name:'五丈绝阵', par:2,
+    playerPreset:[{troopId:'弓',count:2},{troopId:'枪',count:2},{troopId:'盾',count:2},{troopId:'甲',count:1}],
+    enemyFormation:[{mobId:'骑',x:119,y:384},{mobId:'骑',x:255,y:384},{mobId:'弩',x:187,y:320},{mobId:'斧',x:64,y:352},{mobId:'斧',x:311,y:352},{mobId:'兵',x:119,y:408},{mobId:'兵',x:255,y:408}],
+    terrain:[{x:64,y:408,mod:'high'},{x:311,y:408,mod:'high'},{x:187,y:352,mod:'high'},{x:187,y:408,mod:'pass'}] },
 ];
 // 克制：枪 vs 甲怪(armor)×2；骑 vs 弩×2；怪骑 打 弓兵×2；马超 vs 骑×2
 const ADOU_HP = 3;
