@@ -67,7 +67,7 @@ function drawMenu() {
   btn(34, 190, 42, 42, '◀', () => selStage--, { disabled: selStage <= 1, bg: '#8e98a3', size: 15 });
   btn(299, 190, 42, 42, '▶', () => selStage++, { disabled: selStage >= SAVE.stage, bg: '#8e98a3', size: 15 });
   txt('第 ' + selStage + ' 关 · ' + ch + (selStage % 10 === 0 ? ' · BOSS' : ''), W / 2, 215, 16, ink, 'center', true);
-  MAPS.forEach((m, i) => btn(40 + i * 150, 243, 145, 27, m.name, () => { selMap = i; }, { size: 12, bg: selMap === i ? red : slate }));
+  MAPS.forEach((m, i) => btn(24 + (i % 2) * 166, 243 + ((i / 2) | 0) * 32, 160, 27, m.name, () => { selMap = i; }, { size: 11, bg: selMap === i ? red : slate }));
   const mapEffect = MAPS[selMap].effect; if (mapEffect) txt('战场机制 · ' + mapEffect.name, W / 2, 284, 10, '#8a7e6c', 'center');
   btn(30, 296, 315, 42, '主线推进 · 开战', () => { startBattle(selStage, false, selMap); scr = 'game'; }, { size: 18, bg: red });
   btn(30, 344, 154, 30, '特别玩法', () => { scr = 'modes'; }, { size: 11, bg: '#bd4a31' });

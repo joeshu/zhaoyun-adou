@@ -207,6 +207,14 @@ function tickMapEffect(dt) {
   } else if (G.mapIdx === 1) {
     G.P.slowT = Math.max(G.P.slowT, 3); G.E.slowT = Math.max(G.E.slowT, 3);
     G.banner = { txt: '江风水势：敌军减速 3 秒', t: 1.5 };
+  } else if (G.mapIdx === 2) {
+    var fi = barFree(G.P); if (fi >= 0) { G.P.bar[fi].unit = mkTroop(Math.random() < 0.5 ? '刀' : '弓'); G.P.bar[fi].unit.animT = 0.25; fl(G.P.bar[fi].x, G.P.bar[fi].y - 20, '援军!', '#2f9e44'); }
+    fi = barFree(G.E); if (fi >= 0) { G.E.bar[fi].unit = mkTroop('刀'); G.E.bar[fi].unit.animT = 0.25; }
+    G.banner = { txt: '军情支援：双方获得援军', t: 1.5 };
+  } else if (G.mapIdx === 3) {
+    for (var ci = 0; ci < G.P.cells.length; ci++) { var u = G.P.cells[ci]; if (u.open && u.unit) { var st = unitStats(u.unit, G.P); u.unit.hp = Math.min(st.maxhp, u.unit.hp + 2); } }
+    if (G.P.shield !== undefined) G.P.shield = Math.min(2, (G.P.shield || 0) + 1);
+    G.banner = { txt: '险关壁垒：驻军恢复、护盾 +1', t: 1.6 };
   }
 }
 

@@ -120,8 +120,8 @@ function drawMob(m) {
 }
 function drawAdou(S) {
   const mine = S.side > 0;
-  // 玩家阿斗的实际终点仍在底部；仅将状态标记上移，避免被合成栏遮挡。
-  const y = mine ? S.adou.y - 38 : S.adou.y;
+  // 玩家阿斗的实际终点仍在底部或函谷关左偏，状态标记上移避免被合成栏遮挡。
+  const y = mine ? S.adou.y - (G && (G.mapIdx === 3 || G.mapIdx === 2) ? 42 : 38) : S.adou.y;
   txt('阿斗', S.adou.x, y + 7, 20, mine ? '#343a40' : '#c0392b', 'center', true);
   txt('♥' + Math.max(0, S.hp), S.adou.x + 36, y + 5, 12, '#e03131', 'left', true);
   if (S.hp < ADOU_HP) hpBar(S.adou.x - 18, y + 14, 36, Math.max(0, S.hp) / ADOU_HP, '#e03131');
