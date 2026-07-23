@@ -1,0 +1,53 @@
+name: UI Overlap Check
+# 用 Playwright 无头 Chromium 渲染 Canvas 游戏，逐屏检测按钮重叠；有重叠即置红。
+# 与 iOS 打包 workflow 解耦：这是轻量 UI 回归门，跑 ubuntu 更快更省。
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - 'index.html'
+      - 'js/**'
+      - 'server.js'
+      - 'scripts/check-overlap.js'
+      - '.github/workflows/ui-overlap.yml'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'index.html'
+      - 'js/**'
+      - 'server.js'
+      - 'scripts/check-overlap.js'
+      - '.github/workflows/ui-overlap.yml'
+
+jobs:
+  overlap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      # 仅装 Playwright（先不下载浏览器，下一步显式装 chromium 即可，避免重复下载）
+      - name: Install Playwright (package only)
+        run: npm install --no-save playwright
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+
+      - name: Install Chromium (with OS deps)
+        run: npx playwright install chromium --with-deps
+
+      # 游戏页面由 server.js 提供（:8384，含存档/录像 API），后台起服并就绪等待
+      - name: Start game server
+        run: |
+          node server.js &
+          for i in $(seq 1 20); do
+            curl -sf http://localhost:8384/ >/dev/null && { echo "server up"; break; }
+            sleep 1
+          done
+
+      - name: Run overlap check
+        run: node scripts/check-overlap.js

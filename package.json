@@ -11,6 +11,7 @@
     "build:ios:no-sign": "npm run build:bundle && npm run prepare:www && npx cap copy ios && cd ios && xcodebuild -workspace App.xcworkspace -scheme App -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO build",
     "package:ipa": "node scripts/package-ipa.js",
     "test": "node smoke.js && node tests/events.test.js && node tests/layout.test.js",
+    "test:overlap": "node scripts/check-overlap.js",
     "lint": "eslint js --ext .js"
   },
   "dependencies": {
