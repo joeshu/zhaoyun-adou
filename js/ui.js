@@ -711,14 +711,18 @@ function drawRoster() {
 function drawModes() {
   txt('特别玩法', W / 2, 54, 25, '#2f3540', 'center', true);
   txt('改变胜利目标，而不是单纯增加波次', W / 2, 76, 11, '#90949a', 'center');
+  // 列表独立裁剪并预留底部返回键区域，避免最后一项与返回按钮重叠
+  const top = 90, listH = Math.max(260, H - 180);
+  clipList(20, top, 335, listH, top + SPECIAL_MODES.length * 86);
   SPECIAL_MODES.forEach((m, i) => {
-    const y = 90 + i * 86, open = modeUnlocked(m);
+    const y = top + i * 86, open = modeUnlocked(m);
     panel(20, y, 335, 78, { bg: open ? '#fffdf9' : '#eee9df', stroke: open ? '#e7dccb' : '#ddd5c7', r: 11, blur: 5 });
     txt(m.icon, 45, y + 48, 25, m.col, 'center', true);
     txt(m.name, 72, y + 30, 16, open ? '#2f3540' : '#9ca3aa', 'left', true);
     txt(m.sub, 72, y + 51, 11, open ? '#777d84' : '#a6a9ac', 'left');
     btn(268, y + 22, 70, 33, open ? '进入' : '第' + m.unlock + '关解锁', () => { if (open) startSpecialMode(m.id); }, { size: open ? 12 : 9, bg: open ? m.col : '#aab0b6', disabled: !open });
   });
+  unclip();
   backBtn();
 }
 
