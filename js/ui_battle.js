@@ -605,18 +605,17 @@ function drawSiegeMob(m) {
 /* ========== Adou plaque (bug fix: faction plaque + seal + label) ========== */
 function drawAdou(S) {
   const mine = S.side > 0;
-  // 使用真实 adou.y 不做偏移，牌子紧贴阿斗位置
   const y = S.adou.y;
+  // 阿斗牌布局：标签在上(h=10)，主体椭圆(30px)，血条在下(h=6)，护盾最后(h=12)
+  // 总高约：-12..+38，上下留空区（敌方 y 距顶至少 40，玩家 y 距底至少 44）
   // 长坂独胆：赵云贴附阿斗左侧（护送），随阿斗移动，提供推拒保护光环
-  if (G.mode === 'escort' && G.escort) {
+  if (G.mode === 'escort' && G.escort && mine) {
     ctx.save();
-    // 赵云护驾光环（棋盘有赵云时实心，否则半透明描边）
     const hasZhao = G.P.cells.some(c => c.unit && c.unit.name === '赵云');
     ctx.fillStyle = hasZhao ? 'rgba(28,126,214,0.30)' : 'rgba(28,126,214,0.10)';
     ctx.beginPath(); ctx.arc(S.adou.x - 26, S.adou.y, 16, 0, 7); ctx.fill();
     ctx.strokeStyle = '#1c7ed6'; ctx.lineWidth = hasZhao ? 2.5 : 1; ctx.stroke();
     txt(hasZhao ? '云' : '赵', S.adou.x - 26, S.adou.y + 4, 15, hasZhao ? '#1c7ed6' : '#74828e', 'center', true);
-    // 赵云在场时画一条连接线表示护驾
     if (hasZhao) {
       const zhaoCell = G.P.cells.find(c => c.unit && c.unit.name === '赵云');
       if (zhaoCell) {
@@ -628,41 +627,45 @@ function drawAdou(S) {
     ctx.restore();
   }
 
-  /* Faction-colored rounded plaque background */
   var plaqueCol = mine ? '#2f9e44' : '#e03131';
   var textCol = mine ? '#343a40' : '#c0392b';
   var labelCol = mine ? '#2f9e44' : '#e03131';
 
   ctx.save();
-  /* Plaque body: rounded capsule behind 阿斗 */
-  var pw = 58, ph = 28, pr = 14;
-  rr(S.adou.x - pw / 2, y - 6, pw, ph, pr);
-  ctx.fillStyle = mine ? 'rgba(47,158,68,.10)' : 'rgba(224,49,49,.10)';
+  // 主体椭圆板
+  var pw = 58, ph = 26, pr = 13;
+  rr(S.adou.x - pw / 2, y - 4, pw, ph, pr);
+  ctx.fillStyle = mine ? 'rgba(47,158,68,.12)' : 'rgba(224,49,49,.12)';
   ctx.fill();
   ctx.strokeStyle = plaqueCol; ctx.lineWidth = 1.5; ctx.stroke();
 
-  /* Seal stamp on left side of plaque */
-  seal(S.adou.x - 18, y + 8, 7, mine ? '友' : '敌', plaqueCol);
+  // 标签在椭圆上方
+  seal(S.adou.x - 18, y + 6, 6, mine ? '友' : '敌', plaqueCol);
+  txt(mine ? '我方' : '敌军', S.adou.x, y - 12, 8, labelCol, 'center', true);
 
-  /* 「我方/敌军」label above plaque */
-  txt(mine ? '我方' : '敌军', S.adou.x, y - 6, 9, labelCol, 'center', true);
-
-  /* 阿斗 name + HP inside plaque */
+  // 阿斗名 + HP
   const _hp = (G.mode === 'escort' && G.escort) ? G.escort.hp : S.hp;
   const _baseHp = G.mode === 'escort' ? ESCORT_ADOU_HP : ADOU_HP;
-  txt('阿斗', S.adou.x + 2, y + 7, 18, textCol, 'center', true);
-  txt('♥' + Math.max(0, _hp), S.adou.x + 34, y + 5, 12, '#e03131', 'left', true);
+  txt('阿斗', S.adou.x + 2, y + 5, 16, textCol, 'center', true);
+  txt('♥' + Math.max(0, _hp), S.adou.x + 28, y + 3, 11, '#e03131', 'left', true);
   ctx.restore();
 
-  if (_hp < _baseHp) hpBar(S.adou.x - 18, y + 14, 36, Math.max(0, _hp) / _baseHp, '#e03131');
+  // 血条在椭圆下方，减小高度
+  var hpPct = Math.max(0, _hp) / _baseHp;
+  if (hpPct < 1) {
+    var hw = 36, hh = 4;
+    ctx.fillStyle = '#e9ecef'; ctx.fillRect(S.adou.x - hw / 2, y + 18, hw, hh);
+    ctx.fillStyle = '#e03131'; ctx.fillRect(S.adou.x - hw / 2, y + 18, hw * hpPct, hh);
+  }
 
-  /* Shield icons */
-  for (let i = 0; i < (S.shield || 0); i++) {
-    const sx = S.adou.x - 18 + i * 14;
+  // 护盾别在椭圆正下方，血条再往下一点点
+  for (var i = 0; i < (S.shield || 0); i++) {
+    var sx = S.adou.x - 14 + i * 12;
     ctx.fillStyle = '#1c7ed6';
     ctx.beginPath();
-    ctx.moveTo(sx, y + 19); ctx.lineTo(sx + 9, y + 19); ctx.lineTo(sx + 9, y + 26);
-    ctx.lineTo(sx + 4.5, y + 30); ctx.lineTo(sx, y + 26); ctx.closePath();
+    ctx.moveTo(sx, y + 24); ctx.lineTo(sx + 8, y + 24);
+    ctx.lineTo(sx + 8, y + 30); ctx.lineTo(sx + 4, y + 34);
+    ctx.lineTo(sx, y + 30); ctx.closePath();
     ctx.fill();
   }
 }
@@ -769,8 +772,8 @@ function drawGame() {
   if (G.mode !== 'raid' && G.mode !== 'puzzle' && G.mode !== 'escort' && G.mode !== 'siege') { drawPath(G.E); drawPath(G.P); }
   if (G.mode === 'siege' && G.siege) drawPath(G.P);   // 突击队沿 SIEGE_PATH 上行
 
-  /* ---- Adou plaques ---- */
-  if (G.mode !== 'raid' && G.mode !== 'puzzle' && G.mode !== 'escort' && G.mode !== 'siege') { drawAdou(G.E); G.E.cells.forEach(c => drawCell(c, G.E, false)); }
+  /* ---- 渲染分层：路径基底 → enemy格子 → player格子 → enemy兵 → player兵 → enemy阿斗 → player阿斗(最上层) ---- */
+  if (G.mode !== 'raid' && G.mode !== 'puzzle' && G.mode !== 'escort' && G.mode !== 'siege') { G.E.cells.forEach(c => drawCell(c, G.E, false)); }
   G.P.cells.forEach((c, i) => {
     drawCell(c, G.P, drag && drag.area === 'board' && drag.from === i);
     if (drag && drag.hintType) {
@@ -797,6 +800,15 @@ function drawGame() {
       }
     }
   });
+
+  // 士兵在上，阿斗在最顶层（先敌后己）：敌方兵和己方兵都在格子之上、阿斗之下
+  if (G.mode !== 'raid' && G.mode !== 'puzzle' && G.mode !== 'escort') for (const m of G.E.mobs) if (m.hp > 0) drawMob(m);
+  for (const m of G.P.mobs) if (m.hp > 0) drawMob(m);
+
+  // 敌方阿斗
+  if (G.mode !== 'raid' && G.mode !== 'puzzle' && G.mode !== 'escort' && G.mode !== 'siege') drawAdou(G.E);
+
+  // 队伍状态 / 特殊标记（兵下层已经画了，这里只画阿斗扩展）
 
   /* 黄巾讨伐：当前暴露弱点侧高亮带，提示玩家须在该区域部署/移动单位 */
   if (G.mode === 'raid' && G.raid) {
