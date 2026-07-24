@@ -273,8 +273,6 @@ function update(dt) {
     }
   } else if (G.mode === 'escort') {
     // 长坂独胆：不刷普通/镜像波次；拦截兵由 G.escort.spawnSchedule 在 modeTick 内按进度生成
-  } else if (G.mode === 'siege') {
-    // 反向攻城：突击队由 siegeBuildAssault 预置，无波次/无镜像对抗，胜负在 modeTick 内判定（防止落入下方 catch-all 周期 startWave）
   } else if (G.mode !== 'rogue') {
     // 特别玩法的镜像对抗也需要敌军上限，避免长局堆怪拖慢 Canvas。
     const cap = mobCap(G.mode);
