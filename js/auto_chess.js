@@ -18,9 +18,9 @@ const AC_PROB = { 2:[70,25,5,0], 4:[50,35,12,3], 6:[35,35,20,10], 8:[20,30,25,25
 const AC_ITEMS = [
   { id:'青龙偃月刀', atk:30, desc:'攻击+30，普攻强化' },
   { id:'丈八蛇矛', atk:25, rate:20, desc:'攻击+25，攻速+20%' },
-  { id:'方天画戟', atk:35, desc:'攻击+35，范围攻击' },
+  { id:'方天画戟', atk:35, splash: true, desc:'攻击+35，范围攻击' },
   { id:'仁王盾', armor:25, desc:'护甲+25，物伤减免' },
-  { id:'白银狮子', mr:25, desc:'魔抗+25，每回合回复' },
+  { id:'白银狮子', mr:25, heal:8, desc:'魔抗+25，每回合回复' },
   { id:'八卦阵', mr:20, desc:'魔抗+20，法术闪避' },
 ];
 
@@ -46,8 +46,7 @@ function acMerge() {
     if (ids.length >= 3 && next <= 3) {
       const keep = cells[ids[0]].unit;
       keep.star = next;
-      keep.atk = Math.round(keep.atk * (next === 2 ? 1.7 : 1.59));
-      keep.hp = Math.round(keep.hp * (next === 2 ? 1.7 : 1.59));
+      // 升星只记录星级；战斗属性统一在 fightStats() 里计算，避免重复放大
       ids.slice(1, 3).forEach(i => cells[i].unit = null);
       G.autoChess.msg = keep.id + ' 升至 ' + next + ' 星！';
     }
@@ -125,8 +124,7 @@ function acEquip(i) {
   const c = G.P.cells.find(c => c.unit && !c.unit.item);
   if (!c) return;
   c.unit.item = it;
-  c.unit.atk += it.atk || 0;
-  c.unit.rate = (c.unit.rate || 0) + (it.rate || 0);
+  // 装备只挂载到单位；实际属性统一由 fightStats() 计算，避免攻击力重复叠加
   a.items.splice(i, 1);
   a.msg = c.unit.id + ' 装备 ' + it.id;
 }
@@ -146,27 +144,42 @@ function acStart() {
   a.msg = '双方交战！';
 }
 
-/* ---- 真实双方棋盘战斗 ---- */
+function fightStats(u, side) {
+  const a = G.autoChess, b = side === 'player' ? acBonds() : { f: {}, j: {} };
+  const starMul = u.star === 3 ? 2.7 : u.star === 2 ? 1.7 : 1;
+  let atk = u.atk * starMul, hp = u.hp * starMul;
+  let armor = u.armor || 0, mr = u.mr || 0, rate = u.rate || 0, range = 64;
+  // 阵营羁绊：实际进入伤害/生命计算
+  const fc = b.f[u.faction] || 0;
+  if (fc >= 2) { atk *= ({ 蜀: 1.12, 魏: 1.10, 吴: 1.10 }[u.faction] || 1); }
+  const jc = b.j[u.job] || 0;
+  if (jc >= 2) {
+    if (u.job === '猛将') atk *= 1.15;
+    if (u.job === '弓') { rate += 25; range = 120; }
+    if (u.job === '谋士') atk *= 1.15;
+    if (u.job === '盾') armor += 20;
+  }
+  const item = u.item;
+  if (item) { atk += item.atk || 0; armor += item.armor || 0; mr += item.mr || 0; rate += item.rate || 0; if (item.range) range += item.range; }
+  if (u.job === '盾') armor += 15;
+  return { atk, hp, armor, mr, rate, range, splash: !!(item && item.splash), heal: item && item.heal || 0 };
+}
 function acInitFightGrid() {
-  // 建立自走棋交战区：20格（10玩家格 + 10敌方格），双方棋子按 acFightUnit 格式摆放
-  const a = G.autoChess, c = acBoardCount();
+  const a = G.autoChess;
   a.fightUnits = []; a.fightEnemy = [];
-  // 前10格=玩家棋子在左区，敌方格在右区
   const us = G.P.cells.filter(x => x.unit).map(x => x.unit);
   for (let i = 0; i < us.length; i++) {
-    const ax = 40 + (i % 5) * 36, ay = 120 + Math.floor(i / 5) * 54;
-    a.fightUnits.push({ ...us[i], ax, ay, hp: nAtkHp(us[i]), maxhp: nAtkHp(us[i]), acc: 0, curX: ax, curY: ay, dead: false });
+    const st = fightStats(us[i], 'player'), ax = 40 + (i % 5) * 36, ay = 150 + Math.floor(i / 5) * 54;
+    a.fightUnits.push({ ...us[i], side: 'player', ax, ay, stats: st, hp: st.hp, maxhp: st.hp, acc: 0, curX: ax, curY: ay, dead: false });
   }
-  // 敌方格在右区
   const ai = a.ai[(a.round - 1) % a.ai.length], en = ai.units;
   for (let i = 0; i < en.length; i++) {
-    const ax = 210 + (i % 5) * 36, ay = 120 + Math.floor(i / 5) * 54;
-    a.fightEnemy.push({ ...en[i], ax, ay, hp: nAtkHp(en[i]), maxhp: nAtkHp(en[i]), acc: 0, curX: ax, curY: ay, dead: false });
+    const st = fightStats(en[i], 'enemy'), ax = 210 + (i % 5) * 36, ay = 150 + Math.floor(i / 5) * 54;
+    a.fightEnemy.push({ ...en[i], side: 'enemy', ax, ay, stats: st, hp: st.hp, maxhp: st.hp, acc: 0, curX: ax, curY: ay, dead: false });
   }
-  a.fightTimer = 0; a.fightPhase = 'approach';
-  a.fightAI = ai;
+  a.fightTimer = 0; a.fightPhase = 'approach'; a.fightAI = ai;
 }
-function nAtkHp(u) { return u.hp * (u.star === 2 ? 1.7 : u.star === 3 ? 2.7 : 1); }
+function nAtkHp(u) { return fightStats(u, u.side === 'enemy' ? 'enemy' : 'player').hp; }
 
 function acFightTick(dt) {
   const a = G.autoChess, us = a.fightUnits, en = a.fightEnemy;
@@ -203,15 +216,18 @@ function acFightTick(dt) {
     foes.forEach(f => { const d = Math.hypot(u.curX - f.curX, u.curY - f.curY); if (d < bd) { bd = d; best = f; } });
     if (!best) return;
     const dx = best.curX - u.curX, dy = best.curY - u.curY, dist = Math.hypot(dx, dy) || 1;
-    // 移动到攻击范围（64px）
-    if (dist > 64) {
+    // 远程单位保持攻击距离，近战单位贴近
+    const attackRange = u.stats ? u.stats.range : 64;
+    if (dist > attackRange) {
       u.curX += (dx / dist) * step * 30;
       u.curY += (dy / dist) * step * 30;
     } else {
-      u.acc += dt * 0.8;
+      u.acc += dt * (0.8 + ((u.stats && u.stats.rate) || 0) / 100);
       if (u.acc >= 1) {
         u.acc = 0;
-        const dmg = nAtk(u) * (0.9 + Math.random() * 0.2);
+        const raw = (u.stats ? u.stats.atk : nAtk(u)) * (0.9 + Math.random() * 0.2);
+        const defense = (best.stats && (u.job === '谋士' ? best.stats.mr : best.stats.armor)) || 0;
+        const dmg = Math.max(1, raw * (100 / (100 + defense)));
         best.hp -= dmg;
         G.fx.push({ type: 'line', x1: u.curX, y1: u.curY, x2: best.curX, y2: best.curY, t: 0.12, t0: 0.12, col: u.side === 'player' ? '#1c7ed6' : '#e03131' });
         if (best.hp <= 0) best.dead = true;
@@ -253,7 +269,7 @@ function acAfterCombat() {
     if (a.round % 5 === 0 && a.items.length < 3) acItemOffer();
   }
 }
-function nAtk(u) { return u.atk * (u.star === 2 ? 1.7 : u.star === 3 ? 2.7 : 1); }
+function nAtk(u) { return (u.stats && u.stats.atk) || u.atk * (u.star === 2 ? 1.7 : u.star === 3 ? 2.7 : 1); }
 function acMakeAI() {
   return ['曹魏', '东吴', '西蜀', '河北', '荆襄', '关中', '江东'].map((name, i) => ({
     name, hp: 100,
