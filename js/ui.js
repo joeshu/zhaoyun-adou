@@ -712,7 +712,7 @@ function drawModes() {
   txt('特别玩法', W / 2, 54, 25, '#2f3540', 'center', true);
   txt('改变胜利目标，而不是单纯增加波次', W / 2, 76, 11, '#90949a', 'center');
   SPECIAL_MODES.forEach((m, i) => {
-    const y = 96 + i * 92, open = modeUnlocked(m);
+    const y = 90 + i * 86, open = modeUnlocked(m);
     panel(20, y, 335, 78, { bg: open ? '#fffdf9' : '#eee9df', stroke: open ? '#e7dccb' : '#ddd5c7', r: 11, blur: 5 });
     txt(m.icon, 45, y + 48, 25, m.col, 'center', true);
     txt(m.name, 72, y + 30, 16, open ? '#2f3540' : '#9ca3aa', 'left', true);
