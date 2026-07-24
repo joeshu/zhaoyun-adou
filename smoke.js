@@ -252,10 +252,20 @@ eval(src + `
   modeTick(0.1);
   A(G.state === 'win', '残局挑战歼灭敌阵结算胜利');
   startBattle(12, false, 1, null, { mode: 'fire' });
-  SAVE.invincible = true;
-  for (let i = 0; i < 60 * 70 && G.state === 'play'; i++) update(1 / 60);
-  A(G.P.mobs.length <= 10 && G.E.mobs.length <= 10, '火攻模式保留镜像战场且双方敌军上限10');
-  SAVE.invincible = false;
+  A(G.P.mobs.length === 0, '火攻模式不刷玩家镜像军');
+  A(G.fire && G.fire.cells.length >= 8 && G.fire.cells.length <= 12, '火攻模式生成火油格(8~12)');
+  // 到点且水寨存活 → 胜（新胜利条件：守水寨存活 FIRE_TIME 秒）
+  G.fire.stronghold = FIRE_STRONG_HP; G.modeTime = 0.5;
+  modeTick(1);
+  A(G.state === 'win', '火攻模式到点且水寨存活=胜');
+  // 水寨失守 → 败（单一失败条件）
+  startBattle(12, false, 1, null, { mode: 'fire' });
+  G.fire.stronghold = 0; tickFire(0.1);
+  A(G.state === 'lose', '火攻模式水寨失守=败');
+  // 常态：仅敌方出怪且上限10（实时放火玩法）
+  startBattle(12, false, 1, null, { mode: 'fire' });
+  for (let i = 0; i < 60 * 30 && G.state === 'play'; i++) update(1 / 60);
+  A(G.P.mobs.length === 0 && G.E.mobs.length <= 10, '火攻模式仅敌方出怪且上限10');
   console.log('特别玩法 OK: 火攻/试炼/护送/残局/讨伐');
 
   updateHeroRecord('赵云', 'kills');

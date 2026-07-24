@@ -59,8 +59,8 @@ function fateBuff(S) {
 function unitStats(u, S, cell) {
   const fb = S.fate || { dmg: 1, rate: 1 };
   const comboMul = (S && S.side > 0 && S.combo >= 3) ? 1.2 : 1;   // 连杀攻速buff（p5：5秒内3杀→攻速+20%）
-  const modeDmg = (typeof G !== 'undefined' && G && G.mode === 'rogue' && G.rogue) ? G.rogue.dmg : 1;
-  const modeRate = (typeof G !== 'undefined' && G && G.mode === 'rogue' && G.rogue) ? G.rogue.hp : 1;
+  const modeDmg = (typeof G !== 'undefined' && G && G.mode === 'rogue' && G.rogue) ? (G.rogue.column.dmgMul || 1) : 1;
+  const modeRate = (typeof G !== 'undefined' && G && G.mode === 'rogue' && G.rogue) ? (G.rogue.column.hpMul || 1) : 1;
   // 遗物系统：本局玩家全军增益（仅玩家侧生效）
   const pD = (typeof G !== 'undefined' && G && G.playerDmgMul) ? G.playerDmgMul : 1;
   const pR = (typeof G !== 'undefined' && G && G.playerRateMul) ? G.playerRateMul : 1;

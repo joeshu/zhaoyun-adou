@@ -870,6 +870,7 @@ function onDown(p) {
     return;
   }
   if (scr !== 'game' || !G || G.state !== 'play' || G.paused) return;
+  if (G.mode === 'rogue') return;   // 试炼无部署/走位，仅保留顶栏与军略弹窗按钮
   // P1-4 ghost 回放模式：禁止玩家手动操作（仅允许 UI 按钮）
   if (G.ghostMode) return;
   if (G.egg && Math.hypot(p.x - G.egg.x, p.y - G.egg.y) < 22) { collectEgg(); return; }
@@ -888,6 +889,17 @@ function onDown(p) {
       G.escort.dragX = clamp(p.x, ESCORT_X_MIN, ESCORT_X_MAX);
     }
     return;   // run 阶段守军固定，忽略其它点击（按钮已在上方处理）
+  }
+  // 赤壁火攻·实时放火：点空闲火油格→点燃（禁用普通部署/开荒，纯新增不影响 escort/puzzle）
+  if (G.mode === 'fire' && G.fire) {
+    let best = null, bd = 34;
+    for (const c of G.fire.cells) {
+      if (c.state !== 'idle') continue;
+      const d = Math.hypot(p.x - c.x, p.y - c.y);
+      if (d < bd) { bd = d; best = c; }
+    }
+    if (best) fireIgnite(best);
+    return;   // fire 模式：点其它处不部署、不开荒
   }
   if (bi >= 0 && G.P.bar[bi].unit) drag = { area: 'bar', from: bi, x: p.x, y: p.y };
   else if (ci >= 0 && G.P.cells[ci].open && G.P.cells[ci].unit) drag = { area: 'board', from: ci, x: p.x, y: p.y };

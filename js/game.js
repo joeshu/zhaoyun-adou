@@ -260,16 +260,20 @@ function update(dt) {
       const cap = mobCap(G.mode);
       if (G.mode && Math.max(G.P.mobs.length, G.E.mobs.length) >= cap) break;
       const s = G.spawnQ.shift();
-      spawnMob(G.P, s.type, s.hpMul);
+      if (G.mode !== 'fire' && G.mode !== 'rogue') spawnMob(G.P, s.type, s.hpMul);   // 火攻/试炼：玩家侧不刷镜像军(试炼纵队由 rogueBuildColumn 构建)
       spawnMob(G.E, s.type, s.hpMul);
+      if (G.mode === 'rogue') rogueEnemyAug(G.E.mobs[G.E.mobs.length - 1], s.hpMul);  // 试炼：敌军追加跨侧交火字段
     }
   } else if (!G.mode && !G.endless && G.wave >= stageCfg(G.stage)[0]) {
     if (!G.P.mobs.length) endBattle(true);
-  } else if (G.mode === 'rogue' && G.wave >= 1 && !G.P.mobs.length && !G.rogueChoices) {
-    rogueOffer();
+  } else if (G.mode === 'rogue') {
+    if (!G.rogueChoices) {
+      if (!G.P.mobs.length) { endBattle(false); G.rewardTxt = '纵队溃散 · 试炼失败'; }
+      else if (!G.E.mobs.length && !G.spawnQ.length) rogueOffer();   // 本层敌军清空 → 选军略
+    }
   } else if (G.mode === 'escort') {
     // 长坂独胆：不刷普通/镜像波次；拦截兵由 G.escort.spawnSchedule 在 modeTick 内按进度生成
-  } else {
+  } else if (G.mode !== 'rogue') {
     // 特别玩法的镜像对抗也需要敌军上限，避免长局堆怪拖慢 Canvas。
     const cap = mobCap(G.mode);
     if (G.mode && Math.max(G.P.mobs.length, G.E.mobs.length) >= cap) {
@@ -282,9 +286,10 @@ function update(dt) {
   }
   // AI 行动：镜像对抗模式保留；raid/puzzle 为单侧重做模式，AI 不行动。
   G.aiT -= dt;
-  if (G.aiT <= 0) { G.aiT = G.aiIv; if (G.mode !== 'raid' && G.mode !== 'puzzle' && G.mode !== 'escort') aiAct(G.E); }
+  if (G.aiT <= 0) { G.aiT = G.aiIv; if (G.mode !== 'raid' && G.mode !== 'puzzle' && G.mode !== 'escort' && G.mode !== 'rogue') aiAct(G.E); }
   // 双侧模拟（raid/puzzle 仅玩家侧参与战斗，敌方侧完全静止）
   const _sides = (G.mode === 'raid' || G.mode === 'puzzle' || G.mode === 'escort') ? [G.P] : [G.P, G.E];
+  if (G.mode === 'rogue' && typeof rogueTickFate === 'function') rogueTickFate(dt);   // 试炼羁绊(五虎破阵)独立于侧，仅触发一次
   for (const S of _sides) {
     // 每侧每帧只算一次光环总和，供 unitStats 缓存读取（原实现每单位都遍历 cells 算刘备光环）
     let auraSum = 1;
@@ -293,7 +298,7 @@ function update(dt) {
     if (S.comboT > 0) { S.comboT -= dt; if (S.comboT <= 0) S.combo = 0; }   // 连杀窗口衰减
     sideIncome(S, dt);
     if (S.slowT > 0) S.slowT -= dt;
-    if (typeof tickFateSkills === 'function') tickFateSkills(S, dt);
+    if (G.mode !== 'rogue' && typeof tickFateSkills === 'function') tickFateSkills(S, dt);
     for (const c of S.cells) if (c.unit) {
       if (c.unit.animT > 0) c.unit.animT -= dt;
       updUnit(S, c, dt);

@@ -547,6 +547,7 @@ function drawPath(S) {
 }
 
 function drawMob(m) {
+  if (m.rogueLead || m.rogueTroop) { drawRogueMob(m); return; }   // 试炼纵队单位走专属绘制（非 MOBS）
   const size = m.boss ? 28 : 16;
   const col = m.flash > 0 ? '#f59f00' : m.boss ? '#a61e4e' : m.press ? '#5c1e1e' : '#c0392b';
   txt(m.type, m.x, m.y + size * 0.35, size, col, 'center', true);
@@ -560,6 +561,20 @@ function drawMob(m) {
   if (m.stun > 0) txt('✦', m.x + size * 0.6, m.y - size * 0.5, 10, '#e8a005', 'center');
   if (m.slowT > 0) txt('泥', m.x - size * 0.7, m.y - size * 0.5, 8, '#846358', 'center');
   if (m.intercept) { ctx.strokeStyle = '#e03131'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(m.x, m.y, size * 0.9, 0, 7); ctx.stroke(); }
+}
+
+// 试炼纵队单位绘制（hero=蓝 / troop=紫）：圆牌 + 兵种/将名首字 + 血条（绕过 MOBS[m.type]）
+function drawRogueMob(m) {
+  const size = 18;
+  const col = m.flash > 0 ? '#f59f00' : m.rogueLead ? '#1c7ed6' : '#9c36b5';
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,255,255,.9)';
+  ctx.beginPath(); ctx.arc(m.x, m.y, size * 0.62, 0, 7); ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = col; ctx.beginPath(); ctx.arc(m.x, m.y, size * 0.62, 0, 7); ctx.stroke();
+  txt(m.glyph || (m.rogueLead ? '主' : '兵'), m.x, m.y + 5, m.rogueLead ? 14 : 12, col, 'center', true);
+  ctx.restore();
+  hpBar(m.x - 11, m.y + size * 0.62 + 3, 22, m.hp / m.maxhp, m.rogueLead ? '#1c7ed6' : '#9c36b5');
+  if (m.stun > 0) txt('✦', m.x + size * 0.6, m.y - size * 0.5, 10, '#e8a005', 'center');
 }
 
 /* ========== Adou plaque (bug fix: faction plaque + seal + label) ========== */
@@ -874,8 +889,8 @@ function drawGame() {
 
   /* Mode status bars */
   if (G.mode === 'fire') {
-    txt('🔥 ' + G.wind + ' · 守城 ' + Math.ceil(Math.max(0, G.modeTime)) + ' 秒', W / 2, 48, 11, '#bd4a31', 'center', true);
-    drawBuildings();
+    txt('🔥 风：' + (G.wind === '东南风' ? '东南' : '西北') + ' · 水寨♥' + Math.ceil(Math.max(0, G.fire.stronghold)) + ' · 控火油×' + Math.floor(G.fire.oil), W / 2, 48, 11, '#bd4a31', 'center', true);
+    drawFire();
   } else if (G.mode === 'escort') {
     const e = G.escort;
     if (!e.run) {
@@ -1100,6 +1115,16 @@ function drawGame() {
         ['再来一局', () => startSpecialMode('raid')],
         ['返回菜单', () => { goTo('menu'); }, '#868e96'],
       ]);
+    } else if (G.mode === 'fire') {
+      overlay('火攻成功', G.rewardTxt, [
+        ['再来一局', () => startSpecialMode('fire')],
+        ['返回菜单', () => { goTo('menu'); }, '#868e96'],
+      ]);
+    } else if (G.mode === 'rogue') {
+      overlay('试炼完成', G.rewardTxt, [
+        ['再来一局', () => startSpecialMode('rogue')],
+        ['返回菜单', () => { goTo('menu'); }, '#868e96'],
+      ]);
     } else {
       const acts2 = [];
       if (!G.endless && G.stage < STAGE_MAX) acts2.push(['下一关', () => { startBattle(G.stage + 1, false, G.mapIdx); }]);
@@ -1119,6 +1144,16 @@ function drawGame() {
     } else if (G.mode === 'raid') {
       overlay('讨伐失败', G.rewardTxt, [
         ['再来一局', () => startSpecialMode('raid')],
+        ['返回菜单', () => { goTo('menu'); }, '#868e96'],
+      ]);
+    } else if (G.mode === 'fire') {
+      overlay('水寨失守', G.rewardTxt, [
+        ['再来一局', () => startSpecialMode('fire')],
+        ['返回菜单', () => { goTo('menu'); }, '#868e96'],
+      ]);
+    } else if (G.mode === 'rogue') {
+      overlay('试炼失败', G.rewardTxt, [
+        ['再来一局', () => startSpecialMode('rogue')],
         ['返回菜单', () => { goTo('menu'); }, '#868e96'],
       ]);
     } else {
