@@ -151,8 +151,13 @@ function acStart() {
   a.msg = '双方交战！';
 }
 
-function fightStats(u, side) {
-  const a = G.autoChess, b = side === 'player' ? acBonds() : { f: {}, j: {} };
+function acBondsFor(units) {
+  const f = { 蜀: 0, 魏: 0, 吴: 0 }, j = {};
+  units.forEach(u => { f[u.faction] = (f[u.faction] || 0) + 1; j[u.job] = (j[u.job] || 0) + 1; });
+  return { f, j };
+}
+function fightStats(u, side, roster) {
+  const b = acBondsFor(roster || (side === 'player' ? G.P.cells.filter(c => c.unit).map(c => c.unit) : []));
   const starMul = u.star === 3 ? 2.7 : u.star === 2 ? 1.7 : 1;
   let atk = u.atk * starMul, hp = u.hp * starMul;
   let armor = u.armor || 0, mr = u.mr || 0, rate = u.rate || 0, range = 64;
@@ -175,14 +180,14 @@ function acInitFightGrid() {
   const a = G.autoChess;
   a.fightUnits = []; a.fightEnemy = [];
   const us = G.P.cells.filter(x => x.unit).map(x => x.unit);
-  for (let i = 0; i < us.length; i++) {
-    const st = fightStats(us[i], 'player'), ax = 40 + (i % 5) * 36, ay = 150 + Math.floor(i / 5) * 54;
-    a.fightUnits.push({ ...us[i], side: 'player', ax, ay, stats: st, hp: st.hp, maxhp: st.hp, acc: 0, curX: ax, curY: ay, dead: false });
-  }
   const ai = a.ai[(a.round - 1) % a.ai.length], en = ai.units;
+  for (let i = 0; i < us.length; i++) {
+    const st = fightStats(us[i], 'player', us), ax = 40 + (i % 5) * 36, ay = 150 + Math.floor(i / 5) * 54;
+    a.fightUnits.push({ ...us[i], side: 'player', row: Math.floor(i / 5), ax, ay, stats: st, hp: st.hp, maxhp: st.hp, acc: 0, curX: ax, curY: ay, dead: false });
+  }
   for (let i = 0; i < en.length; i++) {
-    const st = fightStats(en[i], 'enemy'), ax = 210 + (i % 5) * 36, ay = 150 + Math.floor(i / 5) * 54;
-    a.fightEnemy.push({ ...en[i], side: 'enemy', ax, ay, stats: st, hp: st.hp, maxhp: st.hp, acc: 0, curX: ax, curY: ay, dead: false });
+    const st = fightStats(en[i], 'enemy', en), ax = 210 + (i % 5) * 36, ay = 150 + Math.floor(i / 5) * 54;
+    a.fightEnemy.push({ ...en[i], side: 'enemy', row: Math.floor(i / 5), ax, ay, stats: st, hp: st.hp, maxhp: st.hp, acc: 0, curX: ax, curY: ay, dead: false });
   }
   a.fightTimer = 0; a.fightPhase = 'approach'; a.fightAI = ai;
 }
@@ -222,6 +227,10 @@ function acFightTick(dt) {
     let best = null, bd = 1e9;
     foes.forEach(f => { const d = Math.hypot(u.curX - f.curX, u.curY - f.curY); if (d < bd) { bd = d; best = f; } });
     if (!best) return;
+    const backline = foes.filter(f => f.row > 0);
+    if ((u.job === '弓' || u.job === '谋士' || u.job === '骑') && backline.length) {
+      best = backline.reduce((x, f) => f.hp < x.hp ? f : x, backline[0]);
+    }
     if (u.job === '盾') {
       const near = foes.reduce((x, f) => Math.hypot(u.curX - f.curX, u.curY - f.curY) < Math.hypot(u.curX - x.curX, u.curY - x.curY) ? f : x, foes[0]);
       if (near) best = near;
@@ -282,8 +291,10 @@ function acAdvanceRound() {
     a.fightTimer = 0; a.fightUnits = null; a.fightEnemy = null; a.fightPhase = 'done';
     a.ai.forEach(x => {
       if (x.hp > 0) x.units = x.jobs.map((job, j) => {
-        const pool = AC_HEROES.filter(h => h.job === job);
-        const u = acUnit(pool[(a.round + j) % Math.max(1, pool.length)] || AC_HEROES[0]);
+        const pool = AC_HEROES.filter(h => h.job === job && h.faction === x.faction);
+        const factionPool = AC_HEROES.filter(h => h.faction === x.faction);
+        const source = pool.length ? pool : factionPool;
+        const u = acUnit(source[(a.round + j) % Math.max(1, source.length)] || AC_HEROES[0]);
         u.star = a.round >= 10 && j === 0 ? 2 : 1;
         return u;
       });
@@ -294,13 +305,23 @@ function acAdvanceRound() {
 function nAtk(u) { return (u.stats && u.stats.atk) || u.atk * (u.star === 2 ? 1.7 : u.star === 3 ? 2.7 : 1); }
 function acMakeAI() {
   const plans = [
-    ['曹魏', ['盾','猛将','枪']], ['东吴', ['弓','谋士','盾']], ['西蜀', ['骑','猛将','弓']],
-    ['河北', ['盾','猛将','猛将']], ['荆襄', ['枪','弓','谋士']], ['江东', ['弓','弓','盾']], ['关中', ['骑','枪','猛将']]
+    ['曹魏', '魏', ['盾','猛将','枪']], ['东吴', '吴', ['弓','谋士','盾']], ['西蜀', '蜀', ['骑','猛将','弓']],
+    ['河北', '魏', ['盾','猛将','猛将']], ['荆襄', '吴', ['枪','弓','谋士']], ['江东', '吴', ['弓','弓','盾']], ['关中', '蜀', ['骑','枪','猛将']]
   ];
-  return plans.map(([name, jobs], i) => ({
-    name, hp: 100, jobs,
-    units: jobs.map(job => acUnit(AC_HEROES.filter(x => x.job === job)[i % Math.max(1, AC_HEROES.filter(y => y.job === job).length)] || AC_HEROES[i % AC_HEROES.length])),
-  }));
+  return plans.map(([name, faction, jobs], i) => {
+    const units = jobs.map((job, j) => {
+      const factionPool = AC_HEROES.filter(x => x.faction === faction);
+      const pool = AC_HEROES.filter(x => x.job === job && x.faction === faction);
+      return acUnit((pool.length ? pool : factionPool)[(i + j) % Math.max(1, (pool.length ? pool : factionPool).length)] || AC_HEROES[0]);
+    });
+    return { name, faction, jobs, units, bondText: acBondTextFor(units) };
+  });
+}
+function acBondTextFor(units) {
+  const b = acBondsFor(units), out = [];
+  [['蜀',12],['魏',10],['吴',10]].forEach(x => { if ((b.f[x[0]] || 0) >= 2) out.push(x[0] + '羁绊+' + x[1] + '%'); });
+  [['猛将',15],['弓',8],['谋士',15],['盾',0]].forEach(x => { if ((b.j[x[0]] || 0) >= 2) out.push(x[0] + '强化'); });
+  return out.join(' · ') || '无羁绊';
 }
 function acChooseLord() {
   const a = G.autoChess;
@@ -357,7 +378,7 @@ function drawAutoChess() {
   // 战斗阶段绘制双方对战
   if (a.phase === 'fight' && a.fightUnits && a.fightEnemy) {
     ctx.fillStyle = '#1a2420'; ctx.fillRect(0, 120, W, H - 120 - 200);
-    txt('⚔ 双方交战  · 速度×' + a.combatSpeed, W / 2, 110, 14, '#f4d58b', 'center', true);
+    txt('敌方：' + a.fightAI.name + ' · ' + (a.fightAI.faction || '') + ' · ' + (a.fightAI.bondText || '无羁绊'), W / 2, 128, 10, '#d8c79f', 'center');
     // 左侧=玩家棋子
     a.fightUnits.forEach(u => {
       if (u.dead) return;
