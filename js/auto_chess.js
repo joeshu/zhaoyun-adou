@@ -83,6 +83,13 @@ function acBuy(i) {
   a.shop[i] = null;
   a.msg = '招募 ' + u.id + ' · ' + u.faction + ' ' + u.job;
 }
+function acEconomy() {
+  const a = G.autoChess;
+  const interest = Math.min(5, Math.floor(a.gold / 10));
+  const streakBonus = Math.min(3, Math.floor(Math.abs(a.streak) / 2));
+  a.gold += 5 + interest + streakBonus;
+  a.lastIncome = { base: 5, interest, streak: streakBonus };
+}
 function acRefresh() {
   const a = G.autoChess;
   // 孙权·制衡：首刷免费
@@ -215,12 +222,16 @@ function acFightTick(dt) {
     let best = null, bd = 1e9;
     foes.forEach(f => { const d = Math.hypot(u.curX - f.curX, u.curY - f.curY); if (d < bd) { bd = d; best = f; } });
     if (!best) return;
+    if (u.job === '盾') {
+      const near = foes.reduce((x, f) => Math.hypot(u.curX - f.curX, u.curY - f.curY) < Math.hypot(u.curX - x.curX, u.curY - x.curY) ? f : x, foes[0]);
+      if (near) best = near;
+    }
     const dx = best.curX - u.curX, dy = best.curY - u.curY, dist = Math.hypot(dx, dy) || 1;
-    // 远程单位保持攻击距离，近战单位贴近
     const attackRange = u.stats ? u.stats.range : 64;
+    const charge = u.job === '骑' && a.fightTimer < 1.2 ? 1.55 : 1;
     if (dist > attackRange) {
-      u.curX += (dx / dist) * step * 30;
-      u.curY += (dy / dist) * step * 30;
+      u.curX += (dx / dist) * step * 30 * charge;
+      u.curY += (dy / dist) * step * 30 * charge;
     } else {
       u.acc += dt * (0.8 + ((u.stats && u.stats.rate) || 0) / 100);
       if (u.acc >= 1) {
@@ -260,20 +271,29 @@ function acAfterCombat() {
     endBattle(a.hp > 0);
   } else {
     a.round++; a.phase = 'prep'; a.timer = 15;
-    a.gold += 5 + Math.min(5, Math.floor(a.gold / 10));
+    acEconomy();
     if (!a.locked) acShop();
     a.fightTimer = 0; a.fightUnits = null; a.fightEnemy = null; a.fightPhase = 'done';
     a.ai.forEach(x => {
-      if (x.hp > 0) x.units = Array.from({ length: Math.min(10, 2 + Math.floor(a.round / 2)) }, () => acUnit(acPick()));
+      if (x.hp > 0) x.units = x.jobs.map((job, j) => {
+        const pool = AC_HEROES.filter(h => h.job === job);
+        const u = acUnit(pool[(a.round + j) % Math.max(1, pool.length)] || AC_HEROES[0]);
+        u.star = a.round >= 10 && j === 0 ? 2 : 1;
+        return u;
+      });
     });
     if (a.round % 5 === 0 && a.items.length < 3) acItemOffer();
   }
 }
 function nAtk(u) { return (u.stats && u.stats.atk) || u.atk * (u.star === 2 ? 1.7 : u.star === 3 ? 2.7 : 1); }
 function acMakeAI() {
-  return ['曹魏', '东吴', '西蜀', '河北', '荆襄', '关中', '江东'].map((name, i) => ({
-    name, hp: 100,
-    units: Array.from({ length: 2 + (i % 2) }, () => acUnit(AC_HEROES[(Math.random() * AC_HEROES.length) | 0])),
+  const plans = [
+    ['曹魏', ['盾','猛将','枪']], ['东吴', ['弓','谋士','盾']], ['西蜀', ['骑','猛将','弓']],
+    ['河北', ['盾','猛将','猛将']], ['荆襄', ['枪','弓','谋士']], ['江东', ['弓','弓','盾']], ['关中', ['骑','枪','猛将']]
+  ];
+  return plans.map(([name, jobs], i) => ({
+    name, hp: 100, jobs,
+    units: jobs.map(job => acUnit(AC_HEROES.filter(x => x.job === job)[i % Math.max(1, AC_HEROES.filter(y => y.job === job).length)] || AC_HEROES[i % AC_HEROES.length])),
   }));
 }
 function acChooseLord() {
