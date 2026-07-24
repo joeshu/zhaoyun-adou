@@ -605,7 +605,8 @@ function drawSiegeMob(m) {
 /* ========== Adou plaque (bug fix: faction plaque + seal + label) ========== */
 function drawAdou(S) {
   const mine = S.side > 0;
-  const y = mine ? S.adou.y - (G && (G.mapIdx === 3 || G.mapIdx === 2) ? 42 : 38) : S.adou.y;
+  // 使用真实 adou.y 不做偏移，牌子紧贴阿斗位置
+  const y = S.adou.y;
   // 长坂独胆：赵云贴附阿斗左侧（护送），随阿斗移动，提供推拒保护光环
   if (G.mode === 'escort' && G.escort) {
     ctx.save();
