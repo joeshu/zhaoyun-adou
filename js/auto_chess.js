@@ -369,10 +369,10 @@ function drawAutoChess() {
     }
     const chessY = a.items.length > 2 ? 162 : 154;
     drawChessBoard(chessY);
-    drawShop(chessY + 170);
+    drawACShop(chessY + 170);
   } else {
     drawChessBoard(150);
-    drawShop(320);
+    drawACShop(320);
   }
 }
 function drawChessBoard(y0) {
@@ -391,7 +391,7 @@ function drawChessBoard(y0) {
   txt('前排', 10, y0 + 3, 9, '#8a6d3b', 'left', true);
   txt('后排', 10, y0 + 79, 9, '#467d86', 'left', true);
 }
-function drawShop(y0) {
+function drawACShop(y0) {
   const a = G.autoChess;
   txt('商店 · 点击购买', W / 2, y0 - 6, 12, '#3f5648', 'center', true);
   for (let i = 0; i < 5; i++) {
