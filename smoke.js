@@ -268,6 +268,49 @@ eval(src + `
   A(G.P.mobs.length === 0 && G.E.mobs.length <= 10, '火攻模式仅敌方出怪且上限10');
   console.log('特别玩法 OK: 火攻/试炼/护送/残局/讨伐');
 
+  // —— 反向攻城（siege）：战前编成 → 突击队 → 敌工事射击 → 破城/全灭/超时 ——
+  startBattle(12, false, 0, null, { mode: 'siege' });
+  A(G.mode === 'siege', '反向攻城 模式初始化');
+  A(G.modeLabel === '反向攻城', '反向攻城 模式标签');
+  A(G.siege && G.siege.build === true, '开局进入战前编成面板');
+  A(G.P.path === SIEGE_PATH, 'siege 使用 SIEGE_PATH');
+  A(G.P.len === pathCum(SIEGE_PATH)[pathCum(SIEGE_PATH).length - 1], 'siege PATH 长度正确');
+  A(G.siege.towers.length === 10, '生成 10 座敌工事');
+  A(G.siege.fort.hp === SIEGE_FORT.hp && G.siege.fort.maxhp === SIEGE_FORT.maxhp, '敌垒血量初始化');
+  // 选预设 → 解除 build、生成突击队、assaultReady
+  chooseSiegePreset(0);
+  A(G.siege.build === false, '编成确认后关闭战前面板');
+  A(G.siege.assaultReady === true, 'assaultReady=true');
+  A(G.P.mobs.length === 1 + SIEGE_PRESETS[0].queue.length, '突击队数量=领队+队列');
+  // 突击队数值取自 TROOPS/HEROES 且带 break 与 siegeAssault 标记（倍率仅本局，不回写全局）
+  const leadMob = G.P.mobs.find(m => m.kind === 'hero');
+  A(leadMob && leadMob.break > 0 && leadMob.siegeAssault, '领队带 break 与 siegeAssault 标记');
+  // 敌工事射击：把一座塔射程内放一个 mob，tick 应扣血（siegeDealDmg 独立，不发玩家奖励）
+  const tw = G.siege.towers[0];
+  const hp0 = G.P.mobs[0].hp;
+  G.P.mobs[0].x = tw.x; G.P.mobs[0].y = tw.y; tw.atkT = tw.rate; // 直接可击
+  siegeTickTowers(0.016);
+  A(G.P.mobs[0].hp < hp0, '敌工事对射程内 mob 结算伤害');
+  // 指令 CD 门控
+  G.siege.cmds.rush = 0; siegeCmd('rush');
+  A(G.siege.rushT > 0 && G.siege.cmds.rush > 0, '突进令触发并进入 CD');
+  siegeCmd('rush'); // CD 中，应被门控忽略
+  A(G.siege.cmds.rush > 0, '突进令 CD 中再次点击被忽略');
+  // 破城胜：直接把 fort.hp 清零 → modeTick 判胜
+  G.siege.fort.hp = 0; modeTick(0.1);
+  A(G.state === 'win', '敌垒归零=攻城胜利');
+  // 全灭败：重建 → 清空突击队 → modeTick 判负
+  startBattle(12, false, 0, null, { mode: 'siege' }); chooseSiegePreset(1);
+  G.P.mobs = []; G.siege.assaultReady = true; modeTick(0.1);
+  A(G.state === 'lose', '突击队全灭=攻城失败');
+  // 超时败：重建 → 时间耗尽且敌垒未破 → 判负
+  startBattle(12, false, 0, null, { mode: 'siege' }); chooseSiegePreset(2);
+  G.modeTime = 0; modeTick(0.1);
+  A(G.state === 'lose' && G.rewardTxt === '攻城超时', '攻城超时=失败');
+  // mobCap('siege') 返回 30
+  A(mobCap('siege') === 30, 'mobCap(siege)=30');
+  console.log('反向攻城 OK: 编成/突击队/工事射击/指令CD/破城=胜/全灭=败/超时=败');
+
   updateHeroRecord('赵云', 'kills');
   updateHeroRecord('赵云', 'deployments');
   var zyRecord = heroRecord('赵云');

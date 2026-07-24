@@ -90,6 +90,7 @@ function wpick(pairs) {
 function mobCap(mode) {
   if (mode === 'fire') return 10;
   if (mode === 'escort' || mode === 'puzzle') return 12;
+  if (mode === 'siege') return 30;   // 攻城无波次、突击队≤12，留护栏
   // 普通/无尽模式：封顶 60，避免长局堆怪掉帧与视觉灾难（原 999 无上限）
   return 60;
 }

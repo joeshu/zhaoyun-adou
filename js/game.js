@@ -251,7 +251,7 @@ function update(dt) {
     G.prepT = G.betweenT;
     if (!G.mode) G.banner = { txt: '【首轮备战】还有 ' + Math.ceil(G.prepT) + ' 秒，抓紧抽卡、合成与布阵', t: 999 };
   }
-  if (G.mode === 'raid' || G.mode === 'puzzle') {
+  if (G.mode === 'raid' || G.mode === 'puzzle' || G.mode === 'siege') {
     // 单侧重做模式（黄巾讨伐 / 群雄演武）：Boss(raid)/敌阵(puzzle)由 modeTick 手动生成，
     // 不刷新镜像波次、不启用 AI 镜像对抗，保持单侧战斗。
   } else if (G.spawnQ.length) {
@@ -260,7 +260,7 @@ function update(dt) {
       const cap = mobCap(G.mode);
       if (G.mode && Math.max(G.P.mobs.length, G.E.mobs.length) >= cap) break;
       const s = G.spawnQ.shift();
-      if (G.mode !== 'fire' && G.mode !== 'rogue') spawnMob(G.P, s.type, s.hpMul);   // 火攻/试炼：玩家侧不刷镜像军(试炼纵队由 rogueBuildColumn 构建)
+      if (G.mode !== 'fire' && G.mode !== 'rogue' && G.mode !== 'siege') spawnMob(G.P, s.type, s.hpMul);   // 火攻/试炼/攻城：玩家侧不刷镜像军(攻城突击队由 siegeBuildAssault 构建)
       spawnMob(G.E, s.type, s.hpMul);
       if (G.mode === 'rogue') rogueEnemyAug(G.E.mobs[G.E.mobs.length - 1], s.hpMul);  // 试炼：敌军追加跨侧交火字段
     }
@@ -273,6 +273,8 @@ function update(dt) {
     }
   } else if (G.mode === 'escort') {
     // 长坂独胆：不刷普通/镜像波次；拦截兵由 G.escort.spawnSchedule 在 modeTick 内按进度生成
+  } else if (G.mode === 'siege') {
+    // 反向攻城：突击队由 siegeBuildAssault 预置，无波次/无镜像对抗，胜负在 modeTick 内判定（防止落入下方 catch-all 周期 startWave）
   } else if (G.mode !== 'rogue') {
     // 特别玩法的镜像对抗也需要敌军上限，避免长局堆怪拖慢 Canvas。
     const cap = mobCap(G.mode);
@@ -288,7 +290,7 @@ function update(dt) {
   G.aiT -= dt;
   if (G.aiT <= 0) { G.aiT = G.aiIv; if (G.mode !== 'raid' && G.mode !== 'puzzle' && G.mode !== 'escort' && G.mode !== 'rogue') aiAct(G.E); }
   // 双侧模拟（raid/puzzle 仅玩家侧参与战斗，敌方侧完全静止）
-  const _sides = (G.mode === 'raid' || G.mode === 'puzzle' || G.mode === 'escort') ? [G.P] : [G.P, G.E];
+  const _sides = (G.mode === 'raid' || G.mode === 'puzzle' || G.mode === 'escort' || G.mode === 'siege') ? [G.P] : [G.P, G.E];
   if (G.mode === 'rogue' && typeof rogueTickFate === 'function') rogueTickFate(dt);   // 试炼羁绊(五虎破阵)独立于侧，仅触发一次
   for (const S of _sides) {
     // 每侧每帧只算一次光环总和，供 unitStats 缓存读取（原实现每单位都遍历 cells 算刘备光环）

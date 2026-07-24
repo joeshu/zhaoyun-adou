@@ -7,6 +7,7 @@ const SPECIAL_MODES = [
   { id: 'escort', icon: '🐎', name: '长坂独胆', sub: '护送阿斗 · 三路突围', col: '#2f7f9d', unlock: 14 },
   { id: 'puzzle', icon: '♟', name: '群雄演武', sub: '每日残局 · 三星挑战', col: '#b78324', unlock: 4 },
   { id: 'raid', icon: '👑', name: '黄巾讨伐', sub: '90 秒讨伐 · 阶段 Boss', col: '#8d3543', unlock: 20 },
+  { id: 'siege', icon: '🏯', name: '反向攻城', sub: '夺隘破垒 · 逆袭敌营', col: '#8a6d3b', unlock: 24 },
 ];
 const specialMode = id => SPECIAL_MODES.find(m => m.id === id);
 const modeUnlocked = m => SAVE.stage >= m.unlock;
@@ -107,7 +108,47 @@ const ROGUE_LEAD_SKILL_DMG_MUL = 1.8;    // 主将技伤害倍率（相对普攻
 const ROGUE_LEAD_SKILL_R        = 120;   // 主将技作用半径(px)
 const ROGUE_TROOP_SPD = 32;              // 纵队兵种行军速度(px/s，引擎量级 兵30~骑62 取中段)
 const ROGUE_HERO_SPD  = 30;              // 主将行军速度(px/s)
-const ROGUE_QUEUE_GAP = 34;              // 纵队队列间隔(px，沿路径)
+const ROGUE_QUEUE_GAP = 34;
+
+/* ========== 反向攻城·夺隘(siege) ==========
+   全部以 G.mode==='siege' 门控；玩家=进攻方沿 SIEGE_PATH 上行突破末端敌垒；
+   敌方=静止工事(SIEGE_TOWERS)射击。不改动 fire/rogue/escort/puzzle/raid/普通模式任何逻辑与数值（铁律）。 */
+const SIEGE_TIME = 90;          // 攻城时限秒
+const SIEGE_PATH = [            // 玩家突击 PATH（长坂坡坐标系，单线自下而上，中段轻微蛇形便于两侧布防）
+  [187,524],[187,470],[140,410],[187,350],[234,290],[187,230],[187,150],[187,76]
+];
+const SIEGE_FORT = { x:187, y:66, hp:260, maxhp:260 };  // 末端敌垒(=隘口)，血量归零=破城
+const SIEGE_BREAK_MUL  = 1.0;   // 突破力倍率（作用于每兵 break）
+const SIEGE_RUSH_CD    = 12;    // 突进令 CD 秒
+const SIEGE_RUSH_DUR   = 4;     // 突进持续秒
+const SIEGE_RUSH_SPD   = 1.6;   // 突进期间突击队移速倍率
+const SIEGE_FOCUS_CD   = 16;    // 集火令 CD 秒
+const SIEGE_FOCUS_DUR  = 5;     // 集火持续秒
+const SIEGE_FOCUS_BREAK= 1.8;   // 集火期间突破力额外倍率（砸城更强）
+const SIEGE_HEAL_CD    = 20;    // 鼓舞令 CD 秒
+const SIEGE_HEAL_AMT   = 0.35;  // 鼓舞：突击队按最大生命回复比例
+const SIEGE_TOWER_DEFS = {      // 工事类型（镜像玩家塔量级，数据驱动）
+  箭塔: { glyph:'箭', range:90,  rate:1.5, dmg:9,  col:'#c0392b' },
+  炮塔: { glyph:'炮', range:112, rate:2.0, dmg:20, col:'#a61e4e' },
+  滚石: { glyph:'石', range:60,  rate:1.0, dmg:14, col:'#8b5e3c' },
+};
+const SIEGE_TOWERS = [          // 沿 PATH 两侧布防，越靠末端越密
+  { type:'箭塔', x:110, y:470 }, { type:'箭塔', x:264, y:470 },
+  { type:'炮塔', x:88,  y:410 }, { type:'箭塔', x:286, y:410 },
+  { type:'滚石', x:140, y:350 }, { type:'炮塔', x:236, y:290 },
+  { type:'箭塔', x:120, y:250 }, { type:'箭塔', x:256, y:250 },
+  { type:'滚石', x:140, y:180 }, { type:'炮塔', x:236, y:150 },
+];
+const SIEGE_PRESETS = [         // 战前 3 选 1 编成（复用 rogue 列面板范式）
+  { n:'突骑陷阵', lead:'赵云', queue:['骑','骑','枪','刀','盾'], tip:'高速突破·七进七出' },
+  { n:'弓步协同', lead:'黄忠', queue:['弓','弓','刀','枪','盾'], tip:'远程消耗·火箭烈' },
+  { n:'重甲攻坚', lead:'张飞', queue:['盾','甲','枪','刀','骑'], tip:'铁壁扛塔·大喝控场' },
+];
+const SIEGE_ASSAULT_GAP = 34;   // 突击队沿 PATH 队列间隔(px)
+const SIEGE_TROOP_SPD   = 30;   // 兵种行军速度(px/s，引擎量级 兵30~骑62 取低段)
+const SIEGE_HERO_SPD    = 28;   // 主将行军速度(px/s)
+const SIEGE_HP_MUL      = 1.4;  // 突击队局部血量倍率（仅本局，不溢出全局）
+const SIEGE_DMG_MUL     = 1.2;  // 突击队局部伤害倍率（仅本局，不溢出全局）
 
 // 据 column 生成纵队(G.P.mobs) + 主将(rogueLead)；敌军由 startWave→spawnMob(G.E) 生成并 rogueEnemyAug 增强。
 function rogueBuildColumn() {
@@ -259,6 +300,102 @@ function rogueTickFate(dt) {
   }
 }
 
+/* ========== 反向攻城·夺隘(siege)：镜像塔防 ==========
+   全部以 G.mode==='siege' 门控，不触及 fire/rogue/escort/puzzle/raid 与普通模式。
+   玩家=进攻方：突击队(=G.P.mobs)沿 SIEGE_PATH 上行突破末端敌垒(SIEGE_FORT)；
+   敌方=静止工事(SIEGE_TOWERS)：经 siegeTickTowers 朝射程内最近突击队结算 siegeDealDmg。
+   v1 工事永久不可摧毁（§3.3）；胜负：敌垒破=胜，突击队全灭/超时=败（§5）。 */
+
+// 构造单个突击单位（hero/troop）；数值取自 HEROES/TROOPS，按 column 倍率放大并附 siege 战斗字段（镜像 mkRogueMob）
+function mkSiegeMob(kind, key, col) {
+  let hp, dmg, spd, glyph, atkR, atkIv;
+  if (kind === 'hero') {
+    const h = HEROES[key];
+    glyph = key[0];
+    hp = h.hp * 2 * col.hpMul;
+    dmg = h.dmg * 1.2 * col.dmgMul;
+    spd = SIEGE_HERO_SPD * col.speedMul;
+    atkR = 46; atkIv = 1 / h.rate;
+  } else {
+    const t = TROOPS[key];
+    glyph = key;
+    hp = t.hp * 2 * col.hpMul;
+    dmg = t.dmg * 1.5 * col.dmgMul;
+    spd = SIEGE_TROOP_SPD * col.speedMul;
+    atkR = (t.rng >= 100) ? 90 : (key === '骑' ? 50 : 40);
+    atkIv = 1 / t.rate;
+  }
+  // 突破力（§4.1）：break = round(maxhp*0.2) + dmg，砸城时按倍率结算
+  const brk = Math.round(hp * 0.2) + dmg;
+  return {
+    type: 'siege_' + kind, kind, key, glyph,
+    hp, maxhp: hp, spd, dmg, atkR, atkIv, atkT: 0,
+    break: brk, siegeAssault: true,
+    d: 0, x: 0, y: 0, flash: 0, stun: 0, dead: false,
+  };
+}
+
+// 战前编成确认后生成突击队(=G.P.mobs)；结构镜像 rogueBuildColumn + layoutRogueColumn（单线 SIEGE_PATH，领队最前）
+function siegeBuildAssault() {
+  const col = G.siege.column;
+  G.P.mobs = [];
+  const lead = mkSiegeMob('hero', col.lead, col);
+  G.P.mobs.push(lead);
+  for (const tk of col.queue) G.P.mobs.push(mkSiegeMob('troop', tk, col));
+  const S = G.P, n = S.mobs.length;
+  for (let i = 0; i < n; i++) {
+    const m = S.mobs[i];
+    m.d = Math.min(S.len, (n - 1 - i) * SIEGE_ASSAULT_GAP);
+    const p = pathPos(S.path, S.cum, m.d);
+    m.x = p.x; m.y = p.y;
+  }
+}
+
+// 敌工事射击玩家突击队（与 updUnit→dealDmg(G.E,...) 物理隔离；只读写 G.siege.towers 与 G.P.mobs）
+function siegeTickTowers(dt) {
+  const sg = G.siege;
+  for (const t of sg.towers) {
+    t.atkT += dt;
+    if (t.atkT < t.rate) continue;
+    let near = null, nd = 1e9;
+    for (const m of G.P.mobs) {
+      if (m.hp <= 0 || m.dead) continue;
+      const d = Math.hypot(m.x - t.x, m.y - t.y);
+      if (d <= t.range && d < nd) { nd = d; near = m; }
+    }
+    if (near) { t.atkT = 0; siegeDealDmg(near, t.dmg); fxLine(t.x, t.y, near.x, near.y, t.col); }
+  }
+}
+
+// HUD 指令按钮调用：rush/focus/heal 各有 CD 门控（§7.4）
+function siegeCmd(name) {
+  const sg = G.siege; if (!sg) return;
+  if (name === 'rush' && sg.cmds.rush <= 0) { sg.rushT = SIEGE_RUSH_DUR; sg.cmds.rush = SIEGE_RUSH_CD; }
+  else if (name === 'focus' && sg.cmds.focus <= 0) { sg.focusT = SIEGE_FOCUS_DUR; sg.cmds.focus = SIEGE_FOCUS_CD; }
+  else if (name === 'heal' && sg.cmds.heal <= 0) {
+    sg.cmds.heal = SIEGE_HEAL_CD;
+    for (const m of G.P.mobs) if (m.hp > 0 && !m.dead) m.hp = Math.min(m.maxhp, m.hp + m.maxhp * SIEGE_HEAL_AMT);
+  }
+}
+
+// 战前编成：选 1 套预设写入 column 并解除 build、生成突击队、置 assaultReady（§7.2）
+function chooseSiegePreset(i) {
+  const sg = G.siege; if (!sg || !sg.build) return;
+  const p = SIEGE_PRESETS[i]; if (!p) return;
+  sg.column = {
+    lead: p.lead,
+    queue: p.queue.slice(),
+    dmgMul: SIEGE_DMG_MUL,
+    hpMul: SIEGE_HP_MUL,
+    speedMul: 1,
+  };
+  sg.build = false;
+  G.paused = false;
+  siegeBuildAssault();
+  sg.assaultReady = true;
+  G.banner = { txt: '【' + p.n + '】' + p.tip + ' · 突破敌垒!', t: 2.5 };
+}
+
 function startSpecialMode(id) {
   const m = specialMode(id);
   if (!m || !modeUnlocked(m)) return false;
@@ -336,6 +473,25 @@ function modeSetup() {
     G.P.mantou = 80;
     G.mapEventT = 0;   // 黄巾讨伐不触发地图补给（经济仅初期 80 馒）
     G.banner = { txt: '【黄巾讨伐】90 秒内击破张角 · 弱点轮转暴露', t: 3 };
+  } else if (G.mode === 'siege') {
+    // 反向攻城：玩家为进攻方，突击队沿 SIEGE_PATH 上行突破末端敌垒；敌方为静止工事射击。
+    G.siege = {
+      column: { lead: SIEGE_PRESETS[0].lead, queue: SIEGE_PRESETS[0].queue.slice(),
+                dmgMul: SIEGE_DMG_MUL, hpMul: SIEGE_HP_MUL, speedMul: 1 },
+      fort: { ...SIEGE_FORT },
+      towers: SIEGE_TOWERS.map(t => ({ ...t, ...SIEGE_TOWER_DEFS[t.type], atkT: 0, hp: 1e9 })),
+      rushT: 0, focusT: 0,
+      cmds: { rush: 0, focus: 0, heal: 0 },
+      assaultReady: false,
+      build: true,            // 战前编成面板开启中
+    };
+    G.P.path = SIEGE_PATH; G.P.cum = pathCum(SIEGE_PATH); G.P.len = G.P.cum[G.P.cum.length - 1];
+    G.E.path = SIEGE_PATH; // 敌无 mob，仅占位
+    G.P.cells.forEach(c => { c.open = false; c.unit = null; });   // 玩家不部署
+    G.E.cells.forEach(c => { c.open = false; c.unit = null; });   // 敌方不部署（工事在 towers[]）
+    G.modeTime = SIEGE_TIME;
+    G.banner = { txt: '【反向攻城】编列突击队，突破敌垒', t: 3 };
+    G.paused = true;   // 等战前编成确认
   }
 }
 
@@ -437,6 +593,17 @@ function modeTick(dt) {
     const bossAlive = G.P.mobs.some(m => m.raidBoss && m.hp > 0);
     if (r.bossSpawned && !bossAlive) { G.rewardTxt = '讨伐成功 · 剩余 ' + Math.ceil(Math.max(0, r.limit)) + ' 秒'; endBattle(true); }
     else if (r.limit <= 0) { G.rewardTxt = '讨伐时间耗尽'; endBattle(false); }
+  } else if (G.mode === 'siege') {
+    const sg = G.siege;
+    G.modeTime -= dt;
+    // 指令 CD 递减
+    for (const k of ['rush', 'focus', 'heal']) if (sg.cmds[k] > 0) sg.cmds[k] = Math.max(0, sg.cmds[k] - dt);
+    if (sg.rushT > 0) sg.rushT -= dt;
+    if (sg.focusT > 0) sg.focusT -= dt;
+    siegeTickTowers(dt);                       // 敌工事射击玩家突击队
+    if (sg.fort.hp <= 0) { sg.fort.hp = 0; endBattle(true); G.rewardTxt = '反向攻城·敌垒已破'; return; }
+    if (sg.assaultReady && !G.P.mobs.length) { endBattle(false); G.rewardTxt = '突击队全灭·攻城失败'; return; }
+    if (G.modeTime <= 0) { endBattle(false); G.rewardTxt = '攻城超时'; return; }
   }
 }
 
@@ -447,6 +614,7 @@ function modeWaveConfig() {
   if (G.mode === 'escort') return { waves: 0, per: 0, mix: [0, 0, 0, 0], hp: 0.9 + G.escort.progress / 400 };  // 不刷无限波；拦截兵由 spawnSchedule 按进度生成（保留 toughness 曲线钩子）
   if (G.mode === 'fire') return { waves: 99, per: 6, mix: [55, 20, 20, 5], hp: 1, hpAdd: 0, atkTier: 1 };
   if (G.mode === 'raid') return { waves: 0, per: 0, mix: [100, 0, 0, 0], hp: 1 };
+  if (G.mode === 'siege') return { waves: 0, per: 0, mix: [0, 0, 0, 0], hp: 1 };  // 无波次，工事由 modeSetup 预置
   return null;
 }
 

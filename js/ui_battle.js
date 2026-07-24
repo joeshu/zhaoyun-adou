@@ -433,6 +433,12 @@ function drawCell(c, S, hide) {
   var cBord = bold ? mt.cellBorderBold : mt.cellBorder;
 
   if (!c.open) {
+    /* 反向攻城：战场格渲染为中性（无"荒"字、无开荒费），镜像 puzzle pass 分支写法 */
+    if (S && S.side > 0 && G && G.mode === 'siege') {
+      ctx.fillStyle = 'rgba(70,60,50,.12)'; ctx.fill();
+      ctx.setLineDash([3, 3]); ctx.strokeStyle = '#8a7e6c'; ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
+      return;
+    }
     /* 荒地：低饱和底色 + 虚线描边 + 「荒」字 + 碎石点 */
     var bf = bold ? shade(mt.barrenFill, 0.94) : mt.barrenFill;
     var bb = bold ? shade(mt.barrenBorder, 0.88) : mt.barrenBorder;
@@ -548,6 +554,7 @@ function drawPath(S) {
 
 function drawMob(m) {
   if (m.rogueLead || m.rogueTroop) { drawRogueMob(m); return; }   // 试炼纵队单位走专属绘制（非 MOBS）
+  if (m.siegeAssault) { drawSiegeMob(m); return; }   // 反向攻城：突击队走专属绘制（蓝描边，非 MOBS）
   const size = m.boss ? 28 : 16;
   const col = m.flash > 0 ? '#f59f00' : m.boss ? '#a61e4e' : m.press ? '#5c1e1e' : '#c0392b';
   txt(m.type, m.x, m.y + size * 0.35, size, col, 'center', true);
@@ -575,6 +582,24 @@ function drawRogueMob(m) {
   ctx.restore();
   hpBar(m.x - 11, m.y + size * 0.62 + 3, 22, m.hp / m.maxhp, m.rogueLead ? '#1c7ed6' : '#9c36b5');
   if (m.stun > 0) txt('✦', m.x + size * 0.6, m.y - size * 0.5, 10, '#e8a005', 'center');
+}
+
+// 反向攻城：突击队绘制（hero=蓝 / troop=蓝），圆牌 + 兵种/将名首字 + 血条（绕过 MOBS[m.type]）；突进/集火激活时底色微亮
+function drawSiegeMob(m) {
+  const size = 18;
+  const col = m.flash > 0 ? '#f59f00' : '#1c7ed6';
+  ctx.save();
+  if (G.siege && (G.siege.rushT > 0 || G.siege.focusT > 0)) {
+    ctx.fillStyle = 'rgba(28,126,214,0.18)';
+    ctx.beginPath(); ctx.arc(m.x, m.y, size * 0.8, 0, 7); ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(255,255,255,.9)';
+  ctx.beginPath(); ctx.arc(m.x, m.y, size * 0.62, 0, 7); ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = col; ctx.beginPath(); ctx.arc(m.x, m.y, size * 0.62, 0, 7); ctx.stroke();
+  txt(m.glyph || (m.kind === 'hero' ? '主' : '兵'), m.x, m.y + 5, m.kind === 'hero' ? 15 : 12, col, 'center', true);
+  hpBar(m.x - 11, m.y + size * 0.62 + 3, 22, m.hp / m.maxhp, '#1c7ed6');
+  if (m.stun > 0) txt('✦', m.x + size * 0.6, m.y - size * 0.5, 10, '#e8a005', 'center');
+  ctx.restore();
 }
 
 /* ========== Adou plaque (bug fix: faction plaque + seal + label) ========== */
@@ -681,6 +706,34 @@ function drawEscortThreat(t, e, S) {
   }
 }
 
+/* 反向攻城：敌垒(末端隘口) + 静止工事(按 glyph/col 圆牌 + 射程圈虚线) + 突进/集火激活光带（全部以 G.mode==='siege' 门控） */
+function drawSiege() {
+  const sg = G.siege; if (!sg) return;
+  ctx.save();
+  // 敌垒（末端隘口）：城垛 + 血条
+  const f = sg.fort;
+  ctx.fillStyle = '#8b6b3a';
+  for (let x = f.x - 24; x < f.x + 24; x += 12) ctx.fillRect(x, f.y - 20, 8, 8);
+  ctx.fillStyle = '#6b4f2a'; ctx.fillRect(f.x - 26, f.y - 12, 52, 18);
+  txt('敌垒', f.x, f.y - 26, 10, '#8a6d3b', 'center', true);
+  ctx.fillStyle = '#3a2a14'; ctx.fillRect(f.x - 26, f.y + 6, 52, 5);
+  ctx.fillStyle = '#c0392b'; ctx.fillRect(f.x - 26, f.y + 6, 52 * clamp(f.hp / f.maxhp, 0, 1), 5);
+  // 工事（静止防御塔）：圆牌 + 射程圈虚线
+  for (const t of sg.towers) {
+    ctx.strokeStyle = 'rgba(192,57,43,.26)'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.arc(t.x, t.y, t.range, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = t.col; ctx.beginPath(); ctx.arc(t.x, t.y, 11, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(t.x, t.y, 11, 0, 7); ctx.stroke();
+    txt(t.glyph, t.x, t.y + 5, 12, '#fff', 'center', true);
+  }
+  // 突进/集火激活光带
+  if (sg.rushT > 0 || sg.focusT > 0) {
+    ctx.fillStyle = sg.rushT > 0 ? 'rgba(28,126,214,.10)' : 'rgba(232,168,5,.10)';
+    ctx.fillRect(0, 32, W, H - 32);
+  }
+  ctx.restore();
+}
+
 /* ========== Main game renderer (drawGame) ==========
    Key upgrades over baseline:
    - Background from cached getMapBg() instead of flat fills
@@ -701,10 +754,11 @@ function drawGame() {
   drawAmbient(G.mapIdx);
 
   /* ---- Path (double-line, bug #1 fixed) ---- */
-  if (G.mode !== 'raid' && G.mode !== 'puzzle' && G.mode !== 'escort') { drawPath(G.E); drawPath(G.P); }
+  if (G.mode !== 'raid' && G.mode !== 'puzzle' && G.mode !== 'escort' && G.mode !== 'siege') { drawPath(G.E); drawPath(G.P); }
+  if (G.mode === 'siege' && G.siege) drawPath(G.P);   // 突击队沿 SIEGE_PATH 上行
 
   /* ---- Adou plaques ---- */
-  if (G.mode !== 'raid' && G.mode !== 'puzzle' && G.mode !== 'escort') { drawAdou(G.E); G.E.cells.forEach(c => drawCell(c, G.E, false)); }
+  if (G.mode !== 'raid' && G.mode !== 'puzzle' && G.mode !== 'escort' && G.mode !== 'siege') { drawAdou(G.E); G.E.cells.forEach(c => drawCell(c, G.E, false)); }
   G.P.cells.forEach((c, i) => {
     drawCell(c, G.P, drag && drag.area === 'board' && drag.from === i);
     if (drag && drag.hintType) {
@@ -763,6 +817,9 @@ function drawGame() {
 
   /* 长坂独胆：走廊 / 长坂桥 / 威胁 telegraph 绘制（在守军与拦截兵之上） */
   if (G.mode === 'escort' && G.escort) drawEscort();
+
+  /* 反向攻城：敌垒 / 工事 / 激活光带 绘制（在突击队之上） */
+  if (G.mode === 'siege' && G.siege) drawSiege();
 
   /* 群雄演武：布阵阶段预览敌阵落点（开战后才真正生成） */
   if (G.mode === 'puzzle' && G.puzzle && G.puzzle.prep && G.puzzle.cur) {
@@ -909,6 +966,10 @@ function drawGame() {
     drawRaidHud();
   } else if (G.mode === 'rogue') {
     txt('⚔ 五虎试炼 · 第 ' + G.rogue.floor + '/' + G.rogue.maxFloor + ' 战 · 军略 ' + G.rogue.picks, W / 2, 48, 11, '#7250b8', 'center', true);
+  } else if (G.mode === 'siege') {
+    const sg = G.siege, prog = Math.round((1 - sg.fort.hp / sg.fort.maxhp) * 100);
+    txt('🏯 突破 ' + prog + '% · 敌垒♥' + Math.ceil(Math.max(0, sg.fort.hp))
+      + ' · 剩 ' + Math.ceil(Math.max(0, G.modeTime)) + 's', W / 2, 48, 11, '#8a6d3b', 'center', true);
   }
 
   /* Right-side control buttons */
@@ -947,19 +1008,32 @@ function drawGame() {
   const ay = UI_LAYOUT.actionBar.y, ah = UI_LAYOUT.actionBar.h;
 
   /* Manual ultimate */
-  if (SAVE.manualUlt && G.mode !== 'puzzle') {
+  if (SAVE.manualUlt && G.mode !== 'puzzle' && G.mode !== 'siege') {
     let _ready = 0;
     for (const _c of G.P.cells) if (_c.unit && _c.unit.t === 'hero' && HEROES[_c.unit.name].skill && _c.unit.cd <= 0) _ready++;
     btn(196, ay, 54, ah, '大招×' + _ready, () => manualUlt(G.P), { size: 10, bg: '#e8a005', disabled: !_ready });
   }
-  btn(254, ay, 32, ah, '撤销', () => undoAction(),
+  if (G.mode !== 'siege') btn(254, ay, 32, ah, '撤销', () => undoAction(),
     { size: 9, bg: '#8e98a3', disabled: G.ghostMode || !G.undoStack || !G.undoStack.length });
-  if (G.mode !== 'puzzle') {
+  if (G.mode !== 'puzzle' && G.mode !== 'siege') {
     btn(8, ay, 62, ah, '抽卡 馒' + DRAW.cost, () => doSummon(G.P),
       { size: 11, bg: '#c0392b', disabled: G.P.mantou < DRAW.cost || barFree(G.P) < 0 });
     const tenCostNow = SAVE.firstTen ? (DRAW.tenCost / 2 | 0) : DRAW.tenCost;
     btn(74, ay, 62, ah, '十连 ' + tenCostNow, () => drawTen(G.P),
       { size: 11, bg: '#a61e4e', disabled: G.P.mantou < tenCostNow || barFree(G.P) < 0 });
+  }
+
+  /* 反向攻城：3 指令按钮（突进/集火/鼓舞），CD 中禁用（复用大招按钮范式，siegeCmd 派发） */
+  if (G.mode === 'siege' && G.siege) {
+    const sg = G.siege, ay2 = ay, ah2 = ah;
+    const cmd = (x, w, label, key, col, cd) => {
+      const ready = cd <= 0;
+      btn(x, ay2, w, ah2, label + ' ' + (ready ? '✓' : Math.ceil(cd) + 's'), () => siegeCmd(key),
+        { size: 10, bg: ready ? col : '#868e96', disabled: !ready });
+    };
+    cmd(8, 116, '突进', 'rush', '#1c7ed6', sg.cmds.rush);
+    cmd(130, 116, '集火', 'focus', '#e8a005', sg.cmds.focus);
+    cmd(252, 116, '鼓舞', 'heal', '#2f9e44', sg.cmds.heal);
   }
 
   /* Active items — 单独一行（合成栏下方、操作栏上方 y=ay-ah），
@@ -1060,6 +1134,21 @@ function drawGame() {
   }
 
   /* Overlay states: win / lose / paused / rogue choices / chapter */
+  /* 反向攻城·战前编成面板（复用 rogueChoices overlay 范式）：3 预设选择（§7.2） */
+  if (G.siege && G.siege.build) {
+    ctx.fillStyle = 'rgba(26,24,35,.72)'; ctx.fillRect(0, 0, W, H);
+    panel(24, 150, 327, 332, { bg: '#fffdf9', stroke: '#d9c8a0', r: 14 });
+    txt('反向攻城 · 战前编成', W / 2, 184, 21, '#8a6d3b', 'center', true);
+    txt('选 1 套突击编成，决定领队与主战兵种', W / 2, 206, 10, '#868e96', 'center');
+    SIEGE_PRESETS.forEach((p, i) => {
+      const cy = 224 + i * 92;
+      panel(44, cy, 287, 80, { bg: '#fff8e8', stroke: '#e8a005', r: 10 });
+      txt(p.n, 60, cy + 26, 16, '#8a6d3b', 'left', true);
+      txt(p.tip, 60, cy + 46, 10, '#656d76', 'left');
+      txt('领队 ' + p.lead + ' · 队列 ' + p.queue.join(''), 60, cy + 63, 9, '#a0483a', 'left');
+      btn(252, cy + 22, 70, 36, '选用', () => chooseSiegePreset(i), { size: 12, bg: '#8a6d3b' });
+    });
+  }
   if (G.rogueChoices) {
     ctx.fillStyle = 'rgba(26,24,35,.72)'; ctx.fillRect(0, 0, W, H);
     panel(24, 210, 327, 190, { bg: '#fffdf9', stroke: '#dacdf0', r: 14 });
@@ -1125,6 +1214,11 @@ function drawGame() {
         ['再来一局', () => startSpecialMode('rogue')],
         ['返回菜单', () => { goTo('menu'); }, '#868e96'],
       ]);
+    } else if (G.mode === 'siege') {
+      overlay('敌垒已破', G.rewardTxt, [
+        ['再来一局', () => startSpecialMode('siege')],
+        ['返回菜单', () => { goTo('menu'); }, '#868e96'],
+      ]);
     } else {
       const acts2 = [];
       if (!G.endless && G.stage < STAGE_MAX) acts2.push(['下一关', () => { startBattle(G.stage + 1, false, G.mapIdx); }]);
@@ -1154,6 +1248,11 @@ function drawGame() {
     } else if (G.mode === 'rogue') {
       overlay('试炼失败', G.rewardTxt, [
         ['再来一局', () => startSpecialMode('rogue')],
+        ['返回菜单', () => { goTo('menu'); }, '#868e96'],
+      ]);
+    } else if (G.mode === 'siege') {
+      overlay('攻城失败', G.rewardTxt, [
+        ['再来一局', () => startSpecialMode('siege')],
         ['返回菜单', () => { goTo('menu'); }, '#868e96'],
       ]);
     } else {

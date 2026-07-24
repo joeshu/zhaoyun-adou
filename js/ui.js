@@ -901,6 +901,10 @@ function onDown(p) {
     if (best) fireIgnite(best);
     return;   // fire 模式：点其它处不部署、不开荒
   }
+  if (G.mode === 'siege' && G.siege) {
+    if (G.siege.build) return;          // 战前编成面板开启时，战场点击忽略（面板按钮已在 btns 处理）
+    return;                              // v1 指令由 HUD 按钮 siegeCmd 派发，不走拖拽/点选
+  }
   if (bi >= 0 && G.P.bar[bi].unit) drag = { area: 'bar', from: bi, x: p.x, y: p.y };
   else if (ci >= 0 && G.P.cells[ci].open && G.P.cells[ci].unit) drag = { area: 'board', from: ci, x: p.x, y: p.y };
   else if (ci >= 0 && !G.P.cells[ci].open && G.mode !== 'puzzle') unlockCell(G.P, ci);   // 群雄演武：隘口(pass)地形锁定，不可开荒
