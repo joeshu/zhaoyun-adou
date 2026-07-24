@@ -967,14 +967,18 @@ function drawGame() {
       txt('🐎 护送进度 ' + Math.floor(e.progress) + '%', W / 2, 48, 11, '#2f7f9d', 'center', true);
       ctx.fillStyle = '#d9e8ec'; ctx.fillRect(112, 53, 151, 4); ctx.fillStyle = '#2f7f9d'; ctx.fillRect(112, 53, 151 * e.progress / 100, 4);
       for (let i = 0; i < e.maxhp; i++) txt(i < e.hp ? '♥' : '♡', 152 + i * 11, 84, 11, i < e.hp ? '#e03131' : '#ced4da', 'center', true);
-      // 拦截警示条（区分轻微/危险两段）
+      // 拦截警示（在阿斗正下方而非顶部 HUD，避免与进度条/血心重叠）
       if (e.blockWarn && e.blockTimer > 0) {
         const warnP = clamp(e.blockTimer / ESCORT_BLOCK_FAIL, 0, 1);
+        const ax = G.P.adou.x, ay = G.P.adou.y;
         ctx.fillStyle = warnP > 0.6 ? '#e03131' : '#f59f00';
-        ctx.fillRect(112, 90, 151 * warnP, 6);
-        ctx.strokeStyle = '#868e96'; ctx.lineWidth = 0.5; ctx.strokeRect(112, 90, 151, 6);
+        ctx.globalAlpha = 0.6 + 0.4 * Math.sin(Date.now() / 180);
+        ctx.fillRect(ax - 30, ay + 20, 60 * warnP, 5);
+        ctx.strokeStyle = '#495057'; ctx.lineWidth = 0.5; ctx.strokeRect(ax - 30, ay + 20, 60, 5);
+        ctx.globalAlpha = 1;
+        // 拦截图标和倒计时在阿斗下方更远处，不挡住标签牌
         const icon = warnP > 0.7 ? '🚨' : warnP > 0.4 ? '⚠' : '⚡';
-        txt(icon + '拦截 ' + e.blockTimer.toFixed(1) + 's', W / 2, 108, 10, warnP > 0.6 ? '#e03131' : '#f59f00', 'center', true);
+        txt(icon + '拦截 ' + e.blockTimer.toFixed(1) + 's', ax, ay + 36, 10, warnP > 0.6 ? '#e03131' : '#f59f00', 'center', true);
       }
     }
   } else if (G.mode === 'puzzle') {
