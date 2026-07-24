@@ -265,6 +265,12 @@ function acFightTick(dt) {
 }
 function acAfterCombat() {
   const a = G.autoChess;
+  a.resultT = 1.4;
+  a.phase = 'result';
+  a.msg = a.lastFight && a.lastFight.win ? '战斗胜利！' : '战斗失败！';
+}
+function acAdvanceRound() {
+  const a = G.autoChess;
   const alive = a.ai.filter(x => x.hp > 0).length;
   if (a.hp <= 0 || a.round >= 20 || alive <= 0) {
     G.rewardTxt = a.hp <= 0 ? '群雄争霸出局' : '群雄争霸完成';
@@ -320,6 +326,7 @@ function autoChessSetup() {
     lordIdx: 0, lord: null,
     ai: acMakeAI(),
     fightTimer: 0, fightUnits: null, fightEnemy: null, fightPhase: null, fightAI: null,
+    resultT: 0, combatSpeed: 1,
   };
   G.P.cells.forEach(c => { c.open = true; c.unit = null; });
   G.E.cells.forEach(c => { c.open = false; c.unit = null; });
@@ -330,7 +337,8 @@ function autoChessTick(dt) {
   const a = G.autoChess;
   if (!a || G.state !== 'play') return;
   if (a.phase === 'prep') { a.timer -= dt; if (a.timer <= 0) acStart(); }
-  else if (a.phase === 'fight') { if (!a.fightPhase) acInitFightGrid(); acFightTick(dt); }
+  else if (a.phase === 'fight') { if (!a.fightPhase) acInitFightGrid(); for (let i = 0; i < a.combatSpeed; i++) acFightTick(dt); }
+  else if (a.phase === 'result') { a.resultT -= dt; if (a.resultT <= 0) acAdvanceRound(); }
 }
 function autoChessUnitGlyph(u) { return u ? u.id.slice(0, 1) : ''; }
 
@@ -349,7 +357,7 @@ function drawAutoChess() {
   // 战斗阶段绘制双方对战
   if (a.phase === 'fight' && a.fightUnits && a.fightEnemy) {
     ctx.fillStyle = '#1a2420'; ctx.fillRect(0, 120, W, H - 120 - 200);
-    txt('⚔ 双方交战', W / 2, 110, 14, '#f4d58b', 'center', true);
+    txt('⚔ 双方交战  · 速度×' + a.combatSpeed, W / 2, 110, 14, '#f4d58b', 'center', true);
     // 左侧=玩家棋子
     a.fightUnits.forEach(u => {
       if (u.dead) return;
@@ -376,6 +384,15 @@ function drawAutoChess() {
       ctx.fillRect(u.curX - 16, u.curY + 18, 32 * hpPct, 3);
     });
     txt('我方 ' + a.fightUnits.filter(u => !u.dead).length + ' vs ' + a.fightEnemy.filter(u => !u.dead).length + ' 敌', W / 2, H - 180, 12, '#aaa', 'center');
+    btn(12, H - 145, 78, 28, '速度×' + a.combatSpeed, () => { a.combatSpeed = a.combatSpeed === 1 ? 2 : 1; }, { size: 9, bg: '#7250b8' });
+    return;
+  }
+  if (a.phase === 'result') {
+    panel(18, 150, 339, 210, { bg: a.lastFight && a.lastFight.win ? '#edf8ee' : '#fff0ed', stroke: a.lastFight && a.lastFight.win ? '#62a66b' : '#d66b5e', r: 14 });
+    txt(a.lastFight && a.lastFight.win ? '⚔ 胜利' : '🛡 失败', W / 2, 195, 27, a.lastFight && a.lastFight.win ? '#2f8f46' : '#bd3b2d', 'center', true);
+    txt(a.msg, W / 2, 224, 12, '#5f574e', 'center', true);
+    txt('存活：我方 ' + (a.lastFight ? a.lastFight.p : 0) + ' · 敌方 ' + (a.lastFight ? a.lastFight.e : 0), W / 2, 254, 12, '#6b6256', 'center');
+    txt('下一回合准备中…', W / 2, 300, 11, '#8a7e6c', 'center');
     return;
   }
 
