@@ -230,6 +230,7 @@ function update(dt) {
   if (typeof tickChapterMechanic === 'function') tickChapterMechanic(dt);
   if (typeof tickBuildings === 'function') tickBuildings(dt);
   if (G.mode && typeof modeTick === 'function') modeTick(dt);
+  if (G.mode === 'autochess') return;
   if (G.state !== 'play') return;
   // 永久主将阵亡后整备 12 秒，以半血回到合成栏；栏满时延后返场。
   if (G.heroRespawns && G.heroRespawns.length) {

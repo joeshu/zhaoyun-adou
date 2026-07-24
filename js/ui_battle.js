@@ -756,6 +756,7 @@ function drawSiege() {
    - 羁绊 banners → central safe zone at y=288 as 朱砂 capsule #bf3b2d (bug fix #2)
    - All other rendering preserved. */
 function drawGame() {
+  if (G.mode === 'autochess' && typeof drawAutoChess === 'function') { drawAutoChess(); return; }
   var sh = G.shake || 0;
   ctx.save();
   if (sh > 0) ctx.translate((Math.random() * 2 - 1) * sh, (Math.random() * 2 - 1) * sh);

@@ -8,6 +8,7 @@ const SPECIAL_MODES = [
   { id: 'puzzle', icon: '♟', name: '群雄演武', sub: '每日残局 · 三星挑战', col: '#b78324', unlock: 4 },
   { id: 'raid', icon: '👑', name: '黄巾讨伐', sub: '90 秒讨伐 · 阶段 Boss', col: '#8d3543', unlock: 20 },
   { id: 'siege', icon: '🏯', name: '反向攻城', sub: '夺隘破垒 · 逆袭敌营', col: '#8a6d3b', unlock: 24 },
+  { id: 'autochess', icon: '♜', name: '群雄争霸', sub: '抽卡升星 · 阵容博弈', col: '#3f5648', unlock: 1 },
 ];
 const specialMode = id => SPECIAL_MODES.find(m => m.id === id);
 const modeUnlocked = m => SAVE.stage >= m.unlock;
@@ -408,7 +409,9 @@ function startSpecialMode(id) {
 function modeSetup() {
   if (!G.mode) return;
   G.modeLabel = (specialMode(G.mode) || {}).name || '';
-  if (G.mode === 'fire') {
+  if (G.mode === 'autochess') {
+    autoChessSetup();
+  } else if (G.mode === 'fire') {
     // 实时放火：仅敌方(G.E)出怪，玩家侧改用点格点火；水寨=PATH_E 末端，守存活即胜。
     G.modeTime = FIRE_TIME; G.modeScore = 0;
     G.wind = '东南风';
@@ -498,6 +501,7 @@ function modeSetup() {
 
 function modeTick(dt) {
   if (!G || !G.mode || G.state !== 'play') return;
+  if (G.mode === 'autochess') { autoChessTick(dt); return; }
   if (G.mode === 'fire') {
     G.modeTime -= dt;
     tickFire(dt);
