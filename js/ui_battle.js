@@ -559,12 +559,22 @@ function drawMob(m) {
   }
   if (m.stun > 0) txt('✦', m.x + size * 0.6, m.y - size * 0.5, 10, '#e8a005', 'center');
   if (m.slowT > 0) txt('泥', m.x - size * 0.7, m.y - size * 0.5, 8, '#846358', 'center');
+  if (m.intercept) { ctx.strokeStyle = '#e03131'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(m.x, m.y, size * 0.9, 0, 7); ctx.stroke(); }
 }
 
 /* ========== Adou plaque (bug fix: faction plaque + seal + label) ========== */
 function drawAdou(S) {
   const mine = S.side > 0;
   const y = mine ? S.adou.y - (G && (G.mapIdx === 3 || G.mapIdx === 2) ? 42 : 38) : S.adou.y;
+  // 长坂独胆：赵云贴附阿斗左侧（护送），随阿斗移动
+  if (G.mode === 'escort' && G.escort) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(28,126,214,0.18)';
+    ctx.beginPath(); ctx.arc(S.adou.x - 26, S.adou.y, 13, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#1c7ed6'; ctx.lineWidth = 1.5; ctx.stroke();
+    txt('赵', S.adou.x - 26, S.adou.y + 4, 13, '#1c7ed6', 'center', true);
+    ctx.restore();
+  }
 
   /* Faction-colored rounded plaque background */
   var plaqueCol = mine ? '#2f9e44' : '#e03131';
@@ -586,11 +596,13 @@ function drawAdou(S) {
   txt(mine ? '我方' : '敌军', S.adou.x, y - 6, 9, labelCol, 'center', true);
 
   /* 阿斗 name + HP inside plaque */
+  const _hp = (G.mode === 'escort' && G.escort) ? G.escort.hp : S.hp;
+  const _baseHp = G.mode === 'escort' ? ESCORT_ADOU_HP : ADOU_HP;
   txt('阿斗', S.adou.x + 2, y + 7, 18, textCol, 'center', true);
-  txt('♥' + Math.max(0, S.hp), S.adou.x + 34, y + 5, 12, '#e03131', 'left', true);
+  txt('♥' + Math.max(0, _hp), S.adou.x + 34, y + 5, 12, '#e03131', 'left', true);
   ctx.restore();
 
-  if (S.hp < ADOU_HP) hpBar(S.adou.x - 18, y + 14, 36, Math.max(0, S.hp) / ADOU_HP, '#e03131');
+  if (_hp < _baseHp) hpBar(S.adou.x - 18, y + 14, 36, Math.max(0, _hp) / _baseHp, '#e03131');
 
   /* Shield icons */
   for (let i = 0; i < (S.shield || 0); i++) {
@@ -603,6 +615,56 @@ function drawAdou(S) {
   }
 }
 
+
+/* 长坂独胆：走廊带 + 长坂桥 + 威胁绘制（全部以 G.mode==='escort' 门控，不影响其它模式） */
+function drawEscort() {
+  const e = G.escort, S = G.P;
+  ctx.save();
+  // 中央走廊带（走位提示）：run 阶段略亮
+  ctx.fillStyle = e.run ? 'rgba(47,127,157,0.05)' : 'rgba(47,127,157,0.10)';
+  ctx.fillRect(ESCORT_CORRIDOR_X0, 32, ESCORT_CORRIDOR_X1 - ESCORT_CORRIDOR_X0, H - 32);
+  ctx.strokeStyle = 'rgba(47,127,157,0.35)'; ctx.setLineDash([4, 4]); ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(ESCORT_CORRIDOR_X0, 32); ctx.lineTo(ESCORT_CORRIDOR_X0, H - 32);
+  ctx.moveTo(ESCORT_CORRIDOR_X1, 32); ctx.lineTo(ESCORT_CORRIDOR_X1, H - 32);
+  ctx.stroke(); ctx.setLineDash([]);
+  // 长坂桥（终点）
+  ctx.fillStyle = '#6b4f2a'; ctx.fillRect(0, ESCORT_BRIDGE_Y - 6, W, 12);
+  ctx.fillStyle = '#8b6b3a';
+  for (let x = 8; x < W; x += 22) ctx.fillRect(x, ESCORT_BRIDGE_Y - 6, 14, 12);
+  txt('长坂桥', W / 2, ESCORT_BRIDGE_Y - 12, 11, '#6b4f2a', 'center', true);
+  ctx.restore();
+  // 威胁 telegraph / 实体
+  for (const t of e.threats) drawEscortThreat(t, e, S);
+}
+
+function drawEscortThreat(t, e, S) {
+  if (t.kind === 'arrow') {
+    if (t.phase === 'warn') {
+      const a = 0.25 + 0.45 * (1 - t.t / t.t0);
+      ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = '#e03131';
+      ctx.fillRect(ESCORT_CORRIDOR_X0, t.yTrig - 3, ESCORT_CORRIDOR_X1 - ESCORT_CORRIDOR_X0, 6);
+      ctx.globalAlpha = Math.min(1, a + 0.2); ctx.strokeStyle = '#e03131'; ctx.lineWidth = 1; ctx.setLineDash([6, 4]);
+      ctx.beginPath(); ctx.moveTo(t.xCenter, t.yTrig - 18); ctx.lineTo(t.xCenter, t.yTrig + 18); ctx.stroke(); ctx.setLineDash([]);
+      ctx.restore();
+    } else {
+      ctx.save(); ctx.globalAlpha = clamp(t.t / t.t0, 0, 1) * 0.5;
+      ctx.fillStyle = '#e03131'; ctx.fillRect(ESCORT_CORRIDOR_X0, t.yTrig - 3, ESCORT_CORRIDOR_X1 - ESCORT_CORRIDOR_X0, 6);
+      ctx.restore();
+    }
+  } else if (t.kind === 'rock') {
+    if (t.phase === 'warn') {
+      const a = 0.2 + 0.5 * (1 - t.t / t.t0);
+      ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = '#e8590c'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(t.xRock, clamp(S.adou.y, ESCORT_BRIDGE_Y + 20, ESCORT_START_Y), t.R, 0, 7); ctx.stroke();
+      ctx.restore();
+    } else if (t.phase === 'fall') {
+      ctx.save(); ctx.fillStyle = '#6b4f2a'; ctx.strokeStyle = '#3b2a14'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(t.xRock, t.y, t.R * 0.7, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+  }
+}
 
 /* ========== Main game renderer (drawGame) ==========
    Key upgrades over baseline:
@@ -624,11 +686,10 @@ function drawGame() {
   drawAmbient(G.mapIdx);
 
   /* ---- Path (double-line, bug #1 fixed) ---- */
-  if (G.mode !== 'raid' && G.mode !== 'puzzle') drawPath(G.E);
-  drawPath(G.P);
+  if (G.mode !== 'raid' && G.mode !== 'puzzle' && G.mode !== 'escort') { drawPath(G.E); drawPath(G.P); }
 
   /* ---- Adou plaques ---- */
-  if (G.mode !== 'raid' && G.mode !== 'puzzle') { drawAdou(G.E); G.E.cells.forEach(c => drawCell(c, G.E, false)); }
+  if (G.mode !== 'raid' && G.mode !== 'puzzle' && G.mode !== 'escort') { drawAdou(G.E); G.E.cells.forEach(c => drawCell(c, G.E, false)); }
   G.P.cells.forEach((c, i) => {
     drawCell(c, G.P, drag && drag.area === 'board' && drag.from === i);
     if (drag && drag.hintType) {
@@ -682,8 +743,11 @@ function drawGame() {
   if (G.mode !== 'raid' && G.mode !== 'puzzle') for (const sn of G.E.snakes) txt('蛇', sn.x, sn.y + 5, 15, '#2f9e44', 'center', true);
 
   /* Mobs */
-  if (G.mode !== 'raid' && G.mode !== 'puzzle') for (const m of G.E.mobs) drawMob(m);
+  if (G.mode !== 'raid' && G.mode !== 'puzzle' && G.mode !== 'escort') for (const m of G.E.mobs) drawMob(m);
   for (const m of G.P.mobs) drawMob(m);
+
+  /* 长坂独胆：走廊 / 长坂桥 / 威胁 telegraph 绘制（在守军与拦截兵之上） */
+  if (G.mode === 'escort' && G.escort) drawEscort();
 
   /* 群雄演武：布阵阶段预览敌阵落点（开战后才真正生成） */
   if (G.mode === 'puzzle' && G.puzzle && G.puzzle.prep && G.puzzle.cur) {
@@ -813,8 +877,15 @@ function drawGame() {
     txt('🔥 ' + G.wind + ' · 守城 ' + Math.ceil(Math.max(0, G.modeTime)) + ' 秒', W / 2, 48, 11, '#bd4a31', 'center', true);
     drawBuildings();
   } else if (G.mode === 'escort') {
-    txt('🐎 护送进度 ' + Math.floor(G.escort.progress) + '%', W / 2, 48, 11, '#2f7f9d', 'center', true);
-    ctx.fillStyle = '#d9e8ec'; ctx.fillRect(112, 53, 151, 4); ctx.fillStyle = '#2f7f9d'; ctx.fillRect(112, 53, 151 * G.escort.progress / 100, 4);
+    const e = G.escort;
+    if (!e.run) {
+      txt('🐎 布阵备战 ' + Math.ceil(Math.max(0, G.betweenT)) + 's · 拖守军入左右两翼', W / 2, 48, 11, '#2f7f9d', 'center', true);
+    } else {
+      txt('🐎 护送进度 ' + Math.floor(e.progress) + '%', W / 2, 48, 11, '#2f7f9d', 'center', true);
+      ctx.fillStyle = '#d9e8ec'; ctx.fillRect(112, 53, 151, 4); ctx.fillStyle = '#2f7f9d'; ctx.fillRect(112, 53, 151 * e.progress / 100, 4);
+      for (let i = 0; i < e.maxhp; i++) txt(i < e.hp ? '♥' : '♡', 152 + i * 11, 84, 11, i < e.hp ? '#e03131' : '#ced4da', 'center', true);
+      if (e.blockWarn) txt('⚠ 被拦截 ' + e.blockTimer.toFixed(1) + 's', W / 2, 100, 11, '#e03131', 'center', true);
+    }
   } else if (G.mode === 'puzzle') {
     const pz = G.puzzle;
     txt('♟ ' + (pz.cur ? pz.cur.name : '群雄演武') + ' · 第 ' + pz.attempt + '/' + pz.maxAttempts + ' 次', W / 2, 48, 11, '#b78324', 'center', true);

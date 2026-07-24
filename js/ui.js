@@ -880,6 +880,15 @@ function onDown(p) {
     else G.targeting = null;
     return;
   }
+  // 长坂独胆·走位操控（仅 run 阶段）：走廊带内点/按=暂停前进，左右拖拽=横向微移；run 阶段禁重新部署
+  if (G.mode === 'escort' && G.escort && G.escort.run) {
+    if (p.x >= ESCORT_CORRIDOR_X0 && p.x <= ESCORT_CORRIDOR_X1) {
+      G.escort.paused = true;
+      G.escort.walkActive = true;
+      G.escort.dragX = clamp(p.x, ESCORT_X_MIN, ESCORT_X_MAX);
+    }
+    return;   // run 阶段守军固定，忽略其它点击（按钮已在上方处理）
+  }
   if (bi >= 0 && G.P.bar[bi].unit) drag = { area: 'bar', from: bi, x: p.x, y: p.y };
   else if (ci >= 0 && G.P.cells[ci].open && G.P.cells[ci].unit) drag = { area: 'board', from: ci, x: p.x, y: p.y };
   else if (ci >= 0 && !G.P.cells[ci].open && G.mode !== 'puzzle') unlockCell(G.P, ci);   // 群雄演武：隘口(pass)地形锁定，不可开荒
@@ -888,6 +897,11 @@ function onDown(p) {
 function onUp(p) {
   g_ptrDown = false; g_ptrHit = null;                      // 抬起即清除按压态
   if (scrollDrag) { scrollDrag = null; return; }
+  if (G.mode === 'escort' && G.escort && G.escort.walkActive) {
+    G.escort.walkActive = false;
+    G.escort.paused = false;   // 松开恢复前进
+    return;
+  }
   if (!drag) return;
   const d = drag; drag = null;
   if (p.x >= RECYCLE.x && p.x <= RECYCLE.x + RECYCLE.w && p.y >= RECYCLE.y - 8 && p.y <= RECYCLE.y + RECYCLE.h + 8) {
@@ -940,6 +954,11 @@ function boot() {
   canvas.addEventListener('pointermove', ev => {
     const p = pt(ev);
     if (scrollDrag) { listScroll = clamp(scrollDrag.s0 + (scrollDrag.y0 - p.y), 0, listScrollMax); return; }
+    if (G.mode === 'escort' && G.escort && G.escort.walkActive) {
+      G.escort.dragX = clamp(p.x, ESCORT_X_MIN, ESCORT_X_MAX);
+      G.escort.paused = true;
+      return;
+    }
     if (drag) { drag.x = p.x; drag.y = p.y;
     const tu = (drag.area === 'bar' ? G.P.bar : G.P.cells)[drag.from].unit;
     let hint = '', hintType = '';

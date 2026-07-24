@@ -267,6 +267,8 @@ function update(dt) {
     if (!G.P.mobs.length) endBattle(true);
   } else if (G.mode === 'rogue' && G.wave >= 1 && !G.P.mobs.length && !G.rogueChoices) {
     rogueOffer();
+  } else if (G.mode === 'escort') {
+    // 长坂独胆：不刷普通/镜像波次；拦截兵由 G.escort.spawnSchedule 在 modeTick 内按进度生成
   } else {
     // 特别玩法的镜像对抗也需要敌军上限，避免长局堆怪拖慢 Canvas。
     const cap = mobCap(G.mode);
@@ -280,9 +282,9 @@ function update(dt) {
   }
   // AI 行动：镜像对抗模式保留；raid/puzzle 为单侧重做模式，AI 不行动。
   G.aiT -= dt;
-  if (G.aiT <= 0) { G.aiT = G.aiIv; if (G.mode !== 'raid' && G.mode !== 'puzzle') aiAct(G.E); }
+  if (G.aiT <= 0) { G.aiT = G.aiIv; if (G.mode !== 'raid' && G.mode !== 'puzzle' && G.mode !== 'escort') aiAct(G.E); }
   // 双侧模拟（raid/puzzle 仅玩家侧参与战斗，敌方侧完全静止）
-  const _sides = (G.mode === 'raid' || G.mode === 'puzzle') ? [G.P] : [G.P, G.E];
+  const _sides = (G.mode === 'raid' || G.mode === 'puzzle' || G.mode === 'escort') ? [G.P] : [G.P, G.E];
   for (const S of _sides) {
     // 每侧每帧只算一次光环总和，供 unitStats 缓存读取（原实现每单位都遍历 cells 算刘备光环）
     let auraSum = 1;

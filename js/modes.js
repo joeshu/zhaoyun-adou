@@ -11,6 +11,19 @@ const SPECIAL_MODES = [
 const specialMode = id => SPECIAL_MODES.find(m => m.id === id);
 const modeUnlocked = m => SAVE.stage >= m.unlock;
 
+/* 长坂独胆（escort）调参常量：全部以 G.mode==='escort' 门控，不影响其它模式/数值平衡。
+   阿斗沿中央走廊(187)自底部(600)上行至长坂桥(BRIDGE_Y=70)；守军沿左右两翼部署。 */
+const ESCORT_BRIDGE_Y = 70;          // 长坂桥（终点）y
+const ESCORT_START_X = 187;          // 中央通道中轴
+const ESCORT_START_Y = 600;          // 起点 y（≈底部）
+const ESCORT_X_MIN = 147, ESCORT_X_MAX = 227;        // 阿斗横向微移钳制（走廊宽 80）
+const ESCORT_CORRIDOR_X0 = 130, ESCORT_CORRIDOR_X1 = 244;  // 走位空白带（输入命中区）
+const ESCORT_V_BASE = 24, ESCORT_K = 0.05, ESCORT_CAP = 2.0, ESCORT_MOMENTUM = 1.3;
+const ESCORT_R_BLOCK = 60, ESCORT_BLOCK_FAIL = 4;  // 拦截兵逼停半径 / 判负秒数
+const ESCORT_INTERCEPT_CAP = 6;      // 同屏拦截兵上限（有限刷怪护栏）
+const ESCORT_TELE_ARROW = 1.2, ESCORT_TELE_ROCK = 0.9;    // 威胁 telegraph 时长
+const ESCORT_ROCK_VY = 220, ESCORT_ARROW_HW = 36;          // 落石下落速度 / 箭雨半宽
+
 function startSpecialMode(id) {
   const m = specialMode(id);
   if (!m || !modeUnlocked(m)) return false;
@@ -32,8 +45,20 @@ function modeSetup() {
     G.rogue = { floor: 1, maxFloor: 8, picks: 0, dmg: 1, hp: 1, income: 0 };
     G.banner = { txt: '【五虎试炼】每场胜利选择一条军略', t: 3 };
   } else if (G.mode === 'escort') {
-    G.escort = { progress: 0, target: 100, rescued: 0 };
-    G.banner = { txt: '【长坂独胆】清路护送阿斗抵达长坂桥', t: 3 };
+    G.escort = {
+      progress: 0, target: 100, rescued: 0,
+      hp: ESCORT_ADOU_HP, maxhp: ESCORT_ADOU_HP,
+      bridgeY: ESCORT_BRIDGE_Y,
+      run: false, paused: false, walkActive: false, dragX: ESCORT_START_X,
+      blockTimer: 0, blockWarn: false,
+      threats: [], spawnSchedule: escortSpawnSchedule(),
+      arrowT: 4, rockT: 6, interCap: ESCORT_INTERCEPT_CAP,
+    };
+    // 阿斗移动对象：新建独立对象并替换 G.P.adou，避免改写共享的 MAPS[0].ADOU_P 常量（导致跨局泄漏）
+    G.P.adou = { x: ESCORT_START_X, y: ESCORT_START_Y };
+    // 部署区：开放除中央列(187)外的所有格 → 中央列禁部署，天然区分"走位操控"与"部署拖拽"
+    G.P.cells.forEach(c => { c.open = (c.x !== ESCORT_START_X); });
+    G.banner = { txt: '【长坂独胆】布阵左右两翼，护送阿斗直抵长坂桥', t: 3 };
   } else if (G.mode === 'puzzle') {
     // 群雄演武：禁抽卡/禁合成，进入关卡选择；布阵与 auto-battle 在 puzzleLoadLevel 后开始。
     G.P.mantou = 0;
@@ -70,10 +95,35 @@ function modeTick(dt) {
       if (Math.hypot(m.x - f.x, m.y - f.y) < 76) m.hp -= (G.wind === '东南风' ? 18 : 11) * dt;
     if (G.modeTime <= 0) { G.rewardTxt = '火攻战功 ' + Math.floor(G.modeScore + G.P.killCnt); endBattle(true); }
   } else if (G.mode === 'escort') {
-    // 前方敌军越少，护送越快；抵达时以剩余生命结算。
-    const danger = G.P.mobs.length;
-    G.escort.progress = Math.min(100, G.escort.progress + dt * (danger ? 0.35 : 1.25));
-    if (G.escort.progress >= 100) { G.rewardTxt = '护送成功 · 救援 ' + G.escort.rescued + ' 人'; endBattle(true); }
+    const e = G.escort, S = G.P;
+    // 备战倒计时（复用 betweenT）→ 转入 run 阶段
+    if (!e.run) {
+      G.betweenT -= dt;
+      if (G.betweenT <= 0) { e.run = true; G.banner = { txt: '突围开始！护送阿斗上行至长坂桥', t: 2.5 }; }
+      return;
+    }
+    // run 阶段：阿斗沿中央走廊上行（y 为位置真值，progress 由其推导）
+    e.progress = clamp((ESCORT_START_Y - S.adou.y) / (ESCORT_START_Y - ESCORT_BRIDGE_Y) * 100, 0, 100);
+    const p = e.progress / 100;
+    const N = S.cells.filter(c => c.unit).length;                 // 存活守军数
+    const near = S.mobs.some(m => m.intercept && Math.hypot(m.x - S.adou.x, m.y - S.adou.y) <= ESCORT_R_BLOCK);
+    // 修反人类：兵越多越快越稳；near(被拦截兵逼近)时失去惯性加速，谨慎慢行
+    const V = ESCORT_V_BASE * clamp(1 + ESCORT_K * N, 1, ESCORT_CAP) * (near ? 1 : ESCORT_MOMENTUM);
+    if (!e.paused) S.adou.y -= V * dt;                            // AUTO-ADVANCE；暂停(走廊按住)时不前进
+    if (e.walkActive) S.adou.x = clamp(e.dragX, ESCORT_X_MIN, ESCORT_X_MAX);  // 走位横向微移
+    S.adou.x = clamp(S.adou.x, ESCORT_X_MIN, ESCORT_X_MAX);
+    // 威胁生成（频率随 p 升级；伤害前必有 telegraph）
+    e.arrowT -= dt; if (e.arrowT <= 0) { e.arrowT = lerp(6.0, 2.5, p); spawnArrow(S, e); }
+    e.rockT -= dt; if (e.rockT <= 0) { e.rockT = lerp(9.0, 4.5, p); spawnRock(S, e); }
+    while (e.spawnSchedule.length && e.spawnSchedule[0].at <= p) {
+      const s = e.spawnSchedule.shift();
+      spawnInterceptor(S, e, s.x, s.y, s.type);
+    }
+    tickEscortThreats(e, S, dt);
+    // 胜负：胜=抵达长坂桥且 hp>0；败=①hp≤0 ②被拦截兵逼停≥4s
+    if (e.hp <= 0) { G.rewardTxt = '阿斗阵亡 · 护送失败'; endBattle(false); }
+    else if (e.blockTimer >= ESCORT_BLOCK_FAIL) { G.rewardTxt = '阿斗被拦截 · 护送失败'; endBattle(false); }
+    else if (S.adou.y <= ESCORT_BRIDGE_Y) { e.rescued = N; G.rewardTxt = '护送成功 · 救援 ' + N + ' 守军'; endBattle(true); }
   } else if (G.mode === 'puzzle') {
     // 群雄演武：布阵阶段(prep)不结算；开战后(auto-battle)歼灭敌阵=胜，尝试耗尽=败。
     const p = G.puzzle;
@@ -140,10 +190,96 @@ function modeWaveConfig() {
   if (!G || !G.mode) return null;
   if (G.mode === 'rogue') return { waves: 1, per: 5 + G.rogue.floor * 2, mix: [45, 20, 20, 15], hp: 0.85 + G.rogue.floor * 0.12 };
   if (G.mode === 'puzzle') return { waves: 0, per: 0, hp: 0.85 };   // 敌阵由 puzzleStartAttempt 手动生成，不走波次
-  if (G.mode === 'escort') return { waves: 99, per: 5, mix: [45, 20, 25, 10], hp: 0.9 + G.escort.progress / 400 };
+  if (G.mode === 'escort') return { waves: 0, per: 0, mix: [0, 0, 0, 0], hp: 0.9 + G.escort.progress / 400 };  // 不刷无限波；拦截兵由 spawnSchedule 按进度生成（保留 toughness 曲线钩子）
   if (G.mode === 'fire') return { waves: 99, per: 5, mix: [45, 25, 20, 10], hp: 1, hpAdd: 0, atkTier: 1 };
   if (G.mode === 'raid') return { waves: 0, per: 0, mix: [100, 0, 0, 0], hp: 1 };
   return null;
+}
+
+/* ========== 长坂独胆（escort）：护送走位重做 ==========
+   全部以 G.mode==='escort' 门控，不触及 fire/rogue/puzzle/raid 与普通模式。
+   阿斗沿中央走廊(187)上行至长坂桥(BRIDGE_Y=70)；守军沿左右两翼部署；run 阶段阿斗自动上行，
+   玩家在走廊带内点/按=暂停前进、左右拖拽=横向微移；run 阶段禁重新部署。
+   威胁(箭雨/落石/拦截兵)频率随进度 p 升级，伤害前必有 telegraph。 */
+
+// 生成有限刷怪调度：拦截兵按进度阈值触发（避免无限堆怪），频率随 p 收紧。
+function escortSpawnSchedule() {
+  const sched = [];
+  const Vnom = ESCORT_V_BASE * clamp(1 + ESCORT_K * 4, 1, ESCORT_CAP) * ESCORT_MOMENTUM;
+  const span = ESCORT_START_Y - ESCORT_BRIDGE_Y;
+  let p = 0, t = 2.5;   // 首个拦截兵延迟，给布阵/起步时间
+  while (p < 0.96) {
+    const freq = lerp(7.0, 3.5, p);
+    t += freq;
+    p = clamp(p + Vnom * freq / span, 0, 1);
+    const cnt = 1 + (p > 0.5 ? 1 : 0);   // 数量 1→2 随 p 递增
+    for (let i = 0; i < cnt; i++) {
+      const top = Math.random() < 0.6;
+      const x = top ? lerp(150, 224, Math.random())
+                    : (Math.random() < 0.5 ? lerp(64, 112, Math.random()) : lerp(224, 311, Math.random()));
+      const y = top ? lerp(80, 130, Math.random())
+                    : lerp(ESCORT_BRIDGE_Y + 80, ESCORT_START_Y - 80, Math.random());
+      sched.push({ at: p, x, y, type: wpick([['兵', 60], ['卒', 40]]) });
+    }
+  }
+  return sched;
+}
+
+// 箭雨：在阿斗前方预埋 y_trig 线，telegraph 后结算（|adou.x - x_center| ≤ halfWidth → -1HP）
+function spawnArrow(S, e) {
+  const yTrig = clamp(S.adou.y - lerp(140, 220, Math.random()), ESCORT_BRIDGE_Y + 30, ESCORT_START_Y);
+  e.threats.push({ kind: 'arrow', yTrig, xCenter: lerp(ESCORT_X_MIN, ESCORT_X_MAX, Math.random()), halfWidth: ESCORT_ARROW_HW, phase: 'warn', t: ESCORT_TELE_ARROW, t0: ESCORT_TELE_ARROW });
+}
+
+// 落石：从顶部某 x_rock 下落，telegraph 后落到阿斗所在行结算（|adou.x - x_rock| ≤ R → -1HP）
+function spawnRock(S, e) {
+  e.threats.push({ kind: 'rock', xRock: lerp(120, 254, Math.random()), R: 26, y: 0, vy: ESCORT_ROCK_VY, phase: 'warn', t: ESCORT_TELE_ROCK, t0: ESCORT_TELE_ROCK });
+}
+
+// 拦截兵：顶部/侧翼生成，直扑阿斗（m.intercept 在 updMob 内走"直追"分支，不沿路径、不造成 HP 伤害）
+function spawnInterceptor(S, e, x, y, type) {
+  if (S.mobs.filter(m => m.intercept).length >= e.interCap) return;
+  spawnMob(S, type, lerp(0.9, 1.15, e.progress / 100), false);
+  const m = S.mobs[S.mobs.length - 1];
+  m.x = x; m.y = y; m.d = 0; m.intercept = true; m.boss = false;
+}
+
+// 威胁系统：telegraph 倒计时 → 结算(hp 伤害) / 拦截兵逼停计时
+function tickEscortThreats(e, S, dt) {
+  for (const t of e.threats) {
+    if (t.kind === 'arrow') {
+      t.t -= dt;
+      if (t.phase === 'warn' && t.t <= 0) {
+        if (Math.abs(S.adou.x - t.xCenter) <= t.halfWidth) {
+          e.hp -= 1;
+          popFloat(S.adou.x, S.adou.y - 30, 'dmg', 1, { txt: '箭雨 -1', col: '#e03131' });
+          boom(S.adou.x, S.adou.y, '#e03131');
+        }
+        t.phase = 'done'; t.t = 0.3; t.t0 = 0.3;
+      }
+    } else if (t.kind === 'rock') {
+      if (t.phase === 'warn') {
+        t.t -= dt;
+        if (t.t <= 0) { t.phase = 'fall'; t.y = 0; }
+      } else if (t.phase === 'fall') {
+        t.y += t.vy * dt;
+        if (t.y >= S.adou.y) {   // 落到阿斗所在行
+          if (Math.abs(S.adou.x - t.xRock) <= t.R) {
+            e.hp -= 1;
+            popFloat(S.adou.x, S.adou.y - 30, 'dmg', 1, { txt: '落石 -1', col: '#e03131' });
+            boom(S.adou.x, S.adou.y, '#e03131');
+          }
+          t.phase = 'done'; t.t = 0.3; t.t0 = 0.3;
+        } else if (t.y > H + 20) { t.phase = 'done'; t.t = 0.001; }
+      }
+    }
+  }
+  e.threats = e.threats.filter(t => !(t.phase === 'done' && t.t <= 0));
+  // 拦截兵逼停：任一进入 R_BLOCK 内累积 blockTimer；离开则衰减（防龟缩万能解）
+  let near = false;
+  for (const m of S.mobs) if (m.intercept && Math.hypot(m.x - S.adou.x, m.y - S.adou.y) <= ESCORT_R_BLOCK) { near = true; break; }
+  if (near) { e.blockTimer += dt; e.blockWarn = true; }
+  else { e.blockTimer = Math.max(0, e.blockTimer - dt * 2); if (e.blockTimer <= 0) e.blockWarn = false; }
 }
 
 function rogueOffer() {

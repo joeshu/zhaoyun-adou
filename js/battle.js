@@ -115,7 +115,8 @@ function dealDmg(S, m, dmg, byUnit, cell) {
     S.killCnt = 0;
     const opp = S === G.P ? G.E : G.P;
     const cap = mobCap(G.mode);
-    if (opp.mobs.length < cap) {
+    // 长坂独胆：敌方侧(G.E)不参与模拟，压力怪在此模式无意义，跳过避免堆积无效单位
+    if (G.mode !== 'escort' && opp.mobs.length < cap) {
       spawnMob(opp, '卒', G.hpMul * 2, true);
       if (opp.side > 0) fl(opp.path[0][0] + 20, opp.path[0][1], '压力怪!', '#c0392b');
     }
@@ -378,6 +379,13 @@ function updMob(S, m, dt) {
   if (m.flash > 0) m.flash -= dt;
   if (m.slowT > 0) m.slowT -= dt;
   if (m.stun > 0) { m.stun = Math.max(0, m.stun - dt); return; }   // 眩晕中：减帧并定身
+  // 长坂独胆·拦截兵：直扑移动中的阿斗（S.adou 每 tick 更新），不沿路径、不造成 HP 伤害，仅触发逼停
+  if (m.intercept) {
+    const dx = S.adou.x - m.x, dy = S.adou.y - m.y, d = Math.hypot(dx, dy) || 1;
+    const spd = m.spd * (m.slowT > 0 ? 0.5 : 1) * (S.slowT > 0 ? 0.5 : 1);
+    m.x += dx / d * spd * dt; m.y += dy / d * spd * dt;
+    return;
+  }
   if (SAVE.bossPhase && m.boss && m.maxhp) {
     const r = m.hp / m.maxhp;
     if (r <= 0.3 && !m.phaseDone[3]) { m.phase = 3; m.phaseDone[3] = true; m.atk *= 1.3; if (typeof G !== 'undefined' && G) G.banner = { txt: m.name + '·狂暴!', t: 1.2 }; }

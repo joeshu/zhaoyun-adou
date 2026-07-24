@@ -287,6 +287,7 @@ const PUZZLE_LEVELS = [
 ];
 // 克制：枪 vs 甲怪(armor)×2；骑 vs 弩×2；怪骑 打 弓兵×2；马超 vs 骑×2
 const ADOU_HP = 3;
+const ESCORT_ADOU_HP = 5;     // 长坂独胆·阿斗专属血量（不复用 ADOU_HP=3）
 const INCOME_IV = 5, INCOME_N = 3;                 // 基础每5秒+3馒头；农民=2馒头/秒（文档7.1）
 
 /* ---------- 抽卡（文档一/二/三章） ---------- */
