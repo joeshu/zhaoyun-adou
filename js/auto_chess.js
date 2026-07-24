@@ -142,37 +142,102 @@ function acStart() {
   if (a.phase !== 'prep') return;
   a.phase = 'fight'; a.timer = 2.2;
   acLordEffect();
-  a.msg = '自动战斗开始';
+  acInitFightGrid();
+  a.msg = '双方交战！';
 }
 
-/* ---- 战斗 ---- */
-function acCombat() {
-  const a = G.autoChess, us = G.P.cells.filter(c => c.unit).map(c => c.unit);
-  const ai = a.ai[(a.round - 1) % a.ai.length];
-  const enemy = ai.units;
-  let p = us.reduce((n, u) => n + nAtk(u), 0);
-  let e = enemy.reduce((n, u) => n + nAtk(u), 0);
-  const b = acBonds();
-  if ((b.f['蜀'] || 0) >= 2) p *= 1.12;
-  if ((b.f['魏'] || 0) >= 2) p *= 1.10;
-  if ((b.f['吴'] || 0) >= 2) p *= 1.10;
-  if ((b.j['弓'] || 0) >= 2) p *= 1.08;
-  if ((b.j['谋士'] || 0) >= 2) p *= 1.15;
+/* ---- 真实双方棋盘战斗 ---- */
+function acInitFightGrid() {
+  // 建立自走棋交战区：20格（10玩家格 + 10敌方格），双方棋子按 acFightUnit 格式摆放
+  const a = G.autoChess, c = acBoardCount();
+  a.fightUnits = []; a.fightEnemy = [];
+  // 前10格=玩家棋子在左区，敌方格在右区
+  const us = G.P.cells.filter(x => x.unit).map(x => x.unit);
+  for (let i = 0; i < us.length; i++) {
+    const ax = 40 + (i % 5) * 36, ay = 120 + Math.floor(i / 5) * 54;
+    a.fightUnits.push({ ...us[i], ax, ay, hp: nAtkHp(us[i]), maxhp: nAtkHp(us[i]), acc: 0, curX: ax, curY: ay, dead: false });
+  }
+  // 敌方格在右区
+  const ai = a.ai[(a.round - 1) % a.ai.length], en = ai.units;
+  for (let i = 0; i < en.length; i++) {
+    const ax = 210 + (i % 5) * 36, ay = 120 + Math.floor(i / 5) * 54;
+    a.fightEnemy.push({ ...en[i], ax, ay, hp: nAtkHp(en[i]), maxhp: nAtkHp(en[i]), acc: 0, curX: ax, curY: ay, dead: false });
+  }
+  a.fightTimer = 0; a.fightPhase = 'approach';
+  a.fightAI = ai;
+}
+function nAtkHp(u) { return u.hp * (u.star === 2 ? 1.7 : u.star === 3 ? 2.7 : 1); }
 
-  const win = p * (0.88 + Math.random() * .24) >= e;
-  a.lastFight = { win, enemy, p: Math.round(p), e: Math.round(e), ai: ai.name };
-  if (win) {
-    a.streak = Math.max(1, a.streak + 1);
-    ai.hp = Math.max(0, ai.hp - (15 + us.length * 2));
-    a.msg = '胜利 · 击败' + ai.name + ' · 对手 -' + (15 + us.length * 2) + ' 血';
-    // 曹操·挟天子
-    if (a.lord && a.lord.name.startsWith('曹操')) a.gold += 1;
-  } else {
-    a.streak = Math.min(-1, a.streak - 1);
-    a.hp -= 10 + enemy.length * 2;
-    a.msg = '失败 · ' + ai.name + '击退你 · -' + (10 + enemy.length * 2) + ' 血';
+function acFightTick(dt) {
+  const a = G.autoChess, us = a.fightUnits, en = a.fightEnemy;
+  a.fightTimer += dt;
+  const liveUs = us.filter(u => !u.dead), liveEn = en.filter(u => !u.dead);
+
+  // 胜负判定
+  if (!liveUs.length || !liveEn.length) {
+    const win = liveUs.length > 0;
+    a.lastFight = { win, enemy: a.fightAI.units, p: liveUs.length, e: liveEn.length, ai: a.fightAI.name };
+    if (win) {
+      a.streak = Math.max(1, a.streak + 1);
+      a.fightAI.hp = Math.max(0, a.fightAI.hp - (15 + liveUs.length * 2));
+      a.msg = '胜利 · 击败' + a.fightAI.name;
+      if (a.lord && a.lord.name.startsWith('曹操')) a.gold += 1;
+    } else {
+      a.streak = Math.min(-1, a.streak - 1);
+      a.hp -= 10 + liveEn.length * 2;
+      a.msg = '失败 · ' + a.fightAI.name + '击退你';
+    }
+    acAfterCombat();
+    return;
   }
 
+  // 速度倍率
+  const step = dt * 2;
+  // 每个棋子向最近敌人移动+攻击
+  const all = [...liveUs, ...liveEn];
+  all.forEach(u => {
+    const foes = u.side === 'player' ? liveEn : liveUs;
+    if (!foes.length) return;
+    // 寻最近敌人
+    let best = null, bd = 1e9;
+    foes.forEach(f => { const d = Math.hypot(u.curX - f.curX, u.curY - f.curY); if (d < bd) { bd = d; best = f; } });
+    if (!best) return;
+    const dx = best.curX - u.curX, dy = best.curY - u.curY, dist = Math.hypot(dx, dy) || 1;
+    // 移动到攻击范围（64px）
+    if (dist > 64) {
+      u.curX += (dx / dist) * step * 30;
+      u.curY += (dy / dist) * step * 30;
+    } else {
+      u.acc += dt * 0.8;
+      if (u.acc >= 1) {
+        u.acc = 0;
+        const dmg = nAtk(u) * (0.9 + Math.random() * 0.2);
+        best.hp -= dmg;
+        G.fx.push({ type: 'line', x1: u.curX, y1: u.curY, x2: best.curX, y2: best.curY, t: 0.12, t0: 0.12, col: u.side === 'player' ? '#1c7ed6' : '#e03131' });
+        if (best.hp <= 0) best.dead = true;
+      }
+    }
+  });
+
+  // 最长战斗 5 秒后强制结束（根据剩余血量判定）
+  if (a.fightTimer > 5) {
+    const win = liveUs.length >= liveEn.length;
+    a.lastFight = { win, enemy: a.fightAI.units, p: liveUs.length, e: liveEn.length, ai: a.fightAI.name };
+    if (win) {
+      a.streak = Math.max(1, a.streak + 1);
+      a.fightAI.hp = Math.max(0, a.fightAI.hp - (15 + liveUs.length * 2));
+      a.msg = '僵持胜 · 击败' + a.fightAI.name;
+      if (a.lord && a.lord.name.startsWith('曹操')) a.gold += 1;
+    } else {
+      a.streak = Math.min(-1, a.streak - 1);
+      a.hp -= 10 + liveEn.length * 2;
+      a.msg = '僵持败 · ' + a.fightAI.name + '击退你';
+    }
+    acAfterCombat();
+  }
+}
+function acAfterCombat() {
+  const a = G.autoChess;
   const alive = a.ai.filter(x => x.hp > 0).length;
   if (a.hp <= 0 || a.round >= 20 || alive <= 0) {
     G.rewardTxt = a.hp <= 0 ? '群雄争霸出局' : '群雄争霸完成';
@@ -181,11 +246,10 @@ function acCombat() {
     a.round++; a.phase = 'prep'; a.timer = 15;
     a.gold += 5 + Math.min(5, Math.floor(a.gold / 10));
     if (!a.locked) acShop();
-    // AI 每回合强化
+    a.fightTimer = 0; a.fightUnits = null; a.fightEnemy = null; a.fightPhase = 'done';
     a.ai.forEach(x => {
       if (x.hp > 0) x.units = Array.from({ length: Math.min(10, 2 + Math.floor(a.round / 2)) }, () => acUnit(acPick()));
     });
-    // 每5回合装备选择
     if (a.round % 5 === 0 && a.items.length < 3) acItemOffer();
   }
 }
@@ -219,6 +283,7 @@ function autoChessSetup() {
     ],
     lordIdx: 0, lord: null,
     ai: acMakeAI(),
+    fightTimer: 0, fightUnits: null, fightEnemy: null, fightPhase: null, fightAI: null,
   };
   G.P.cells.forEach(c => { c.open = true; c.unit = null; });
   G.E.cells.forEach(c => { c.open = false; c.unit = null; });
@@ -229,7 +294,7 @@ function autoChessTick(dt) {
   const a = G.autoChess;
   if (!a || G.state !== 'play') return;
   if (a.phase === 'prep') { a.timer -= dt; if (a.timer <= 0) acStart(); }
-  else if (a.phase === 'fight') { a.timer -= dt; if (a.timer <= 0) acCombat(); }
+  else if (a.phase === 'fight') { if (!a.fightPhase) acInitFightGrid(); acFightTick(dt); }
 }
 function autoChessUnitGlyph(u) { return u ? u.id.slice(0, 1) : ''; }
 
@@ -244,6 +309,39 @@ function drawAutoChess() {
 
   txt(a.phase === 'prep' ? '准备阶段 ' + Math.ceil(a.timer) + 's' : '自动战斗中', W / 2, 48, 12, a.phase === 'prep' ? '#a61e4e' : '#bd4a31', 'center', true);
   txt(a.lord ? a.lord.name : '主公未选 · 点击下方选择', W / 2, 68, 10, '#6b6256', 'center', true);
+
+  // 战斗阶段绘制双方对战
+  if (a.phase === 'fight' && a.fightUnits && a.fightEnemy) {
+    ctx.fillStyle = '#1a2420'; ctx.fillRect(0, 120, W, H - 120 - 200);
+    txt('⚔ 双方交战', W / 2, 110, 14, '#f4d58b', 'center', true);
+    // 左侧=玩家棋子
+    a.fightUnits.forEach(u => {
+      if (u.dead) return;
+      rr(u.curX - 16, u.curY - 16, 32, 32, 6);
+      ctx.fillStyle = u.side === 'player' ? '#1c7ed6' : '#e03131';
+      ctx.fill();
+      txt(u.id.slice(0, 1), u.curX, u.curY + 6, 22, '#fff', 'center', true);
+      // HP条
+      const hpPct = Math.max(0, u.hp / u.maxhp);
+      ctx.fillStyle = '#555'; ctx.fillRect(u.curX - 16, u.curY + 18, 32, 3);
+      ctx.fillStyle = hpPct > 0.3 ? '#2f9e44' : '#e03131';
+      ctx.fillRect(u.curX - 16, u.curY + 18, 32 * hpPct, 3);
+    });
+    // 右侧=敌人棋子
+    a.fightEnemy.forEach(u => {
+      if (u.dead) return;
+      rr(u.curX - 16, u.curY - 16, 32, 32, 6);
+      ctx.fillStyle = '#e03131';
+      ctx.fill();
+      txt(u.id.slice(0, 1), u.curX, u.curY + 6, 22, '#fff', 'center', true);
+      const hpPct = Math.max(0, u.hp / u.maxhp);
+      ctx.fillStyle = '#555'; ctx.fillRect(u.curX - 16, u.curY + 18, 32, 3);
+      ctx.fillStyle = hpPct > 0.3 ? '#2f9e44' : '#e03131';
+      ctx.fillRect(u.curX - 16, u.curY + 18, 32 * hpPct, 3);
+    });
+    txt('我方 ' + a.fightUnits.filter(u => !u.dead).length + ' vs ' + a.fightEnemy.filter(u => !u.dead).length + ' 敌', W / 2, H - 180, 12, '#aaa', 'center');
+    return;
+  }
 
   // 战利品选择
   if (a.phase === 'loot' && a.itemChoices) {
