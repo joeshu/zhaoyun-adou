@@ -606,13 +606,24 @@ function drawSiegeMob(m) {
 function drawAdou(S) {
   const mine = S.side > 0;
   const y = mine ? S.adou.y - (G && (G.mapIdx === 3 || G.mapIdx === 2) ? 42 : 38) : S.adou.y;
-  // 长坂独胆：赵云贴附阿斗左侧（护送），随阿斗移动
+  // 长坂独胆：赵云贴附阿斗左侧（护送），随阿斗移动，提供推拒保护光环
   if (G.mode === 'escort' && G.escort) {
     ctx.save();
-    ctx.fillStyle = 'rgba(28,126,214,0.18)';
-    ctx.beginPath(); ctx.arc(S.adou.x - 26, S.adou.y, 13, 0, 7); ctx.fill();
-    ctx.strokeStyle = '#1c7ed6'; ctx.lineWidth = 1.5; ctx.stroke();
-    txt('赵', S.adou.x - 26, S.adou.y + 4, 13, '#1c7ed6', 'center', true);
+    // 赵云护驾光环（棋盘有赵云时实心，否则半透明描边）
+    const hasZhao = G.P.cells.some(c => c.unit && c.unit.name === '赵云');
+    ctx.fillStyle = hasZhao ? 'rgba(28,126,214,0.30)' : 'rgba(28,126,214,0.10)';
+    ctx.beginPath(); ctx.arc(S.adou.x - 26, S.adou.y, 16, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#1c7ed6'; ctx.lineWidth = hasZhao ? 2.5 : 1; ctx.stroke();
+    txt(hasZhao ? '云' : '赵', S.adou.x - 26, S.adou.y + 4, 15, hasZhao ? '#1c7ed6' : '#74828e', 'center', true);
+    // 赵云在场时画一条连接线表示护驾
+    if (hasZhao) {
+      const zhaoCell = G.P.cells.find(c => c.unit && c.unit.name === '赵云');
+      if (zhaoCell) {
+        ctx.strokeStyle = 'rgba(28,126,214,0.25)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 6]);
+        ctx.beginPath(); ctx.moveTo(zhaoCell.x, zhaoCell.y); ctx.lineTo(S.adou.x - 26, S.adou.y); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
     ctx.restore();
   }
 
@@ -956,7 +967,15 @@ function drawGame() {
       txt('🐎 护送进度 ' + Math.floor(e.progress) + '%', W / 2, 48, 11, '#2f7f9d', 'center', true);
       ctx.fillStyle = '#d9e8ec'; ctx.fillRect(112, 53, 151, 4); ctx.fillStyle = '#2f7f9d'; ctx.fillRect(112, 53, 151 * e.progress / 100, 4);
       for (let i = 0; i < e.maxhp; i++) txt(i < e.hp ? '♥' : '♡', 152 + i * 11, 84, 11, i < e.hp ? '#e03131' : '#ced4da', 'center', true);
-      if (e.blockWarn) txt('⚠ 被拦截 ' + e.blockTimer.toFixed(1) + 's', W / 2, 100, 11, '#e03131', 'center', true);
+      // 拦截警示条（区分轻微/危险两段）
+      if (e.blockWarn && e.blockTimer > 0) {
+        const warnP = clamp(e.blockTimer / ESCORT_BLOCK_FAIL, 0, 1);
+        ctx.fillStyle = warnP > 0.6 ? '#e03131' : '#f59f00';
+        ctx.fillRect(112, 90, 151 * warnP, 6);
+        ctx.strokeStyle = '#868e96'; ctx.lineWidth = 0.5; ctx.strokeRect(112, 90, 151, 6);
+        const icon = warnP > 0.7 ? '🚨' : warnP > 0.4 ? '⚠' : '⚡';
+        txt(icon + '拦截 ' + e.blockTimer.toFixed(1) + 's', W / 2, 108, 10, warnP > 0.6 ? '#e03131' : '#f59f00', 'center', true);
+      }
     }
   } else if (G.mode === 'puzzle') {
     const pz = G.puzzle;

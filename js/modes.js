@@ -17,13 +17,13 @@ const modeUnlocked = m => SAVE.stage >= m.unlock;
 const ESCORT_BRIDGE_Y = 70;          // 长坂桥（终点）y
 const ESCORT_START_X = 187;          // 中央通道中轴
 const ESCORT_START_Y = 600;          // 起点 y（≈底部）
-const ESCORT_X_MIN = 147, ESCORT_X_MAX = 227;        // 阿斗横向微移钳制（走廊宽 80）
-const ESCORT_CORRIDOR_X0 = 130, ESCORT_CORRIDOR_X1 = 244;  // 走位空白带（输入命中区）
-const ESCORT_V_BASE = 24, ESCORT_K = 0.05, ESCORT_CAP = 2.0, ESCORT_MOMENTUM = 1.3;
-const ESCORT_R_BLOCK = 60, ESCORT_BLOCK_FAIL = 4;  // 拦截兵逼停半径 / 判负秒数
-const ESCORT_INTERCEPT_CAP = 6;      // 同屏拦截兵上限（有限刷怪护栏）
-const ESCORT_TELE_ARROW = 1.2, ESCORT_TELE_ROCK = 0.9;    // 威胁 telegraph 时长
-const ESCORT_ROCK_VY = 220, ESCORT_ARROW_HW = 36;          // 落石下落速度 / 箭雨半宽
+const ESCORT_X_MIN = 126, ESCORT_X_MAX = 248;        // 阿斗横向微移钳制（走廊更宽，操控更友好）
+const ESCORT_CORRIDOR_X0 = 100, ESCORT_CORRIDOR_X1 = 274;  // 走位空白带（输入命中区）
+const ESCORT_V_BASE = 28, ESCORT_K = 0.04, ESCORT_CAP = 2.4, ESCORT_MOMENTUM = 1.0;
+const ESCORT_R_BLOCK = 52, ESCORT_BLOCK_FAIL = 5;    // 拦截兵逼停半径 / 判负秒数（更宽容）
+const ESCORT_INTERCEPT_CAP = 5;      // 同屏拦截兵上限
+const ESCORT_TELE_ARROW = 1.8, ESCORT_TELE_ROCK = 1.4;    // 威胁 telegraph 时长（加长便于反应）
+const ESCORT_ROCK_VY = 200, ESCORT_ARROW_HW = 44;          // 落石下落速度（稍慢）/ 箭雨半宽（稍微宽容）
 
 /* 赤壁火攻（fire）调参常量：全部以 G.mode==='fire' 门控，不影响其它模式/数值平衡。
    玩家侧不刷镜像军，只点燃预置「火油格」借风焚敌，守住水寨(=PATH_E 末端)存活即胜。 */
@@ -441,6 +441,7 @@ function modeSetup() {
       hp: ESCORT_ADOU_HP, maxhp: ESCORT_ADOU_HP,
       bridgeY: ESCORT_BRIDGE_Y,
       run: false, paused: false, walkActive: false, dragX: ESCORT_START_X,
+      repelling: false, repelVx: 0, repelT: 0,
       blockTimer: 0, blockWarn: false,
       threats: [], spawnSchedule: escortSpawnSchedule(),
       arrowT: 4, rockT: 6, interCap: ESCORT_INTERCEPT_CAP,
@@ -519,7 +520,11 @@ function modeTick(dt) {
     const near = S.mobs.some(m => m.intercept && Math.hypot(m.x - S.adou.x, m.y - S.adou.y) <= ESCORT_R_BLOCK);
     // 修反人类：兵越多越快越稳；near(被拦截兵逼近)时失去惯性加速，谨慎慢行
     const V = ESCORT_V_BASE * clamp(1 + ESCORT_K * N, 1, ESCORT_CAP) * (near ? 1 : ESCORT_MOMENTUM);
-    if (!e.paused) S.adou.y -= V * dt;                            // AUTO-ADVANCE；暂停(走廊按住)时不前进
+    // 重力感：按住走位（walkActive）时速度减半，松开恢复全速→鼓励精准闪避而非一直按住
+    const speedMul = (e.walkActive && !e.repelling) ? 0.5 : 1.0;
+    if (!e.paused) S.adou.y -= V * dt * speedMul;                // AUTO-ADVANCE；暂停(走廊按住)时不前进
+    // 走位推拒：repelling 时阿斗反方向弹开（被拦截兵逼近时推开，不能靠走位硬吃拦截兵）
+    if (e.repelling) { S.adou.x += e.repelVx * dt; e.repelT -= dt; if (e.repelT <= 0) e.repelling = false; }
     if (e.walkActive) S.adou.x = clamp(e.dragX, ESCORT_X_MIN, ESCORT_X_MAX);  // 走位横向微移
     S.adou.x = clamp(S.adou.x, ESCORT_X_MIN, ESCORT_X_MAX);
     // 威胁生成（频率随 p 升级；伤害前必有 telegraph）
@@ -812,11 +817,19 @@ function tickEscortThreats(e, S, dt) {
     }
   }
   e.threats = e.threats.filter(t => !(t.phase === 'done' && t.t <= 0));
-  // 拦截兵逼停：任一进入 R_BLOCK 内累积 blockTimer；离开则衰减（防龟缩万能解）
+  // 拦截兵逼停：任一进入 R_BLOCK 内累积 blockTimer；同时阿斗被推拒弹开
   let near = false;
-  for (const m of S.mobs) if (m.intercept && Math.hypot(m.x - S.adou.x, m.y - S.adou.y) <= ESCORT_R_BLOCK) { near = true; break; }
+  for (const m of S.mobs) if (m.intercept && Math.hypot(m.x - S.adou.x, m.y - S.adou.y) <= ESCORT_R_BLOCK) {
+    near = true;
+    // 推拒：拦截兵靠近时阿斗反向弹开（小幅横向位移，制造紧张感而非死锁）
+    if (!e.repelling) { e.repelling = true; e.repelT = 0.35; e.repelVx = (m.x - S.adou.x) > 0 ? -30 : 30; }
+    break;
+  }
   if (near) { e.blockTimer += dt; e.blockWarn = true; }
-  else { e.blockTimer = Math.max(0, e.blockTimer - dt * 2); if (e.blockTimer <= 0) e.blockWarn = false; }
+  else { e.blockTimer = Math.max(0, e.blockTimer - dt * 3); if (e.blockTimer <= 0) e.blockWarn = false; }
+  // 赵云护驾：棋盘存在赵云且存活时，拦截兵逼停计时衰减更慢，blockTimer 积累速度减半
+  const hasZhaoyun = S.cells.some(c => c.unit && c.unit.name === '赵云');
+  if (hasZhaoyun && e.blockTimer > 0) e.blockTimer -= dt * 0.3;
 }
 
 function rogueOffer() {
