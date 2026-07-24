@@ -174,7 +174,7 @@ function fightStats(u, side, roster) {
   const item = u.item;
   if (item) { atk += item.atk || 0; armor += item.armor || 0; mr += item.mr || 0; rate += item.rate || 0; if (item.range) range += item.range; }
   if (u.job === '盾') armor += 15;
-  return { atk, hp, armor, mr, rate, range, splash: !!(item && item.splash), heal: item && item.heal || 0 };
+  return { atk, hp, armor, mr, rate, range, splash: !!(item && item.splash), heal: item && item.heal || 0, dodge: item && item.id === '八卦阵' ? 0.18 : 0 };
 }
 function acInitFightGrid() {
   const a = G.autoChess;
@@ -183,19 +183,53 @@ function acInitFightGrid() {
   const ai = a.ai[(a.round - 1) % a.ai.length], en = ai.units;
   for (let i = 0; i < us.length; i++) {
     const st = fightStats(us[i], 'player', us), ax = 40 + (i % 5) * 36, ay = 150 + Math.floor(i / 5) * 54;
-    a.fightUnits.push({ ...us[i], side: 'player', row: Math.floor(i / 5), ax, ay, stats: st, hp: st.hp, maxhp: st.hp, acc: 0, curX: ax, curY: ay, dead: false });
+    a.fightUnits.push({ ...us[i], side: 'player', row: Math.floor(i / 5), ax, ay, stats: st, hp: st.hp, maxhp: st.hp, acc: 0, skillCd: 0, flash: 0, damage: 0, curX: ax, curY: ay, dead: false });
   }
   for (let i = 0; i < en.length; i++) {
     const st = fightStats(en[i], 'enemy', en), ax = 210 + (i % 5) * 36, ay = 150 + Math.floor(i / 5) * 54;
-    a.fightEnemy.push({ ...en[i], side: 'enemy', row: Math.floor(i / 5), ax, ay, stats: st, hp: st.hp, maxhp: st.hp, acc: 0, curX: ax, curY: ay, dead: false });
+    a.fightEnemy.push({ ...en[i], side: 'enemy', row: Math.floor(i / 5), ax, ay, stats: st, hp: st.hp, maxhp: st.hp, acc: 0, skillCd: 0, flash: 0, damage: 0, curX: ax, curY: ay, dead: false });
   }
-  a.fightTimer = 0; a.fightPhase = 'approach'; a.fightAI = ai;
+  a.fightTimer = 0; a.fightPhase = 'approach'; a.fightAI = ai; a.combatFx = [];
 }
 function nAtkHp(u) { return fightStats(u, u.side === 'enemy' ? 'enemy' : 'player').hp; }
+
+function acDamage(attacker, target, raw, kind) {
+  if (!target || target.dead) return 0;
+  if (target.stats && kind === 'magic' && Math.random() < target.stats.dodge) return 0;
+  const defense = (target.stats && (kind === 'magic' ? target.stats.mr : target.stats.armor)) || 0;
+  const dmg = Math.max(1, raw * (100 / (100 + defense)));
+  target.hp -= dmg; target.damage = (target.damage || 0) + dmg; target.flash = 0.12;
+  const a = G.autoChess;
+  (a.combatFx || (a.combatFx = [])).push({ x: target.curX, y: target.curY, text: '-' + Math.round(dmg), col: kind === 'magic' ? '#b197fc' : '#ffd43b', t: 0.7 });
+  if (target.hp <= 0) target.dead = true;
+  return dmg;
+}
+function acSkill(u, foes) {
+  const a = G.autoChess, near = foes.filter(f => Math.hypot(u.curX - f.curX, u.curY - f.curY) < 105);
+  if (!near.length) return false;
+  const base = u.stats.atk;
+  if (u.job === '谋士') {
+    near.slice(0, 3).forEach(f => acDamage(u, f, base * 0.65, 'magic'));
+    (a.combatFx || []).push({ x: u.curX, y: u.curY - 20, text: '火计', col: '#e599f7', t: 0.7 });
+  } else if (u.job === '枪') {
+    const target = near[0]; acDamage(u, target, base * 0.8, 'physical');
+    const second = foes.filter(f => f !== target && Math.abs(f.curY - target.curY) < 30)[0];
+    if (second) acDamage(u, second, base * 0.45, 'physical');
+  } else if (u.job === '盾') {
+    u.tauntT = 2.2; u.stats.armor += 18;
+    (a.combatFx || []).push({ x: u.curX, y: u.curY - 20, text: '嘲讽', col: '#74c0fc', t: 0.7 });
+  } else if (u.job === '骑') {
+    acDamage(u, near[0], base * 0.9, 'physical');
+  } else if (u.job === '弓') {
+    acDamage(u, near[0], base * 0.75, 'physical');
+  } else return false;
+  return true;
+}
 
 function acFightTick(dt) {
   const a = G.autoChess, us = a.fightUnits, en = a.fightEnemy;
   a.fightTimer += dt;
+  a.combatFx = (a.combatFx || []).filter(x => (x.t -= dt) > 0);
   const liveUs = us.filter(u => !u.dead), liveEn = en.filter(u => !u.dead);
 
   // 胜负判定
@@ -223,6 +257,10 @@ function acFightTick(dt) {
   all.forEach(u => {
     const foes = u.side === 'player' ? liveEn : liveUs;
     if (!foes.length) return;
+    u.skillCd = Math.max(0, (u.skillCd || 0) - dt);
+    u.tauntT = Math.max(0, (u.tauntT || 0) - dt);
+    if (u.skillCd <= 0 && u.job !== '近战' && acSkill(u, foes)) { u.skillCd = u.job === '谋士' ? 3.5 : 4.5; }
+    if (u.job === '盾' && u.stats.heal) u.hp = Math.min(u.maxhp, u.hp + u.stats.heal * dt / 5);
     // 寻最近敌人
     let best = null, bd = 1e9;
     foes.forEach(f => { const d = Math.hypot(u.curX - f.curX, u.curY - f.curY); if (d < bd) { bd = d; best = f; } });
@@ -235,6 +273,8 @@ function acFightTick(dt) {
       const near = foes.reduce((x, f) => Math.hypot(u.curX - f.curX, u.curY - f.curY) < Math.hypot(u.curX - x.curX, u.curY - x.curY) ? f : x, foes[0]);
       if (near) best = near;
     }
+    const tauntTarget = foes.find(f => f.tauntT > 0);
+    if (tauntTarget) best = tauntTarget;
     const dx = best.curX - u.curX, dy = best.curY - u.curY, dist = Math.hypot(dx, dy) || 1;
     const attackRange = u.stats ? u.stats.range : 64;
     const charge = u.job === '骑' && a.fightTimer < 1.2 ? 1.55 : 1;
@@ -246,11 +286,11 @@ function acFightTick(dt) {
       if (u.acc >= 1) {
         u.acc = 0;
         const raw = (u.stats ? u.stats.atk : nAtk(u)) * (0.9 + Math.random() * 0.2);
-        const defense = (best.stats && (u.job === '谋士' ? best.stats.mr : best.stats.armor)) || 0;
-        const dmg = Math.max(1, raw * (100 / (100 + defense)));
-        best.hp -= dmg;
-        G.fx.push({ type: 'line', x1: u.curX, y1: u.curY, x2: best.curX, y2: best.curY, t: 0.12, t0: 0.12, col: u.side === 'player' ? '#1c7ed6' : '#e03131' });
-        if (best.hp <= 0) best.dead = true;
+        const kind = u.job === '谋士' ? 'magic' : 'physical';
+        acDamage(u, best, raw, kind);
+        if (u.stats && u.stats.splash) {
+          foes.filter(f => f !== best && Math.hypot(f.curX - best.curX, f.curY - best.curY) < 42).forEach(f => acDamage(u, f, raw * 0.45, 'physical'));
+        }
       }
     }
   });
@@ -404,6 +444,7 @@ function drawAutoChess() {
       ctx.fillStyle = hpPct > 0.3 ? '#2f9e44' : '#e03131';
       ctx.fillRect(u.curX - 16, u.curY + 18, 32 * hpPct, 3);
     });
+    (a.combatFx || []).forEach(f => { ctx.globalAlpha = Math.max(0, f.t / 0.7); txt(f.text, f.x, f.y - (0.7 - f.t) * 22, 12, f.col, 'center', true); ctx.globalAlpha = 1; });
     txt('我方 ' + a.fightUnits.filter(u => !u.dead).length + ' vs ' + a.fightEnemy.filter(u => !u.dead).length + ' 敌', W / 2, H - 180, 12, '#aaa', 'center');
     btn(12, H - 145, 78, 28, '速度×' + a.combatSpeed, () => { a.combatSpeed = a.combatSpeed === 1 ? 2 : 1; }, { size: 9, bg: '#7250b8' });
     return;
