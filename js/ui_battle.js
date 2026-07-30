@@ -1814,7 +1814,7 @@ function drawGame() {
         ['返回菜单', () => { goTo('menu'); }, '#868e96'],
       ]);
     }
-  } else if (G.paused) {
+  } else if (G.paused && !G.rogueChoices && !(G.siege && G.siege.build) && !G.chapterChoice) {
     overlay('已暂停', '', [
       ['继续', () => { G.paused = false; }],
       ['退出对局', () => { goTo('menu'); }, '#868e96'],
