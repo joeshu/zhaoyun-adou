@@ -78,18 +78,59 @@ function shade(c, f) {
 function panel(x, y, w, h, opt = {}) {
   const r = opt.r !== undefined ? opt.r : 12;
   ctx.save();
-  ctx.shadowColor = opt.shadow || 'rgba(60,45,20,.14)';
-  ctx.shadowBlur = opt.blur === undefined ? 10 : opt.blur;
-  ctx.shadowOffsetY = opt.offsetY === undefined ? 3 : opt.offsetY;
-  rr(x, y, w, h, r); ctx.fillStyle = opt.bg || '#fdf9ef'; ctx.fill();
+  // 更柔和的投影：多层阴影营造悬浮感
+  ctx.shadowColor = opt.shadow || 'rgba(60,40,15,.12)';
+  ctx.shadowBlur = opt.blur === undefined ? 12 : opt.blur;
+  ctx.shadowOffsetY = opt.offsetY === undefined ? 4 : opt.offsetY;
+  rr(x, y, w, h, r); ctx.fillStyle = opt.bg || THEME.cardTop; ctx.fill();
   ctx.restore();
   // 纯色背景升级为羊皮纸纵向渐变；rgba 覆盖层保持半透明平铺（battle 提示框等）
   if (typeof opt.bg === 'string' && opt.bg[0] === '#') {
     const g = ctx.createLinearGradient(0, y, 0, y + h);
-    g.addColorStop(0, opt.bg); g.addColorStop(1, shade(opt.bg, 0.92));
+    g.addColorStop(0, opt.bg); g.addColorStop(1, shade(opt.bg, 0.93));
     rr(x, y, w, h, r); ctx.fillStyle = g; ctx.fill();
   }
-  if (opt.stroke !== null) { rr(x, y, w, h, r); ctx.strokeStyle = opt.stroke || '#d4bfa0'; ctx.lineWidth = 1.5; ctx.stroke(); }
+  // 顶部瓷面高光条：增加质感
+  if (!opt.noHighlight) {
+    ctx.save();
+    const hl = ctx.createLinearGradient(0, y, 0, y + h * 0.4);
+    hl.addColorStop(0, 'rgba(255,255,255,.35)');
+    hl.addColorStop(0.5, 'rgba(255,255,255,.12)');
+    hl.addColorStop(1, 'rgba(255,255,255,0)');
+    rr(x + 1, y + 1, w - 2, Math.min(h * 0.45, r + 12), Math.max(1, r - 1));
+    ctx.fillStyle = hl; ctx.fill();
+    ctx.restore();
+  }
+  // 描边
+  if (opt.stroke !== null) {
+    rr(x, y, w, h, r);
+    ctx.strokeStyle = opt.stroke || THEME.cardBorder;
+    ctx.lineWidth = opt.strokeWidth || 1.5;
+    ctx.stroke();
+    // 金边（高品质卡片 opt.gold=true 时使用）
+    if (opt.gold) {
+      ctx.save();
+      rr(x + 2, y + 2, w - 4, h - 4, Math.max(1, r - 2));
+      ctx.strokeStyle = 'rgba(212,168,40,.35)';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+  // 边角纹饰（opt.corner 时在四角加小三角装饰，增加古典韵味）
+  if (opt.corner) {
+    const cs = opt.cornerSize || 6;
+    const ccol = opt.cornerCol || 'rgba(180,140,60,.25)';
+    ctx.fillStyle = ccol;
+    // 左上
+    ctx.beginPath(); ctx.moveTo(x + r, y); ctx.lineTo(x + r + cs, y); ctx.lineTo(x + r, y + cs); ctx.closePath(); ctx.fill();
+    // 右上
+    ctx.beginPath(); ctx.moveTo(x + w - r - cs, y); ctx.lineTo(x + w - r, y); ctx.lineTo(x + w - r, y + cs); ctx.closePath(); ctx.fill();
+    // 左下
+    ctx.beginPath(); ctx.moveTo(x + r, y + h); ctx.lineTo(x + r + cs, y + h); ctx.lineTo(x + r, y + h - cs); ctx.closePath(); ctx.fill();
+    // 右下
+    ctx.beginPath(); ctx.moveTo(x + w - r - cs, y + h); ctx.lineTo(x + w - r, y + h); ctx.lineTo(x + w - r, y + h - cs); ctx.closePath(); ctx.fill();
+  }
 }
 function sectionLabel(label, x, y) {
   txt(label.toUpperCase(), x, y, 9, '#a48b63', 'left', true);
@@ -99,7 +140,7 @@ function hpBar(x, y, w, p, col) {
   ctx.fillStyle = col || (p > 0.5 ? '#2f9e44' : p > 0.25 ? '#f59f00' : '#e03131');
   ctx.fillRect(x, y, w * clamp(p, 0, 1), 3);
 }
-// 瓷面按钮：纵向渐变 + 顶部高光 + 描边；opt.grad 显式双色 或 opt.bg 自动加深
+// 瓷面按钮 v3：更深邃渐变 + 顶部高光 + 底部反光 + 描边 + 光晕；opt.grad 显式双色 或 opt.bg 自动加深
 function btn(x, y, w, h, label, fn, opt = {}) {
   btns.push({ x, y: y - g_scrollY, w, h, fn, disabled: opt.disabled, label: String(label) });   // label 仅用于调试/自动化检测（如重叠扫描），不影响点击
   const r = opt.r !== undefined ? opt.r : 9;
@@ -108,35 +149,90 @@ function btn(x, y, w, h, label, fn, opt = {}) {
     g_ptrHit.x === x && g_ptrHit.y === y - g_scrollY && g_ptrHit.w === w && g_ptrHit.h === h;
   ctx.save();
   if (pressed) { const cx = x + w / 2, cy = y + h / 2; ctx.translate(cx, cy); ctx.scale(0.96, 0.96); ctx.translate(-cx, -cy); }
-  const grad = opt.grad || [opt.bg || '#4b5563', shade(opt.bg || '#4b5563', 0.78)];
+  const grad = opt.grad || [opt.bg || '#5a6472', shade(opt.bg || '#5a6472', 0.76)];
   const g = ctx.createLinearGradient(0, y, 0, y + h);
-  if (opt.disabled) { g.addColorStop(0, '#e5e0d5'); g.addColorStop(1, '#cfc8b8'); }
-  else { g.addColorStop(0, grad[0]); g.addColorStop(1, grad[1]); }
-  rr(x, y, w, h, r); ctx.fillStyle = g; ctx.fill();
-  if (!opt.disabled) {
-    const hl = ctx.createLinearGradient(0, y, 0, y + h * 0.55);
-    hl.addColorStop(0, 'rgba(255,255,255,.25)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
-    rr(x + 1, y + 1, w - 2, h * 0.5, Math.max(1, r - 1)); ctx.fillStyle = hl; ctx.fill();
+  if (opt.disabled) { g.addColorStop(0, '#e8e2d5'); g.addColorStop(1, '#ccc4b4'); }
+  else {
+    g.addColorStop(0, grad[0]);
+    g.addColorStop(0.5, shade(grad[0], 0.96));
+    g.addColorStop(1, grad[1]);
   }
-  rr(x, y, w, h, r); ctx.strokeStyle = opt.disabled ? '#b8b0a0' : 'rgba(0,0,0,.16)'; ctx.lineWidth = 1; ctx.stroke();
+  // 按钮投影（非disabled且非按下时）
+  if (!opt.disabled && !pressed) {
+    ctx.save();
+    ctx.shadowColor = 'rgba(40,25,10,.20)';
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetY = 2;
+    rr(x, y, w, h, r); ctx.fillStyle = g; ctx.fill();
+    ctx.restore();
+  } else {
+    rr(x, y, w, h, r); ctx.fillStyle = g; ctx.fill();
+  }
+  if (!opt.disabled) {
+    // 顶部高光（更通透）
+    const hl = ctx.createLinearGradient(0, y, 0, y + h * 0.5);
+    hl.addColorStop(0, 'rgba(255,255,255,.32)');
+    hl.addColorStop(0.6, 'rgba(255,255,255,.10)');
+    hl.addColorStop(1, 'rgba(255,255,255,0)');
+    rr(x + 1, y + 1, w - 2, h * 0.48, Math.max(1, r - 1)); ctx.fillStyle = hl; ctx.fill();
+    // 底部微光带
+    const bl = ctx.createLinearGradient(0, y + h * 0.7, 0, y + h);
+    bl.addColorStop(0, 'rgba(0,0,0,0)');
+    bl.addColorStop(1, 'rgba(0,0,0,.12)');
+    rr(x + 1, y + h * 0.6, w - 2, h * 0.4 - 1, Math.max(1, r - 1)); ctx.fillStyle = bl; ctx.fill();
+    // 主按钮（朱砂红/鎏金）外发光效果
+    if (opt.glow) {
+      ctx.save();
+      ctx.shadowColor = opt.glowCol || grad[0];
+      ctx.shadowBlur = 8;
+      rr(x, y, w, h, r); ctx.strokeStyle = 'rgba(255,255,255,.15)'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.restore();
+    }
+  }
+  rr(x, y, w, h, r); ctx.strokeStyle = opt.disabled ? '#b0a898' : 'rgba(0,0,0,.18)'; ctx.lineWidth = 1; ctx.stroke();
+  // 内层细描边（营造精致感）
+  if (!opt.disabled) {
+    rr(x + 0.5, y + 0.5, w - 1, h - 1, Math.max(1, r - 0.5));
+    ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 0.5; ctx.stroke();
+  }
   if (pressed) {   // 按下态：内阴影/下沉描边
     rr(x + 1, y + 1, w - 2, h - 2, Math.max(1, r - 1));
-    ctx.strokeStyle = 'rgba(0,0,0,.30)'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = 'rgba(0,0,0,.28)'; ctx.lineWidth = 2; ctx.stroke();
   }
   ctx.save();
   const size = opt.size || 14, lines = String(label).split('\n');
   const prevBaseline = ctx.textBaseline; ctx.textBaseline = 'middle';
+  // 文字阴影（增加可读性和立体感）
+  ctx.shadowColor = 'rgba(0,0,0,.3)'; ctx.shadowBlur = 1; ctx.shadowOffsetY = 1;
   lines.forEach((ln, i) =>
     txt(ln, x + w / 2, y + h / 2 + (i - (lines.length - 1) / 2) * (size + 3), size, opt.col || '#fff', 'center', true));
   ctx.textBaseline = prevBaseline;
   ctx.restore();
   ctx.restore();
 }
-// 资源小药丸（Phase 0 #32 图标化）：色点 + 文字，扫视更快
+// 资源小药丸 v3（更精致的胶囊：渐变+色点阴影+细描边）
 function resChip(label, x, y, dot) {
-  rr(x, y, 64, 18, 9); ctx.fillStyle = '#fffdf9'; ctx.fill();
-  ctx.fillStyle = dot; ctx.beginPath(); ctx.arc(x + 11, y + 9, 5, 0, 7); ctx.fill();
-  txt(label, x + 22, y + 13, 11, '#495057', 'left', true);
+  const cw = 64, ch = 18;
+  // 投影
+  ctx.save();
+  ctx.shadowColor = 'rgba(60,40,15,.08)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 1;
+  rr(x, y, cw, ch, 9); ctx.fillStyle = '#fffdf7'; ctx.fill();
+  ctx.restore();
+  // 渐变底色
+  const cg = ctx.createLinearGradient(0, y, 0, y + ch);
+  cg.addColorStop(0, '#fffdf7'); cg.addColorStop(1, '#f5efe0');
+  rr(x, y, cw, ch, 9); ctx.fillStyle = cg; ctx.fill();
+  // 细描边
+  rr(x, y, cw, ch, 9); ctx.strokeStyle = 'rgba(180,150,100,.25)'; ctx.lineWidth = 0.8; ctx.stroke();
+  // 色点（带光晕）
+  ctx.save();
+  ctx.shadowColor = dot; ctx.shadowBlur = 3;
+  ctx.fillStyle = dot; ctx.beginPath(); ctx.arc(x + 11, y + 9, 4.5, 0, 7); ctx.fill();
+  ctx.restore();
+  // 色点高光
+  ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.beginPath(); ctx.arc(x + 10, y + 7.5, 1.8, 0, 7); ctx.fill();
+  // 文字
+  txt(label, x + 22, y + 13, 11, '#4a3f30', 'left', true);
 }
 
 /* ---------- 切屏过场：goTo 统一进场/出场 ---------- */
@@ -170,47 +266,72 @@ function clipList(x, y, w, h, contentH) {
 }
 function unclip() { g_scrollY = 0; ctx.restore(); }
 
-/* ========== 「墨绿·朱砂」三国羊皮纸主题 ==========
-   零依赖纯 Canvas 组件库：统一色板 + 渐变 + 印章 + 墨边。
+/* ========== 「墨绿·朱砂」三国羊皮纸主题 v3 ==========
+   零依赖纯 Canvas 组件库：更精致的色板 + 渐变 + 光晕 + 纹饰 + 印章。
    所有函数不改布局，只替换绘制，可逐步替换旧 panel/btn。 */
 const THEME = {
-  bg: '#f5ecd9',              // 羊皮纸背景
-  cardTop: '#fdf9ef', cardBot: '#f0e3c8',   // 卡片渐变
-  cardBorder: '#d4bfa0',      // 暖棕描边
-  ink: '#2c2418',             // 墨棕主文字
-  inkSub: '#8a7e6c',          // 辅助文字
-  gold: '#b8860b',            // 描金强调
-  vermilion: ['#c0453a', '#8f2e26'],   // 朱砂红（主按钮）
-  pine: ['#4a6b52', '#2f4a36'],        // 墨绿（次按钮）
-  indigo: ['#3a5a7a', '#2a4058'],      // 玄青（特殊）
-  slate: ['#6b7280', '#4b5563'],       // 石灰（次要）
-  purple: ['#6d5a9e', '#4a3a70'],      // 紫檀（装备/皮肤）
-  gold2: ['#c9930a', '#9a7008'],       // 鎏金（招募/心愿）
+  bg: '#f2e8d3',              // 羊皮纸背景（略深，增加对比）
+  bgWarm: '#f7efe0',          // 暖白背景区
+  cardTop: '#fefbf4', cardBot: '#ede0c4',   // 卡片渐变（更通透）
+  cardBorder: '#c9b48f',      // 暖棕描边（略深，增加轮廓感）
+  cardGold: '#d4b76e',        // 金边（高品质卡片描边）
+  ink: '#2a1f12',             // 墨棕主文字（更深沉）
+  inkSub: '#8a7a62',          // 辅助文字
+  gold: '#b4830a',            // 描金强调
+  goldLight: '#d4a828',       // 亮金
+  vermilion: ['#c94a3d', '#8b2620'],   // 朱砂红（主按钮，略鲜亮）
+  pine: ['#4d7256', '#2c4834'],        // 墨绿（次按钮）
+  indigo: ['#3d6284', '#283e56'],      // 玄青（特殊）
+  slate: ['#6d7683', '#47505d'],       // 石灰（次要）
+  purple: ['#7562a8', '#463670'],      // 紫檀（装备/皮肤）
+  gold2: ['#d49a12', '#94700a'],       // 鎏金（招募/心愿）
+  jade: ['#5a8a6e', '#3a5e4a'],        // 翡翠绿
+  // 品级色（对应白绿蓝紫橙）
+  tierWhite: '#b8b0a0', tierGreen: '#3a9a52', tierBlue: '#2a7cc8',
+  tierPurple: '#8a4cb8', tierOrange: '#d49010',
 };
 
 // 注：渐变按钮/羊皮纸卡片已合并进上方统一的 btn()/panel()，menu 直接用 btn(...{grad})/panel(...)。
 
-// 印章装饰（圆形红底白字，三国符号）
+// 印章装饰 v3（更精致的朱砂印章：双层描边+内文+立体感）
 function seal(x, y, r, char, col) {
+  const c = col || '#a03028';
   ctx.save();
-  ctx.shadowColor = 'rgba(60,20,10,.35)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 2;
-  ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fillStyle = col || '#a03a2c'; ctx.fill();
+  // 外层光晕
+  ctx.shadowColor = c; ctx.shadowBlur = 6; ctx.shadowOffsetY = 1;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fillStyle = c; ctx.fill();
   ctx.restore();
+  // 白色外描边
   ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
-  ctx.beginPath(); ctx.arc(x, y, r - 3.5, 0, 7); ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1; ctx.stroke();
+  // 内层细白线
+  ctx.beginPath(); ctx.arc(x, y, r - 3, 0, 7); ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 0.8; ctx.stroke();
+  // 内填渐变（增加立体感）
+  const sg = ctx.createRadialGradient(x - r * 0.2, y - r * 0.2, r * 0.1, x, y, r);
+  sg.addColorStop(0, shade(c, 1.25)); sg.addColorStop(1, c);
+  ctx.beginPath(); ctx.arc(x, y, r - 1, 0, 7); ctx.fillStyle = sg; ctx.fill();
+  // 重绘白描边覆盖渐变
+  ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.beginPath(); ctx.arc(x, y, r - 3, 0, 7); ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 0.8; ctx.stroke();
+  // 文字
   ctx.save(); ctx.textBaseline = 'middle';
-  txt(char, x, y + 1, r * 0.95, '#fff', 'center', true);
+  ctx.shadowColor = 'rgba(0,0,0,.3)'; ctx.shadowBlur = 1;
+  txt(char, x, y + 1, r * 0.9, '#fff', 'center', true);
   ctx.restore();
 }
 
-// 大标题（带阴影，可选左侧印章）
+// 大标题 v3（更深阴影+可选金色描边+左侧印章）
 function title(s, x, y, size, opt = {}) {
   ctx.save();
-  ctx.shadowColor = 'rgba(60,45,20,.35)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 3;
+  // 外阴影
+  ctx.shadowColor = opt.shadow || 'rgba(60,40,15,.30)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 3;
+  // 金色描边效果（解锁彩蛋时）
+  if (opt.gold) {
+    ctx.strokeStyle = 'rgba(212,168,40,.4)'; ctx.lineWidth = 3;
+    ctx.strokeText(s, x, y);
+  }
   txt(s, x, y, size, opt.col || THEME.ink, 'center', true);
   ctx.restore();
   if (opt.seal) {
-    // restore 后 ctx.font 已还原，需重新设置再测量，否则印章位置算错
     const key = size + 'b'; let f = _fontCache.get(key);
     if (!f) { f = `bold ${size}px "PingFang SC","Microsoft YaHei",sans-serif`; _fontCache.set(key, f); }
     ctx.font = f;
@@ -219,68 +340,137 @@ function title(s, x, y, size, opt = {}) {
   }
 }
 
-// 墨边（页面顶部柔和深色渐变条，增加层次）
+// 墨边 v3（页面顶部柔和深色渐变条，增加层次+顶部金线）
 function inkTop(h = 46) {
   const g = ctx.createLinearGradient(0, 0, 0, h);
-  g.addColorStop(0, 'rgba(60,45,20,.14)'); g.addColorStop(1, 'rgba(60,45,20,0)');
+  g.addColorStop(0, 'rgba(60,40,15,.12)'); g.addColorStop(1, 'rgba(60,40,15,0)');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, h);
+  // 顶部金线装饰
+  ctx.fillStyle = 'rgba(180,140,60,.25)'; ctx.fillRect(0, 0, W, 2);
 }
 
-// 分组标题（小字 + 右侧墨线）
+// 分组标题 v3（小字 + 右侧墨线 + 左侧金点）
 function groupLabel(label, x, y, w) {
-  txt(label, x, y, 10, THEME.gold, 'left', true);
+  // 左侧金点
+  ctx.fillStyle = 'rgba(180,140,60,.6)';
+  ctx.beginPath(); ctx.arc(x - 6, y - 3, 3, 0, 7); ctx.fill();
+  txt(label, x, y, 11, THEME.gold, 'left', true);
   const lw = ctx.measureText(label).width;
-  rr(x + lw + 10, y - 4, (w || 335) - lw - 10, 1, 0.5);
-  ctx.fillStyle = 'rgba(180,134,11,.35)'; ctx.fill();
+  // 墨线：渐变+金线双效果
+  const lineX = x + lw + 10, lineW = (w || 335) - lw - 10;
+  const lg = ctx.createLinearGradient(lineX, 0, lineX + lineW, 0);
+  lg.addColorStop(0, 'rgba(180,140,60,.45)'); lg.addColorStop(1, 'rgba(180,140,60,.08)');
+  rr(lineX, y - 4, lineW, 1, 0.5); ctx.fillStyle = lg; ctx.fill();
 }
 
-/* ---------- 菜单 ---------- */
+/* ---------- 菜单（古典雅致版） ---------- */
 function drawMenu() {
-  const red = '#bf3b2d';
+  const animT = Date.now() / 1000;
+  // 羊皮纸底色
   ctx.fillStyle = THEME.bg; ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = '#eadfcb'; ctx.fillRect(0, 0, W, 6);
-  inkTop(46);                                                    // 顶部墨边，增加层次
-  title('赵云与阿斗', W / 2, 66, 33, { col: SAVE.eggs.all ? '#d29a22' : THEME.ink, seal: '赵' });
-  txt('文字合成塔防 · 全量复刻版', W / 2, 92, 12, THEME.inkSub, 'center');
-  panel(64, 105, 247, 35, { r: 17 });
-  resChip('金 ' + SAVE.gold, 72, 113, '#b0801f');
-  resChip('材 ' + SAVE.mat, 204, 113, '#1c7ed6');
 
-  // 第一层：开始战斗
+  // 四角古典云纹装饰（淡雅）
+  ctx.save(); ctx.globalAlpha = 0.08; ctx.strokeStyle = '#b08040'; ctx.lineWidth = 1.5;
+  // 左上
+  ctx.beginPath(); ctx.arc(10, 10, 25, 0, Math.PI/2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(10, 10, 18, 0, Math.PI/2); ctx.stroke();
+  // 右上
+  ctx.beginPath(); ctx.arc(W-10, 10, 25, Math.PI/2, Math.PI); ctx.stroke();
+  ctx.beginPath(); ctx.arc(W-10, 10, 18, Math.PI/2, Math.PI); ctx.stroke();
+  // 左下
+  ctx.beginPath(); ctx.arc(10, H-10, 25, -Math.PI/2, 0); ctx.stroke();
+  ctx.beginPath(); ctx.arc(10, H-10, 18, -Math.PI/2, 0); ctx.stroke();
+  // 右下
+  ctx.beginPath(); ctx.arc(W-10, H-10, 25, Math.PI, Math.PI*1.5); ctx.stroke();
+  ctx.beginPath(); ctx.arc(W-10, H-10, 18, Math.PI, Math.PI*1.5); ctx.stroke();
+  ctx.restore();
+
+  // 顶部装饰金线
+  ctx.fillStyle = 'rgba(180,131,10,.35)'; ctx.fillRect(0, 0, W, 3);
+  ctx.fillStyle = 'rgba(212,168,40,.2)'; ctx.fillRect(0, 3, W, 1);
+  inkTop(52);
+
+  // 标题区域装饰框
+  const titleBoxW = 260, titleBoxH = 72;
+  ctx.save();
+  ctx.shadowColor = 'rgba(60,40,15,.1)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 2;
+  rr(W/2 - titleBoxW/2, 30, titleBoxW, titleBoxH, 14);
+  const titleG = ctx.createLinearGradient(0, 30, 0, 30 + titleBoxH);
+  titleG.addColorStop(0, '#fefbf4'); titleG.addColorStop(1, '#f5ead5');
+  ctx.fillStyle = titleG; ctx.fill();
+  ctx.restore();
+  rr(W/2 - titleBoxW/2, 30, titleBoxW, titleBoxH, 14);
+  ctx.strokeStyle = 'rgba(201,180,143,.7)'; ctx.lineWidth = 1.5; ctx.stroke();
+  // 内描金细线
+  rr(W/2 - titleBoxW/2 + 3, 33, titleBoxW - 6, titleBoxH - 6, 12);
+  ctx.strokeStyle = 'rgba(212,168,40,.25)'; ctx.lineWidth = 0.8; ctx.stroke();
+  // 四角装饰点
+  [[40,40],[W-40,40],[40,95],[W-40,95]].forEach(([dx,dy]) => {
+    ctx.fillStyle = 'rgba(212,168,40,.4)'; ctx.beginPath(); ctx.arc(dx, dy, 2, 0, 7); ctx.fill();
+  });
+
+  // 主标题
+  title('赵云与阿斗', W / 2, 68, 34, { col: SAVE.eggs.all ? '#d29a22' : THEME.ink, seal: '赵' });
+  txt('文字合成塔防 · 三国古风版', W / 2, 94, 11, THEME.inkSub, 'center');
+
+  // 资源面板（升级：金边+玻璃质感）
+  const resW = 260, resH = 38;
+  ctx.save();
+  ctx.shadowColor = 'rgba(60,40,15,.08)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 2;
+  rr(W/2 - resW/2, 112, resW, resH, 19);
+  const resG = ctx.createLinearGradient(0, 112, 0, 112 + resH);
+  resG.addColorStop(0, '#fffdf7'); resG.addColorStop(1, '#f7efe0');
+  ctx.fillStyle = resG; ctx.fill();
+  ctx.restore();
+  rr(W/2 - resW/2, 112, resW, resH, 19);
+  ctx.strokeStyle = 'rgba(201,180,143,.65)'; ctx.lineWidth = 1.2; ctx.stroke();
+  resChip('金 ' + SAVE.gold, W/2 - resW/2 + 8, 120, '#b0801f');
+  resChip('材 ' + SAVE.mat, W/2 + 18, 120, '#1c7ed6');
+
+  // 第一层：开始战斗（主按钮加光晕）
   selStage = clamp(selStage, 1, SAVE.stage);
   const ch = CHAPTERS[Math.min(3, ((selStage - 1) / 10) | 0)];
-  groupLabel('开始战斗', 30, 166, 335); panel(20, 174, 335, 148);
-  btn(34, 190, 42, 42, '◀', () => selStage--, { disabled: selStage <= 1, grad: THEME.slate, size: 15, r: 12 });
-  btn(299, 190, 42, 42, '▶', () => selStage++, { disabled: selStage >= SAVE.stage, grad: THEME.slate, size: 15, r: 12 });
-  txt('第 ' + selStage + ' 关 · ' + ch + (selStage % 10 === 0 ? ' · BOSS' : ''), W / 2, 215, 16, THEME.ink, 'center', true);
-  // 4 张地图压成 1 行 4 颗（80×27），避免原 2 行布局与 mapEffect / 皮肤·开战 重叠
-  MAPS.forEach((m, i) => btn(24 + i * 82, 243, 80, 27, m.name, () => { selMap = i; }, { size: 11, grad: selMap === i ? THEME.vermilion : THEME.slate, r: 8 }));
-  const mapEffect = MAPS[selMap].effect; if (mapEffect) txt('战场机制 · ' + mapEffect.name, W / 2, 280, 10, THEME.inkSub, 'center');
-  btn(30, 290, 150, 26, '画面:' + (SAVE.mapSkin ? '浓墨' : '标准'), () => { SAVE.mapSkin = SAVE.mapSkin ? 0 : 1; saveSave(); }, { size: 10, grad: SAVE.mapSkin ? THEME.vermilion : THEME.slate, r: 8 });
-  btn(195, 290, 150, 26, '开 战', () => { startBattle(selStage, false, selMap); goTo('game'); }, { size: 18, grad: THEME.vermilion, r: 8 });
-  btn(30, 344, 154, 30, '特别玩法', () => { goTo('modes'); }, { size: 11, grad: THEME.vermilion, r: 9 });
-  btn(191, 344, 154, 30, SAVE.endless ? '无尽挑战 · ' + SAVE.bestWave + '波' : '无尽挑战（30关解锁）', () => { startBattle(STAGE_MAX, true, selMap); goTo('game'); }, { size: 10, grad: THEME.indigo, disabled: !(SAVE.endless || SAVE.endlessOn), r: 9 });
+  groupLabel('— 开始战斗 —', 30, 175, 335); panel(20, 183, 335, 145, { corner: true });
+  btn(34, 199, 42, 42, '◀', () => selStage--, { disabled: selStage <= 1, grad: THEME.slate, size: 15, r: 12 });
+  btn(299, 199, 42, 42, '▶', () => selStage++, { disabled: selStage >= SAVE.stage, grad: THEME.slate, size: 15, r: 12 });
+  txt('第 ' + selStage + ' 关 · ' + ch + (selStage % 10 === 0 ? ' · BOSS' : ''), W / 2, 224, 16, THEME.ink, 'center', true);
+  MAPS.forEach((m, i) => btn(24 + i * 82, 251, 80, 27, m.name, () => { selMap = i; }, { size: 11, grad: selMap === i ? THEME.vermilion : THEME.slate, r: 8, glow: selMap === i }));
+  const mapEffect = MAPS[selMap].effect; if (mapEffect) txt('战场机制 · ' + mapEffect.name, W / 2, 288, 10, THEME.inkSub, 'center');
+  btn(30, 298, 150, 26, '画面:' + (SAVE.mapSkin ? '浓墨' : '标准'), () => { SAVE.mapSkin = SAVE.mapSkin ? 0 : 1; saveSave(); }, { size: 10, grad: SAVE.mapSkin ? THEME.vermilion : THEME.slate, r: 8 });
+  // 开战主按钮（呼吸光晕）
+  const fightGlow = 0.7 + Math.sin(animT * 2.5) * 0.3;
+  ctx.save();
+  ctx.shadowColor = '#c94a3d'; ctx.shadowBlur = 10 * fightGlow;
+  btn(195, 296, 150, 30, '开 战', () => { startBattle(selStage, false, selMap); goTo('game'); }, { size: 20, grad: THEME.vermilion, r: 9, glow: true });
+  ctx.restore();
+  btn(30, 348, 154, 30, '特别玩法', () => { goTo('modes'); }, { size: 11, grad: THEME.vermilion, r: 9 });
+  btn(191, 348, 154, 30, SAVE.endless ? '无尽挑战 · ' + SAVE.bestWave + '波' : '无尽挑战（30关解锁）', () => { startBattle(STAGE_MAX, true, selMap); goTo('game'); }, { size: 10, grad: THEME.indigo, disabled: !(SAVE.endless || SAVE.endlessOn), r: 9 });
 
   // 第二层：养成
-  groupLabel('养成', 30, 404, 335);
-  btn(30, 412, 100, 34, '武将营', () => { goTo('camp'); }, { grad: THEME.purple, size: 12, r: 9 });
-  btn(138, 412, 100, 34, '锻造装备', () => { goTo('forge'); forgeMsg = ''; }, { grad: THEME.slate, size: 12, r: 9 });
-  btn(246, 412, 99, 34, '道具商店', () => { goTo('shop'); }, { grad: THEME.slate, size: 12, r: 9 });
-  btn(30, 452, 154, 30, '军师 · 军令', () => { goTo('command'); }, { size: 11, grad: THEME.purple, r: 9 });
-  btn(191, 452, 154, 30, '心愿招募', () => { goTo('wish'); }, { size: 11, grad: THEME.gold2, r: 9 });
+  groupLabel('— 三国养成 —', 30, 410, 335);
+  btn(30, 418, 100, 34, '武将营', () => { goTo('camp'); }, { grad: THEME.purple, size: 12, r: 9 });
+  btn(138, 418, 100, 34, '锻造装备', () => { goTo('forge'); forgeMsg = ''; }, { grad: THEME.jade, size: 12, r: 9 });
+  btn(246, 418, 99, 34, '道具商店', () => { goTo('shop'); }, { grad: THEME.slate, size: 12, r: 9 });
+  btn(30, 458, 154, 30, '军师 · 军令', () => { goTo('command'); }, { size: 11, grad: THEME.purple, r: 9 });
+  btn(191, 458, 154, 30, '心愿招募', () => { goTo('wish'); }, { size: 11, grad: THEME.gold2, r: 9, glow: true });
 
   // 第三层：记录
-  groupLabel('记录', 30, 512, 335);
-  btn(30, 520, 100, 32, '成就', () => { goTo('ach'); }, { grad: THEME.slate, size: 11, r: 9 });
-  btn(138, 520, 100, 32, '录像', () => { goTo('ghost'); ghostMsg = ''; loadGhostList(); }, { grad: THEME.indigo, size: 11, r: 9 });
-  btn(246, 520, 99, 32, '存档管理', () => { goTo('save'); saveMsg = ''; }, { grad: THEME.slate, size: 11, r: 9 });
+  groupLabel('— 回忆录 —', 30, 518, 335);
+  btn(30, 526, 100, 32, '成就', () => { goTo('ach'); }, { grad: THEME.slate, size: 11, r: 9 });
+  btn(138, 526, 100, 32, '录像', () => { goTo('ghost'); ghostMsg = ''; loadGhostList(); }, { grad: THEME.indigo, size: 11, r: 9 });
+  btn(246, 526, 99, 32, '存档管理', () => { goTo('save'); saveMsg = ''; }, { grad: THEME.slate, size: 11, r: 9 });
   const canSign = canDaily();
-  btn(30, 558, 154, 28, (canSign ? '✓ ' : '') + '每日签到', () => { goTo('daily'); dailyMsg = ''; }, { size: 11, grad: canSign ? THEME.pine : THEME.slate, r: 8 });
-  btn(191, 558, 154, 28, '玩法说明', () => { goTo('help'); }, { size: 11, grad: THEME.slate, r: 8 });
+  btn(30, 564, 154, 28, (canSign ? '✓ ' : '') + '每日签到', () => { goTo('daily'); dailyMsg = ''; }, { size: 11, grad: canSign ? THEME.pine : THEME.slate, r: 8, glow: canSign });
+  btn(191, 564, 154, 28, '玩法说明', () => { goTo('help'); }, { size: 11, grad: THEME.slate, r: 8 });
 
-  // 非核心规则与实验性功能收进实验室，避免新人首页被开关淹没。
-  btn(30, 612, 210, 30, '设置 · 实验室', () => { goTo('lab'); }, { size: 11, grad: THEME.slate, r: 8 });
-  btn(246, 612, 99, 30, SAVE.mute ? '🔇 静音' : '🔊 有声', () => { SAVE.mute = !SAVE.mute; saveSave(); }, { size: 10, grad: SAVE.mute ? THEME.slate : THEME.pine, r: 8 });
+  // 底部装饰
+  ctx.save(); ctx.globalAlpha = 0.15; ctx.strokeStyle = '#b08040'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(30, 608); ctx.lineTo(W-30, 608); ctx.stroke();
+  ctx.restore();
+
+  // 非核心规则与实验性功能收进实验室
+  btn(30, 616, 210, 30, '设置 · 实验室', () => { goTo('lab'); }, { size: 11, grad: THEME.slate, r: 8 });
+  btn(246, 616, 99, 30, SAVE.mute ? '🔇 静音' : '🔊 有声', () => { SAVE.mute = !SAVE.mute; saveSave(); }, { size: 10, grad: SAVE.mute ? THEME.slate : THEME.pine, r: 8 });
 }
 
 
