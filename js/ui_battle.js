@@ -303,41 +303,239 @@ function unitCol(u) {
   return HEROES[u.name].grade === 4 ? '#b0801f' : '#9c36b5';
 }
 
-/* 棋子底衬：圆/盾/菱/方按类型区分；色弱模式加高对比描边。
-   浓墨模式(=limited-skin)额外添加柔和光晕角标。 */
+/* 棋子底衬 v3：精致卡牌效果 —— 内发光+品级纹饰+渐变底+兵种类型标识+光晕环。
+   圆/盾/菱/方按类型区分；色弱模式加高对比描边。
+   浓墨模式额外添加柔和光晕角标。 */
+
+// 兵种类型图标符号（用于卡牌右上角标识兵种种类）
+const TROOP_ICONS = {
+  卒: '兵', 刀: '刀', 枪: '枪', 弓: '弓', 骑: '骑', 盾: '盾', 甲: '甲'
+};
+// 品级内圈色（由浅入深）
+const TIER_INNER = [
+  ['#f0ece4','#d8d0c2'],    // 白
+  ['#e0f5e4','#b8e0c2'],    // 绿
+  ['#dce8f5','#b0c8e8'],    // 蓝
+  ['#ece0f5','#c8b0e0'],    // 紫
+  ['#f5ecd0','#e8d090'],    // 橙
+];
+
+// 获取全局时间（用于呼吸动画）
+function getAnimT() {
+  try { return (G && G.time) ? G.time : Date.now() / 1000; }
+  catch(e) { return Date.now() / 1000; }
+}
+
 function drawBase(u) {
   const hero = u.t === 'hero';
-  const g = hero ? (HEROES[u.name].grade === 4 ? '#e8a005' : '#9c36b5') : null;
+  const isOrange = hero && HEROES[u.name].grade === 4;
+  const g = hero ? (isOrange ? '#d49010' : '#8a4cb8') : null;
+  const animT = getAnimT();
   ctx.save();
+
   if (u.t === 'troop') {
-    const c = TIER_COL[u.tier - 1];
-    ctx.fillStyle = c; ctx.globalAlpha = 0.16; ctx.beginPath(); ctx.arc(0, 0, 18, 0, 7); ctx.fill();
-    ctx.globalAlpha = 1; ctx.lineWidth = 2; ctx.strokeStyle = c; ctx.beginPath(); ctx.arc(0, 0, 18, 0, 7); ctx.stroke();
-  } else if (hero) {
-    rr(-19, -19, 38, 38, 9); ctx.fillStyle = g; ctx.globalAlpha = 0.20; ctx.fill();
-    ctx.globalAlpha = 1; ctx.lineWidth = 2.5; ctx.strokeStyle = g; rr(-19, -19, 38, 38, 9); ctx.stroke();
-    /* 浓墨模式：柔和光晕环 */
-    if (SAVE.mapSkin === 1) {
-      ctx.globalAlpha = 0.12; ctx.strokeStyle = g; ctx.lineWidth = 3;
-      rr(-23, -23, 46, 46, 11); ctx.stroke();
-      ctx.globalAlpha = 1;
-      /* 角标水印 */
-      ctx.fillStyle = g; ctx.globalAlpha = 0.25;
-      ctx.font = '8px "PingFang SC","Microsoft YaHei",sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
-      ctx.fillText('★', 17, 17); ctx.globalAlpha = 1;
+    const tier = u.tier - 1;
+    const c = TIER_COL[tier];
+    const inner = TIER_INNER[tier];
+    const R = 18;
+
+    // 呼吸光晕（高阶兵种动态效果）
+    if (tier >= 2) {
+      const breath = 0.6 + Math.sin(animT * 2 + (u.x || 0) * 0.01) * 0.4;
+      ctx.save();
+      ctx.shadowColor = c; ctx.shadowBlur = (tier >= 3 ? 12 : 8) * breath;
+      ctx.beginPath(); ctx.arc(0, 0, R + 2, 0, 7);
+      ctx.strokeStyle = c; ctx.globalAlpha = 0.15 * breath; ctx.lineWidth = 1; ctx.stroke();
+      ctx.restore();
     }
+
+    // 底色圆（渐变填充）
+    const bg = ctx.createRadialGradient(0, -4, 1, 0, 0, R);
+    bg.addColorStop(0, '#fffef8'); bg.addColorStop(0.55, inner[0]); bg.addColorStop(1, inner[1]);
+    ctx.beginPath(); ctx.arc(0, 0, R - 1, 0, 7); ctx.fillStyle = bg; ctx.fill();
+
+    // 外圈描边（双层：外层深色+内层亮色）
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, 7);
+    ctx.strokeStyle = shade(c, 0.7); ctx.lineWidth = 2.8; ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, 7);
+    ctx.strokeStyle = c; ctx.lineWidth = 1.3; ctx.stroke();
+
+    // 内圈细纹（高阶兵种，带旋转感）
+    if (tier >= 2) {
+      ctx.save();
+      ctx.beginPath(); ctx.arc(0, 0, R - 3.5, 0, 7);
+      ctx.strokeStyle = c; ctx.globalAlpha = tier >= 3 ? 0.25 : 0.15; ctx.lineWidth = 0.7; ctx.stroke();
+      ctx.restore();
+    }
+
+    // 瓷面顶部高光弧（更通透）
+    ctx.save();
+    ctx.beginPath(); ctx.arc(-2, -6, R - 6, -Math.PI * 0.88, -Math.PI * 0.12);
+    ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2.2; ctx.lineCap = 'round'; ctx.stroke();
+    ctx.restore();
+
+    // 底部小反光（增加瓷体质感）
+    ctx.save();
+    ctx.beginPath(); ctx.ellipse(0, R - 5, R - 7, 2.5, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,.2)'; ctx.fill();
+    ctx.restore();
+
+    // 品级点（底部小星点，更精致）
+    const dotR = 2.2, dotY = R - 5;
+    for (let d = 0; d < 5; d++) {
+      ctx.beginPath();
+      ctx.arc(-7 + d * 3.5, dotY, dotR, 0, 7);
+      if (d <= tier) {
+        ctx.fillStyle = c; ctx.fill();
+        // 星点高光
+        ctx.beginPath(); ctx.arc(-7.5 + d * 3.5, dotY - 0.8, 0.8, 0, 7);
+        ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.fill();
+      } else {
+        ctx.fillStyle = 'rgba(0,0,0,.08)'; ctx.fill();
+      }
+    }
+
+  } else if (hero) {
+    const SZ = 19;
+    const isGold = isOrange;
+    const grade = HEROES[u.name].grade;
+    const heroBreath = 0.7 + Math.sin(animT * 1.8) * 0.3;
+
+    // 外层呼吸光晕（橙将金色光晕，紫将紫色光晕）
+    ctx.save();
+    ctx.shadowColor = g; ctx.shadowBlur = (isGold ? 14 : 10) * heroBreath;
+    rr(-SZ - 1, -SZ - 1, SZ * 2 + 2, SZ * 2 + 2, 10);
+    ctx.fillStyle = g; ctx.globalAlpha = (isGold ? 0.22 : 0.15) * heroBreath; ctx.fill();
+    ctx.restore();
+
+    // 底色渐变（更温润的玉质感）
+    const hbg = ctx.createRadialGradient(0, -SZ * 0.4, 2, 0, 0, SZ * 1.2);
+    if (isGold) {
+      hbg.addColorStop(0, '#fffaf0'); hbg.addColorStop(0.4, '#fdf0c8'); hbg.addColorStop(1, '#e8c878');
+    } else {
+      hbg.addColorStop(0, '#faf5ff'); hbg.addColorStop(0.4, '#efe0f8'); hbg.addColorStop(1, '#c8a8e4');
+    }
+    rr(-SZ + 1, -SZ + 1, SZ * 2 - 2, SZ * 2 - 2, 8);
+    ctx.fillStyle = hbg; ctx.fill();
+
+    // 外框描边（三层：深色外框+主色+内亮线）
+    rr(-SZ, -SZ, SZ * 2, SZ * 2, 9);
+    ctx.strokeStyle = shade(g, isGold ? 0.65 : 0.6); ctx.lineWidth = isGold ? 3.2 : 2.8; ctx.stroke();
+    rr(-SZ + 1, -SZ + 1, SZ * 2 - 2, SZ * 2 - 2, 8);
+    ctx.strokeStyle = g; ctx.lineWidth = isGold ? 1.4 : 1.2; ctx.stroke();
+    rr(-SZ + 2, -SZ + 2, SZ * 2 - 4, SZ * 2 - 4, 7);
+    ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 0.6; ctx.stroke();
+
+    // 内框细金线（橙将专属回纹）
+    if (isGold) {
+      rr(-SZ + 3.5, -SZ + 3.5, SZ * 2 - 7, SZ * 2 - 7, 5.5);
+      ctx.strokeStyle = 'rgba(212,168,40,.45)'; ctx.lineWidth = 0.9; ctx.stroke();
+    }
+
+    // 四角纹饰（橙将四角小菱形金饰，紫将圆点）
+    if (isGold) {
+      const cd = 4.5;
+      [[-SZ+cd,-SZ+cd],[SZ-cd,-SZ+cd],[-SZ+cd,SZ-cd],[SZ-cd,SZ-cd]].forEach(([dx,dy]) => {
+        ctx.save(); ctx.translate(dx, dy); ctx.rotate(Math.PI/4);
+        ctx.fillStyle = 'rgba(212,168,40,.75)';
+        ctx.fillRect(-1.8, -1.8, 3.6, 3.6);
+        ctx.fillStyle = 'rgba(255,250,230,.6)';
+        ctx.fillRect(-1, -1, 2, 2);
+        ctx.restore();
+      });
+    } else {
+      const cd = 4;
+      [[-SZ+cd,-SZ+cd],[SZ-cd,-SZ+cd],[-SZ+cd,SZ-cd],[SZ-cd,SZ-cd]].forEach(([dx,dy]) => {
+        ctx.fillStyle = 'rgba(138,76,184,.45)';
+        ctx.beginPath(); ctx.arc(dx, dy, 1.3, 0, 7); ctx.fill();
+      });
+    }
+
+    // 顶部高光（温润玉质感）
+    ctx.save();
+    const hl = ctx.createLinearGradient(0, -SZ, 0, -SZ + SZ * 0.55);
+    hl.addColorStop(0, 'rgba(255,255,255,.48)'); hl.addColorStop(0.6, 'rgba(255,255,255,.12)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+    rr(-SZ + 2, -SZ + 2, SZ * 2 - 4, SZ * 0.55, 6); ctx.fillStyle = hl; ctx.fill();
+    ctx.restore();
+
+    // 底部反光
+    ctx.save();
+    const bl = ctx.createRadialGradient(0, SZ - 3, 1, 0, SZ, SZ);
+    bl.addColorStop(0, 'rgba(255,255,255,.18)'); bl.addColorStop(1, 'rgba(255,255,255,0)');
+    rr(-SZ + 4, SZ - 8, SZ * 2 - 8, 10, 4); ctx.fillStyle = bl; ctx.fill();
+    ctx.restore();
+
+    // 浓墨模式：柔和光晕环
+    if (SAVE.mapSkin === 1) {
+      ctx.save();
+      ctx.globalAlpha = 0.12 * heroBreath; ctx.strokeStyle = g; ctx.lineWidth = 3;
+      rr(-23, -23, 46, 46, 11); ctx.stroke();
+      ctx.restore();
+    }
+
   } else if (u.t === 'char') {
-    rr(-16, -16, 32, 32, 7); ctx.fillStyle = '#9c36b5'; ctx.globalAlpha = 0.18; ctx.fill();
-    ctx.globalAlpha = 1; ctx.lineWidth = 2; ctx.strokeStyle = '#9c36b5'; rr(-16, -16, 32, 32, 7); ctx.stroke();
+    const c = '#8a4cb8', R = 16;
+    const charBreath = 0.75 + Math.sin(animT * 2.2) * 0.25;
+    // 将字牌：菱形 + 内发光
+    ctx.save();
+    ctx.shadowColor = c; ctx.shadowBlur = 7 * charBreath;
+    ctx.fillStyle = c; ctx.globalAlpha = 0.18 * charBreath;
+    ctx.beginPath(); ctx.moveTo(0, -R); ctx.lineTo(R, 0); ctx.lineTo(0, R); ctx.lineTo(-R, 0); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    // 渐变底（更温润）
+    const cbg = ctx.createRadialGradient(0, -4, 1, 0, 0, R);
+    cbg.addColorStop(0, '#fdfaff'); cbg.addColorStop(0.6, '#f0e4f8'); cbg.addColorStop(1, '#d0b4e4');
+    ctx.beginPath(); ctx.moveTo(0, -R+1); ctx.lineTo(R-1, 0); ctx.lineTo(0, R-1); ctx.lineTo(-R+1, 0); ctx.closePath();
+    ctx.fillStyle = cbg; ctx.fill();
+    // 描边（三层）
+    ctx.beginPath(); ctx.moveTo(0, -R); ctx.lineTo(R, 0); ctx.lineTo(0, R); ctx.lineTo(-R, 0); ctx.closePath();
+    ctx.strokeStyle = shade(c, 0.65); ctx.lineWidth = 2.8; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, -R+1); ctx.lineTo(R-1, 0); ctx.lineTo(0, R-1); ctx.lineTo(-R+1, 0); ctx.closePath();
+    ctx.strokeStyle = c; ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, -R+2.5); ctx.lineTo(R-2.5, 0); ctx.lineTo(0, R-2.5); ctx.lineTo(-R+2.5, 0); ctx.closePath();
+    ctx.strokeStyle = 'rgba(255,255,255,.2)'; ctx.lineWidth = 0.6; ctx.stroke();
+    // 顶部高光（菱形切面）
+    ctx.save();
+    ctx.beginPath(); ctx.moveTo(0, -R+3.5); ctx.lineTo(R-5, -3); ctx.lineTo(0, -4); ctx.lineTo(-R+5, -3); ctx.closePath();
+    ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.fill();
+    ctx.restore();
+
   } else if (u.t === 'ifrag') {
-    ctx.fillStyle = '#1c7ed6'; ctx.globalAlpha = 0.18;
-    ctx.beginPath(); ctx.moveTo(0, -17); ctx.lineTo(17, 0); ctx.lineTo(0, 17); ctx.lineTo(-17, 0); ctx.closePath(); ctx.fill();
-    ctx.globalAlpha = 1; ctx.lineWidth = 2; ctx.strokeStyle = '#1c7ed6';
-    ctx.beginPath(); ctx.moveTo(0, -17); ctx.lineTo(17, 0); ctx.lineTo(0, 17); ctx.lineTo(-17, 0); ctx.closePath(); ctx.stroke();
+    const c = '#2a7cc8', R = 17;
+    const wishBreath = u.wish ? (0.7 + Math.sin(animT * 2.5) * 0.3) : 1;
+    const fragCol = u.wish ? '#d4a828' : c;
+    // 道具碎片：菱形（蓝色/心愿金色）+光晕
+    ctx.save();
+    ctx.shadowColor = fragCol; ctx.shadowBlur = (u.wish ? 12 : 5) * wishBreath;
+    ctx.fillStyle = fragCol; ctx.globalAlpha = (u.wish ? 0.2 : 0.15) * wishBreath;
+    ctx.beginPath(); ctx.moveTo(0, -R); ctx.lineTo(R, 0); ctx.lineTo(0, R); ctx.lineTo(-R, 0); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    // 渐变底
+    const ibg = ctx.createRadialGradient(0, -4, 1, 0, 0, R);
+    if (u.wish) {
+      ibg.addColorStop(0, '#fffdf5'); ibg.addColorStop(0.6, '#f5e8b8'); ibg.addColorStop(1, '#e0c068');
+    } else {
+      ibg.addColorStop(0, '#f5faff'); ibg.addColorStop(0.6, '#dce8f5'); ibg.addColorStop(1, '#a8c0dc');
+    }
+    ctx.beginPath(); ctx.moveTo(0, -R+1); ctx.lineTo(R-1, 0); ctx.lineTo(0, R-1); ctx.lineTo(-R+1, 0); ctx.closePath();
+    ctx.fillStyle = ibg; ctx.fill();
+    // 描边
+    ctx.beginPath(); ctx.moveTo(0, -R); ctx.lineTo(R, 0); ctx.lineTo(0, R); ctx.lineTo(-R, 0); ctx.closePath();
+    ctx.strokeStyle = shade(fragCol, u.wish ? 0.65 : 0.7); ctx.lineWidth = u.wish ? 2.8 : 2.2; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, -R+1); ctx.lineTo(R-1, 0); ctx.lineTo(0, R-1); ctx.lineTo(-R+1, 0); ctx.closePath();
+    ctx.strokeStyle = fragCol; ctx.lineWidth = u.wish ? 1.3 : 1; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, -R+2.5); ctx.lineTo(R-2.5, 0); ctx.lineTo(0, R-2.5); ctx.lineTo(-R+2.5, 0); ctx.closePath();
+    ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 0.6; ctx.stroke();
+    // 顶部高光
+    ctx.save();
+    ctx.beginPath(); ctx.moveTo(0, -R+3.5); ctx.lineTo(R-5, -3); ctx.lineTo(0, -4); ctx.lineTo(-R+5, -3); ctx.closePath();
+    ctx.fillStyle = 'rgba(255,255,255,.42)'; ctx.fill();
+    ctx.restore();
   }
   ctx.restore();
+
   if (SAVE.colorblind) {
-    ctx.save(); ctx.lineWidth = 1; ctx.strokeStyle = '#222';
+    ctx.save(); ctx.lineWidth = 1.5; ctx.strokeStyle = '#222';
     if (hero) rr(-19, -19, 38, 38, 9);
     else if (u.t === 'char') rr(-16, -16, 32, 32, 7);
     else if (u.t === 'ifrag') { ctx.beginPath(); ctx.moveTo(0, -17); ctx.lineTo(17, 0); ctx.lineTo(0, 17); ctx.lineTo(-17, 0); ctx.closePath(); }
@@ -346,67 +544,272 @@ function drawBase(u) {
   }
 }
 
+// 绘制五角星（辅助函数）
+function drawStar(cx, cy, r, col) {
+  ctx.beginPath();
+  for (let i = 0; i < 5; i++) {
+    const angle = (i * 4 * Math.PI / 5) - Math.PI / 2;
+    const px = cx + Math.cos(angle) * r;
+    const py = cy + Math.sin(angle) * r;
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.closePath(); ctx.fillStyle = col; ctx.fill();
+}
+
+// 绘制圆形小徽章（辅助函数）
+function drawMiniBadge(bx, by, icon, bgCol, iconCol) {
+  const br = 7;
+  ctx.save();
+  // 光晕
+  ctx.shadowColor = bgCol; ctx.shadowBlur = 4;
+  // 底色圆
+  const bgG = ctx.createRadialGradient(bx, by - 1, 1, bx, by, br);
+  bgG.addColorStop(0, shade(bgCol, 1.2)); bgG.addColorStop(1, bgCol);
+  ctx.beginPath(); ctx.arc(bx, by, br, 0, 7); ctx.fillStyle = bgG; ctx.fill();
+  ctx.restore();
+  // 描边
+  ctx.beginPath(); ctx.arc(bx, by, br, 0, 7);
+  ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.beginPath(); ctx.arc(bx, by, br - 0.5, 0, 7);
+  ctx.strokeStyle = shade(bgCol, 0.7); ctx.lineWidth = 0.8; ctx.stroke();
+  // 图标
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.2)'; ctx.shadowBlur = 0.5; ctx.shadowOffsetY = 0.5;
+  txt(icon, bx, by + 3.5, 9, iconCol || '#fff', 'center', true);
+  ctx.restore();
+}
+
 function drawUnitAt(u, x, y, S) {
   const pop = u.animT > 0 ? 1 + u.animT * 0.6 : 1;
+  const animT = getAnimT();
   ctx.save(); ctx.translate(x, y); ctx.scale(pop, pop);
   drawBase(u);
   const col = unitCol(u);
+
+  // 右上角兵种类型小徽记（所有圆形/方形卡牌都加）
+  if (u.t === 'troop' || u.t === 'hero') {
+    const badgeIcon = u.t === 'troop' ? (TROOP_ICONS[u.type] || u.type) : (HEROES[u.name].grade === 4 ? '帝' : '将');
+    const badgeCol = col;
+    const bx = 15, by = -15;
+    const br = 6.5;
+    ctx.save();
+    ctx.shadowColor = badgeCol; ctx.shadowBlur = 3;
+    const bbg = ctx.createRadialGradient(bx, by - 1, 0.5, bx, by, br);
+    bbg.addColorStop(0, '#fffef5'); bbg.addColorStop(1, shade(badgeCol, 1.1));
+    ctx.beginPath(); ctx.arc(bx, by, br, 0, 7); ctx.fillStyle = bbg; ctx.fill();
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(bx, by, br, 0, 7);
+    ctx.strokeStyle = badgeCol; ctx.lineWidth = 1.2; ctx.stroke();
+    txt(badgeIcon, bx, by + 3, 8, badgeCol, 'center', true);
+  }
+
   if (u.t === 'hero') {
+    const isGold = HEROES[u.name].grade === 4;
+    // 武将名（大字，更深文字阴影增加可读性）
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.2)'; ctx.shadowBlur = 1.5; ctx.shadowOffsetY = 1.2;
     txt(u.name, 0, 4, 14 + u.lvl, col, 'center', true);
-    txt('Lv' + u.lvl + (u.weapon ? '·' + WEAPONS[u.weapon].name[0] : ''), 0, 17, 8, col, 'center');
+    ctx.restore();
+    // 等级/武器（小字，更精致，带微型标签底）
+    const lvText = 'Lv' + u.lvl + (u.weapon ? '·' + WEAPONS[u.weapon].name[0] : '');
+    ctx.font = 'bold 7px "PingFang SC","Microsoft YaHei",sans-serif';
+    const lvw = ctx.measureText(lvText).width + 5;
+    rr(-lvw/2, 12, lvw, 7.5, 3);
+    ctx.fillStyle = 'rgba(0,0,0,.08)'; ctx.fill();
+    txt(lvText, 0, 17.5, 7, shade(col, 0.75), 'center', true);
+
+    // 技能CD环（精致玉璧环：双环+渐变+就绪脉冲）
     if (HEROES[u.name].skill) {
       var cdMax = (typeof skillCd === 'function') ? skillCd(u) : HEROES[u.name].skill.cd;
       var cdRatio = 1 - Math.min(1, Math.max(0, (u.cd || 0) / cdMax));
-      ctx.strokeStyle = cdRatio >= 1 ? '#2f9e44' : '#5f3dc4'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(0, -5, 21, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * cdRatio); ctx.stroke();
+      const cdR = 22;
+      // 外环底色（深灰）
+      ctx.strokeStyle = 'rgba(0,0,0,.06)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(0, -5, cdR, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2); ctx.stroke();
+      // 内环底色（浅灰白）
+      ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1.2; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(0, -5, cdR - 1, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2); ctx.stroke();
+      // CD进度（渐变）
+      const cdCol = cdRatio >= 1 ? '#3a9a52' : col;
+      const cdGrad = ctx.createRadialGradient(0, -5, cdR - 2, 0, -5, cdR + 1);
+      cdGrad.addColorStop(0, shade(cdCol, 1.15)); cdGrad.addColorStop(1, cdCol);
+      ctx.strokeStyle = cdGrad; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(0, -5, cdR, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * cdRatio); ctx.stroke();
+      // 就绪时脉冲光效
+      if (cdRatio >= 1) {
+        const pulse = 0.6 + Math.sin(animT * 5) * 0.4;
+        ctx.save();
+        ctx.shadowColor = '#3a9a52'; ctx.shadowBlur = 6 * pulse;
+        ctx.strokeStyle = 'rgba(58,154,82,.35)'; ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.arc(0, -5, cdR + 1, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2); ctx.stroke();
+        ctx.restore();
+        // 就绪时环首点亮
+        ctx.save();
+        ctx.fillStyle = '#3a9a52'; ctx.shadowColor = '#3a9a52'; ctx.shadowBlur = 4;
+        ctx.beginPath(); ctx.arc(0, -5 - cdR, 2.2, 0, 7); ctx.fill();
+        ctx.restore();
+      }
     }
+    // 觉醒星点（真正的五角星，带金色光晕）
     if (u.awaken > 0) {
-      for (let k = 0; k < u.awaken; k++) { ctx.fillStyle = '#e8590c'; ctx.beginPath(); ctx.arc(-8 + k * 8, 20, 2.4, 0, 7); ctx.fill(); }
+      for (let k = 0; k < u.awaken && k < 5; k++) {
+        const sx = -8 + k * 8, sy = 22;
+        ctx.save();
+        ctx.shadowColor = '#f59f00'; ctx.shadowBlur = 4;
+        drawStar(sx, sy, 3, '#f59f00');
+        // 星心高光
+        ctx.fillStyle = '#fff3bf';
+        ctx.beginPath(); ctx.arc(sx, sy - 0.5, 1, 0, 7); ctx.fill();
+        ctx.restore();
+      }
     }
+    // 皮肤装饰
     if (typeof currentSkin === 'function') {
       const sk = currentSkin(u.name);
       if (sk && sk.decor && sk.decor !== 'none') {
-        const dCol = sk.decor === 'gold' ? '#fab005' : col;
+        const dCol = sk.decor === 'gold' ? '#d4a828' : col;
         const dChar = (typeof SKIN_DECOR !== 'undefined' && SKIN_DECOR[sk.decor]) || '★';
-        txt(dChar, 16, -12, 11, dCol, 'center');
+        ctx.save();
+        ctx.shadowColor = dCol; ctx.shadowBlur = 4;
+        // 装饰角标底色
+        ctx.fillStyle = 'rgba(255,255,255,.85)';
+        ctx.beginPath(); ctx.arc(-15, -13, 6, 0, 7); ctx.fill();
+        txt(dChar, -15, -10, 11, dCol, 'center');
+        ctx.restore();
       }
     }
   } else if (u.t === 'troop') {
-    txt(u.type, 0, 6, 22, col, 'center', true);
-    txt(TIER_NAME[u.tier - 1], 0, 18, 8, col, 'center');
+    const tier = u.tier - 1;
+    // 兵种字（带更深阴影更立体）
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.15)'; ctx.shadowBlur = 1; ctx.shadowOffsetY = 1.2;
+    txt(u.type, 0, 5, 19, col, 'center', true);
+    ctx.restore();
+    // 品级字标签（更精致的胶囊）
+    const tierName = TIER_NAME[u.tier - 1];
+    ctx.font = 'bold 6.5px "PingFang SC","Microsoft YaHei",sans-serif';
+    const tw = ctx.measureText(tierName).width + 5;
+    rr(-tw/2, 12.5, tw, 7.5, 3);
+    // 标签渐变
+    const tagG = ctx.createLinearGradient(0, 12.5, 0, 20);
+    tagG.addColorStop(0, shade(col, 1.1)); tagG.addColorStop(1, col);
+    ctx.fillStyle = tagG; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 0.6;
+    rr(-tw/2 + 0.5, 13, tw - 1, 6.5, 2.5); ctx.stroke();
+    txt(tierName, 0, 18, 6.5, '#fff', 'center', true);
   } else if (u.t === 'char') {
-    txt(u.ch, 0, 7, 22, col, 'center', true);
-    txt('将字', 0, 18, 7, '#adb5bd', 'center');
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.15)'; ctx.shadowBlur = 1; ctx.shadowOffsetY = 1.2;
+    txt(u.ch, 0, 6, 19, col, 'center', true);
+    ctx.restore();
+    ctx.font = 'bold 6.5px "PingFang SC","Microsoft YaHei",sans-serif';
+    const jw = ctx.measureText('将字').width + 5;
+    rr(-jw/2, 12.5, jw, 7.5, 3); ctx.fillStyle = 'rgba(138,76,184,.75)'; ctx.fill();
+    txt('将字', 0, 18, 6.5, '#fff', 'center', true);
     if (S && S.side > 0) {
       var paired = null;
       for (var i = 0; i < HERO_LIST.length && !paired; i++) {
         var n = HERO_LIST[i]; if (n[0] === u.ch) paired = n[1]; else if (n[1] === u.ch) paired = n[0];
       }
-      if (paired) txt('配:' + paired, 0, 30, 8, '#b78324', 'center');
+      if (paired) {
+        ctx.font = 'bold 6.5px "PingFang SC","Microsoft YaHei",sans-serif';
+        const pw = ctx.measureText('配'+paired).width + 5;
+        rr(-pw/2, 22, pw, 7.5, 3);
+        const pG = ctx.createLinearGradient(0, 22, 0, 29.5);
+        pG.addColorStop(0, '#e8b848'); pG.addColorStop(1, '#b4830a');
+        ctx.fillStyle = pG; ctx.fill();
+        txt('配:'+paired, 0, 27.5, 6.5, '#fff', 'center', true);
+      }
     }
   } else if (u.t === 'ifrag') {
-    txt(u.ch, 0, 7, 22, u.wish ? '#ffd700' : col, 'center', true);
-    txt(ITEMS[IFRAGS[u.ch].item].name + ' ' + u.n + '/' + IFRAGS[u.ch].need, 0, 18, 7, '#adb5bd', 'center');
-    if (u.wish) txt('★', 14, -10, 12, '#ffd700', 'center');
-  } else txt('铲', 0, 7, 20, col, 'center', true);
+    const fragCol = u.wish ? '#d4a828' : col;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.15)'; ctx.shadowBlur = 1; ctx.shadowOffsetY = 1.2;
+    txt(u.ch, 0, 6, 19, fragCol, 'center', true);
+    ctx.restore();
+    // 碎片进度标签
+    const fragText = u.n + '/' + IFRAGS[u.ch].need;
+    ctx.font = 'bold 6.5px "PingFang SC","Microsoft YaHei",sans-serif';
+    const fw = ctx.measureText(fragText).width + 5;
+    rr(-fw/2, 12.5, fw, 7.5, 3);
+    const fG = ctx.createLinearGradient(0, 12.5, 0, 20);
+    fG.addColorStop(0, shade(fragCol, 1.1)); fG.addColorStop(1, fragCol);
+    ctx.fillStyle = fG; ctx.fill();
+    txt(fragText, 0, 18, 6.5, '#fff', 'center', true);
+    if (u.wish) {
+      ctx.save(); ctx.shadowColor = '#d4a828'; ctx.shadowBlur = 5;
+      drawStar(14, -12, 4.5, '#d4a828');
+      ctx.fillStyle = '#fff3bf'; ctx.beginPath(); ctx.arc(14, -12.5, 1.2, 0, 7); ctx.fill();
+      ctx.restore();
+    }
+  } else {
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.12)'; ctx.shadowBlur = 1; ctx.shadowOffsetY = 1;
+    txt('铲', 0, 6, 17, col, 'center', true);
+    ctx.restore();
+  }
   ctx.restore();
-  /* buff 标识（Phase 3 #39） */
+
+  /* buff 标识（精致圆形小徽章） */
   if (S && S.side > 0) {
-    let _bx = x - 20;
-    if (u.rateMul > 1) { txt('⚡', _bx, y - 22, 11, '#f59f00', 'center', true); _bx += 12; }
-    if (u.buffN > 0) { txt('⚔', _bx, y - 22, 11, '#e8590c', 'center', true); _bx += 12; }
+    let _bx = x - 22;
+    if (u.rateMul > 1) {
+      drawMiniBadge(_bx, y - 21, '⚡', '#f59f00');
+      _bx += 14;
+    }
+    if (u.buffN > 0) {
+      drawMiniBadge(_bx, y - 21, '⚔', '#e8590c');
+      _bx += 14;
+    }
     if (SAVE.manualUlt && u.t === 'hero' && HEROES[u.name].skill && u.cd <= 0) {
-      const _pr = 22 + Math.sin((G ? G.time : 0) * 6) * 2;
-      ctx.strokeStyle = 'rgba(232,160,5,.85)'; ctx.lineWidth = 2;
+      const _pr = 23 + Math.sin(animT * 5) * 2;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(232,160,5,.7)'; ctx.lineWidth = 1.8;
+      ctx.shadowColor = '#e8a005'; ctx.shadowBlur = 5;
       ctx.beginPath(); ctx.arc(x, y - 5, _pr, 0, 7); ctx.stroke();
+      ctx.restore();
     }
   }
   if (S && (u.t === 'troop' || u.t === 'hero')) {
     const st = unitStats(u, S);
-    if (u.hp < st.maxhp) hpBar(x - 18, y + 21, 36, u.hp / st.maxhp, '#2f9e44');
-    if (u.animT > 0) { ctx.strokeStyle = 'rgba(255,107,107,.7)'; ctx.lineWidth = 2; ctx.strokeRect(x - 22, y - 14, 44, 30); }
+    if (u.hp < st.maxhp) {
+      // 精致血条：瓷面质感+顶部高光
+      const hbw = 38, hbh = 4.5, hbx = x - hbw/2, hby = y + 22;
+      // 投影底
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,.15)'; ctx.shadowBlur = 2; ctx.shadowOffsetY = 1;
+      rr(hbx, hby, hbw, hbh, 2.5); ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fill();
+      ctx.restore();
+      // 底色槽
+      rr(hbx, hby, hbw, hbh, 2.5); ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fill();
+      // 血量渐变
+      const hpRatio = u.hp / st.maxhp;
+      const hpCol = hpRatio > 0.5 ? '#3a9a52' : hpRatio > 0.25 ? '#f0a020' : '#e03838';
+      const hpGrad = ctx.createLinearGradient(hbx, hby, hbx, hby + hbh);
+      hpGrad.addColorStop(0, shade(hpCol, 1.2)); hpGrad.addColorStop(0.4, hpCol); hpGrad.addColorStop(1, shade(hpCol, 0.85));
+      rr(hbx, hby, hbw * clamp(hpRatio, 0, 1), hbh, 2.5); ctx.fillStyle = hpGrad; ctx.fill();
+      // 顶部高光条
+      if (hpRatio > 0.05) {
+        ctx.save();
+        const hl = ctx.createLinearGradient(hbx, hby, hbx, hby + hbh * 0.5);
+        hl.addColorStop(0, 'rgba(255,255,255,.45)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+        rr(hbx + 0.5, hby + 0.5, Math.max(0, hbw * clamp(hpRatio, 0, 1) - 1), hbh * 0.45, 2);
+        ctx.fillStyle = hl; ctx.fill();
+        ctx.restore();
+      }
+    }
+    if (u.animT > 0) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,107,107,.5)'; ctx.lineWidth = 1.8;
+      ctx.setLineDash([4,2]);
+      ctx.strokeRect(x - 23, y - 15, 46, 42);
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
   }
-  if (u.stun > 0) txt('✦', x + 16, y - 14, 10, '#5f3dc4', 'center');
+  if (u.stun > 0) {
+    drawMiniBadge(x + 18, y - 19, '✦', '#8a4cb8');
+  }
 }
 
 /* ========== Celadon cell rendering (瓷面格) ==========
@@ -602,71 +1005,184 @@ function drawSiegeMob(m) {
   ctx.restore();
 }
 
-/* ========== Adou plaque (bug fix: faction plaque + seal + label) ========== */
+// 绘制护盾图标（精致版）
+function drawShieldIcon(sx, sy, col) {
+  ctx.save();
+  const sw = 10, sh = 12;
+  // 光晕
+  ctx.shadowColor = col; ctx.shadowBlur = 4;
+  // 渐变底色
+  const sbg = ctx.createLinearGradient(sx, sy, sx, sy + sh);
+  sbg.addColorStop(0, shade(col, 1.3)); sbg.addColorStop(1, col);
+  ctx.beginPath();
+  ctx.moveTo(sx + sw/2, sy);
+  ctx.quadraticCurveTo(sx + sw, sy + 1, sx + sw, sy + 4);
+  ctx.lineTo(sx + sw, sy + 8);
+  ctx.quadraticCurveTo(sx + sw/2, sy + sh + 1, sx, sy + 8);
+  ctx.lineTo(sx, sy + 4);
+  ctx.quadraticCurveTo(sx, sy + 1, sx + sw/2, sy);
+  ctx.closePath();
+  ctx.fillStyle = sbg; ctx.fill();
+  ctx.restore();
+  // 描边
+  ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(sx + sw/2, sy + 0.5);
+  ctx.quadraticCurveTo(sx + sw - 0.5, sy + 1.5, sx + sw - 0.5, sy + 4);
+  ctx.lineTo(sx + sw - 0.5, sy + 8);
+  ctx.quadraticCurveTo(sx + sw/2, sy + sh, sx + 0.5, sy + 8);
+  ctx.lineTo(sx + 0.5, sy + 4);
+  ctx.quadraticCurveTo(sx + 0.5, sy + 1.5, sx + sw/2, sy + 0.5);
+  ctx.stroke();
+  // 高光
+  ctx.fillStyle = 'rgba(255,255,255,.35)';
+  ctx.beginPath();
+  ctx.ellipse(sx + sw/2 - 1, sy + 3.5, 2.5, 1.5, -0.2, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/* ========== Adou plaque v3: 古典木质匾额 + 朱红印章 + 金边 + 精致血条 ========== */
 function drawAdou(S) {
   const mine = S.side > 0;
   const y = S.adou.y;
-  // 阿斗牌布局：标签在上(h=10)，主体椭圆(30px)，血条在下(h=6)，护盾最后(h=12)
-  // 总高约：-12..+38，上下留空区（敌方 y 距顶至少 40，玩家 y 距底至少 44）
+  const animT = getAnimT();
   // 长坂独胆：赵云贴附阿斗左侧（护送），随阿斗移动，提供推拒保护光环
   if (G.mode === 'escort' && G.escort && mine) {
     ctx.save();
     const hasZhao = G.P.cells.some(c => c.unit && c.unit.name === '赵云');
-    ctx.fillStyle = hasZhao ? 'rgba(28,126,214,0.30)' : 'rgba(28,126,214,0.10)';
-    ctx.beginPath(); ctx.arc(S.adou.x - 26, S.adou.y, 16, 0, 7); ctx.fill();
-    ctx.strokeStyle = '#1c7ed6'; ctx.lineWidth = hasZhao ? 2.5 : 1; ctx.stroke();
-    txt(hasZhao ? '云' : '赵', S.adou.x - 26, S.adou.y + 4, 15, hasZhao ? '#1c7ed6' : '#74828e', 'center', true);
+    const zhaoBreath = hasZhao ? (0.8 + Math.sin(animT * 2) * 0.2) : 1;
+    ctx.fillStyle = hasZhao ? `rgba(28,126,214,${0.25 * zhaoBreath})` : 'rgba(28,126,214,0.10)';
+    ctx.beginPath(); ctx.arc(S.adou.x - 30, S.adou.y, 18, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#1c7ed6'; ctx.lineWidth = hasZhao ? 2 : 1; ctx.globalAlpha = zhaoBreath;
+    ctx.beginPath(); ctx.arc(S.adou.x - 30, S.adou.y, 18, 0, 7); ctx.stroke();
+    ctx.globalAlpha = 1;
+    // 赵云小圆牌（精致版）
+    ctx.save();
+    ctx.shadowColor = '#1c7ed6'; ctx.shadowBlur = hasZhao ? 6 : 2;
+    const zbg = ctx.createRadialGradient(S.adou.x - 30, S.adou.y - 2, 1, S.adou.x - 30, S.adou.y, 12);
+    zbg.addColorStop(0, '#f0f7fd'); zbg.addColorStop(1, '#c0d8ec');
+    ctx.beginPath(); ctx.arc(S.adou.x - 30, S.adou.y, 12, 0, 7); ctx.fillStyle = zbg; ctx.fill();
+    ctx.strokeStyle = '#1c7ed6'; ctx.lineWidth = 1.8; ctx.stroke();
+    ctx.restore();
+    txt('云', S.adou.x - 30, S.adou.y + 5, 14, '#1c7ed6', 'center', true);
     if (hasZhao) {
       const zhaoCell = G.P.cells.find(c => c.unit && c.unit.name === '赵云');
       if (zhaoCell) {
-        ctx.strokeStyle = 'rgba(28,126,214,0.25)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 6]);
-        ctx.beginPath(); ctx.moveTo(zhaoCell.x, zhaoCell.y); ctx.lineTo(S.adou.x - 26, S.adou.y); ctx.stroke();
+        ctx.strokeStyle = 'rgba(28,126,214,0.3)'; ctx.lineWidth = 1.2; ctx.setLineDash([3, 5]);
+        ctx.beginPath(); ctx.moveTo(zhaoCell.x, zhaoCell.y); ctx.lineTo(S.adou.x - 30, S.adou.y); ctx.stroke();
         ctx.setLineDash([]);
       }
     }
     ctx.restore();
   }
 
-  var plaqueCol = mine ? '#2f9e44' : '#e03131';
-  var textCol = mine ? '#343a40' : '#c0392b';
-  var labelCol = mine ? '#2f9e44' : '#e03131';
+  const plaqueCol = mine ? '#2f9e44' : '#c9302c';
+  const plaqueGold = mine ? '#5a8a5e' : '#a02828';
+  const textCol = mine ? '#2a4a2e' : '#7a2020';
 
   ctx.save();
-  // 主体椭圆板
-  var pw = 58, ph = 26, pr = 13;
-  rr(S.adou.x - pw / 2, y - 4, pw, ph, pr);
-  ctx.fillStyle = mine ? 'rgba(47,158,68,.12)' : 'rgba(224,49,49,.12)';
-  ctx.fill();
-  ctx.strokeStyle = plaqueCol; ctx.lineWidth = 1.5; ctx.stroke();
+  const pw = 66, ph = 30;
+  const px = S.adou.x - pw / 2, py = y - 6;
 
-  // 标签在椭圆上方
-  seal(S.adou.x - 18, y + 6, 6, mine ? '友' : '敌', plaqueCol);
-  txt(mine ? '我方' : '敌军', S.adou.x, y - 12, 8, labelCol, 'center', true);
-
-  // 阿斗名 + HP
-  const _hp = (G.mode === 'escort' && G.escort) ? G.escort.hp : S.hp;
-  const _baseHp = G.mode === 'escort' ? ESCORT_ADOU_HP : ADOU_HP;
-  txt('阿斗', S.adou.x + 2, y + 5, 16, textCol, 'center', true);
-  txt('♥' + Math.max(0, _hp), S.adou.x + 28, y + 3, 11, '#e03131', 'left', true);
+  // 匾额投影
+  ctx.save();
+  ctx.shadowColor = 'rgba(50,30,10,.2)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 3;
+  rr(px, py, pw, ph, 6); ctx.fillStyle = 'rgba(0,0,0,.1)'; ctx.fill();
   ctx.restore();
 
-  // 血条在椭圆下方，减小高度
-  var hpPct = Math.max(0, _hp) / _baseHp;
-  if (hpPct < 1) {
-    var hw = 36, hh = 4;
-    ctx.fillStyle = '#e9ecef'; ctx.fillRect(S.adou.x - hw / 2, y + 18, hw, hh);
-    ctx.fillStyle = '#e03131'; ctx.fillRect(S.adou.x - hw / 2, y + 18, hw * hpPct, hh);
+  // 木质匾额底色（纵向木纹渐变）
+  const woodG = ctx.createLinearGradient(px, py, px, py + ph);
+  if (mine) {
+    woodG.addColorStop(0, '#d4b896'); woodG.addColorStop(0.5, '#c4a478'); woodG.addColorStop(1, '#b09060');
+  } else {
+    woodG.addColorStop(0, '#c87060'); woodG.addColorStop(0.5, '#b85048'); woodG.addColorStop(1, '#a03838');
+  }
+  rr(px, py, pw, ph, 6); ctx.fillStyle = woodG; ctx.fill();
+
+  // 内凹感边框（外层深色、内层高光）
+  rr(px, py, pw, ph, 6);
+  ctx.strokeStyle = shade(plaqueGold, 0.6); ctx.lineWidth = 2; ctx.stroke();
+  rr(px + 2, py + 2, pw - 4, ph - 4, 5);
+  ctx.strokeStyle = 'rgba(255,255,255,.2)'; ctx.lineWidth = 0.8; ctx.stroke();
+
+  // 顶部高光条（木匾光泽）
+  ctx.save();
+  const hl = ctx.createLinearGradient(px, py, px, py + ph * 0.4);
+  hl.addColorStop(0, 'rgba(255,255,255,.25)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+  rr(px + 2, py + 2, pw - 4, ph * 0.4, 5); ctx.fillStyle = hl; ctx.fill();
+  ctx.restore();
+
+  // 匾额四角小铜钉装饰
+  const nailCol = mine ? '#d4b76e' : '#d4a828';
+  [[px + 6, py + 6], [px + pw - 6, py + 6], [px + 6, py + ph - 6], [px + pw - 6, py + ph - 6]].forEach(([nx, ny]) => {
+    ctx.save();
+    ctx.shadowColor = nailCol; ctx.shadowBlur = 2;
+    ctx.fillStyle = nailCol; ctx.beginPath(); ctx.arc(nx, ny, 2.2, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(255,250,230,.6)'; ctx.beginPath(); ctx.arc(nx - 0.5, ny - 0.5, 0.8, 0, 7); ctx.fill();
+    ctx.restore();
+  });
+
+  // 顶部标签（小字）
+  txt(mine ? '【我方幼主】' : '【敌方主将】', S.adou.x, y - 10, 7, mine ? '#3a6a40' : '#8a2828', 'center', true);
+
+  // 朱红/青绿印章（在左侧）
+  const sealCol = mine ? '#2f9e44' : '#c9302c';
+  ctx.save();
+  ctx.shadowColor = sealCol; ctx.shadowBlur = 3;
+  const sealBg = ctx.createRadialGradient(S.adou.x - 21, y + 2, 1, S.adou.x - 21, y + 2, 8);
+  sealBg.addColorStop(0, shade(sealCol, 1.2)); sealBg.addColorStop(1, sealCol);
+  ctx.beginPath(); ctx.arc(S.adou.x - 21, y + 2, 8, 0, 7); ctx.fillStyle = sealBg; ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(255,255,255,.4)'; ctx.lineWidth = 0.8;
+  ctx.beginPath(); ctx.arc(S.adou.x - 21, y + 2, 8, 0, 7); ctx.stroke();
+  txt(mine ? '护' : '攻', S.adou.x - 21, y + 5, 10, '#fff', 'center', true);
+
+  // 阿斗名（匾中大字）
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.2)'; ctx.shadowBlur = 1; ctx.shadowOffsetY = 1;
+  txt('阿斗', S.adou.x + 2, y + 6, 19, '#fffdf5', 'center', true);
+  ctx.restore();
+
+  // HP数值（右侧）
+  const _hp = (G.mode === 'escort' && G.escort) ? G.escort.hp : S.hp;
+  const _baseHp = G.mode === 'escort' ? ESCORT_ADOU_HP : ADOU_HP;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.2)'; ctx.shadowBlur = 1; ctx.shadowOffsetY = 1;
+  txt('♥' + Math.max(0, _hp), S.adou.x + 25, y + 4, 10, mine ? '#fffdf5' : '#ffe8e0', 'left', true);
+  ctx.restore();
+  ctx.restore();
+
+  // 精致血条（匾额下方）
+  const hpPct = Math.max(0, _hp) / _baseHp;
+  const hw = 54, hh = 6, hx = S.adou.x - hw / 2, hy = y + 24;
+  // 投影
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.2)'; ctx.shadowBlur = 3; ctx.shadowOffsetY = 1;
+  rr(hx, hy, hw, hh, 3); ctx.fillStyle = 'rgba(0,0,0,.15)'; ctx.fill();
+  ctx.restore();
+  // 槽底
+  const slotG = ctx.createLinearGradient(hx, hy, hx, hy + hh);
+  slotG.addColorStop(0, 'rgba(0,0,0,.2)'); slotG.addColorStop(1, 'rgba(0,0,0,.08)');
+  rr(hx, hy, hw, hh, 3); ctx.fillStyle = slotG; ctx.fill();
+  // 血量渐变
+  const hpCol = hpPct > 0.5 ? '#3a9a52' : hpPct > 0.25 ? '#f0a020' : '#e03838';
+  const hpGrad = ctx.createLinearGradient(hx, hy, hx, hy + hh);
+  hpGrad.addColorStop(0, shade(hpCol, 1.2)); hpGrad.addColorStop(0.4, hpCol); hpGrad.addColorStop(1, shade(hpCol, 0.85));
+  rr(hx, hy, hw * hpPct, hh, 3); ctx.fillStyle = hpGrad; ctx.fill();
+  // 血条高光
+  if (hpPct > 0.05) {
+    ctx.save();
+    const hhl = ctx.createLinearGradient(hx, hy, hx, hy + hh * 0.5);
+    hhl.addColorStop(0, 'rgba(255,255,255,.4)'); hhl.addColorStop(1, 'rgba(255,255,255,0)');
+    rr(hx + 0.5, hy + 0.5, Math.max(0, hw * hpPct - 1), hh * 0.45, 2.5); ctx.fillStyle = hhl; ctx.fill();
+    ctx.restore();
   }
 
-  // 护盾别在椭圆正下方，血条再往下一点点
-  for (var i = 0; i < (S.shield || 0); i++) {
-    var sx = S.adou.x - 14 + i * 12;
-    ctx.fillStyle = '#1c7ed6';
-    ctx.beginPath();
-    ctx.moveTo(sx, y + 24); ctx.lineTo(sx + 8, y + 24);
-    ctx.lineTo(sx + 8, y + 30); ctx.lineTo(sx + 4, y + 34);
-    ctx.lineTo(sx, y + 30); ctx.closePath();
-    ctx.fill();
+  // 精致护盾图标（血条下方）
+  const shieldCount = S.shield || 0;
+  const shieldTotalW = shieldCount * 16 - 6;
+  for (let i = 0; i < shieldCount && i < 5; i++) {
+    drawShieldIcon(S.adou.x - shieldTotalW / 2 + i * 16, y + 32, '#1c7ed6');
   }
 }
 
