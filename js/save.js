@@ -1,7 +1,7 @@
 /* v2 存档：金币/材料/主线/武器/穿戴/道具/彩蛋/无尽（多槽 + 导出导入 + 版本/校验） */
 'use strict';
 
-const SAVE_VER = 8;                                // v8：武将觉醒默认开启（FIX-JUEXING-001）；v7=分层存档与日/周挑战
+const SAVE_VER = 9;                                // v9：阿斗命条 3-9（adouHp，主线胜利累计提升）；v8=武将觉醒默认开启（FIX-JUEXING-001）
 
 let curSlot = 0;                                  // 当前存档槽 0/1/2
 const SLOT_KEY = n => (n === 0 ? 'zyad2' : 'zyad2_slot' + n);   // 槽0兼容旧档 key
@@ -25,6 +25,7 @@ function defaultSave() {
     difficulty: 'normal',         // 全局难度档：easy / normal / hard（影响敌HP/ATK，不影响玩家资源）
     aiLevel: 'normal',             // AI 难度档：easy/normal/hard（P0-3：影响 aiAct 策略与速率）
     firstTen: true,               // 首十连半价标记（每个存档首次十连享半价，用后置false）
+    adouHp: 3,                    // 阿斗命条（3-9）：主线每胜一场 +1，上限 ADOU_HP_MAX（官方版核心）
     wish: '',                     // 心愿单：玩家选定的橙将名（如'赵云'），空=未启用（仅玩家侧生效）
     savedAt: 0,                   // 上次手动保存时间戳（0=从未手动保存）
     tutorial: 0,                  // 新手引导进度：0=未开始 1/2/3=对应步骤 99=完成（P0-1）
@@ -120,6 +121,12 @@ function migrateSave(s) {
   if (v < 8) {
     s.awaken = true;
     s.ver = 8;
+  }
+  // v8 → v9：阿斗命条 3-9（adouHp）。旧档无字段补 3。
+  if (v < 9) {
+    if (typeof s.adouHp !== 'number' || s.adouHp < ADOU_HP) s.adouHp = ADOU_HP;
+    s.adouHp = Math.min(Math.max(s.adouHp, ADOU_HP), ADOU_HP_MAX);
+    s.ver = 9;
   }
   return s;
 }
@@ -378,4 +385,31 @@ function cycleEquip(hero) {                        // 穿戴轮换：无→武�
   if (next) SAVE.equips[hero] = next; else delete SAVE.equips[hero];
   saveSave();
   return next;
+}
+
+/* ---------- 官方版：胜局武器掉落 & 出售（蓝/紫折价，橙/专属不可卖） ---------- */
+const WEAPON_SELL = { 2: 30, 3: 60 };                 // 蓝30金 / 紫60金；橙(q4)与武将专属不可出售
+function rollWeaponDrop(stage) {
+  // 越后越易掉：第1关 20%，每关 +2%，封顶 70%
+  if (Math.random() > Math.min(0.2 + stage * 0.02, 0.7)) return null;
+  const q = wpick([[2, 55], [3, 35], [4, 10]]);       // 蓝/紫/橙
+  const pool = Object.keys(WEAPONS).filter(k => WEAPONS[k].q === q);
+  if (!pool.length) return null;
+  const id = pool[(Math.random() * pool.length) | 0];
+  const duplicate = SAVE.weapons.includes(id);
+  if (duplicate) SAVE.gold += 30;                       // 重复转 30 金
+  else SAVE.weapons.push(id);
+  saveSave();
+  return { id, duplicate };
+}
+function sellWeapon(id) {
+  if (!SAVE.weapons.includes(id)) return null;
+  const w = WEAPONS[id];
+  const price = WEAPON_SELL[w.q];
+  if (!price) return null;                              // 橙/专属不可出售
+  SAVE.weapons = SAVE.weapons.filter(x => x !== id);
+  for (const h in SAVE.equips) if (SAVE.equips[h] === id) delete SAVE.equips[h];   // 同步卸下该武器
+  SAVE.gold += price;
+  saveSave();
+  return price;
 }

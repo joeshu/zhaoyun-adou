@@ -48,9 +48,17 @@ eval(src + `
   A(toggleLoadout('nongmin'), '携带被动');
   for (let i = 0; i < 15; i++) forge();
   A(SAVE.weapons.length > 0, '锻造出武器');
+  // 官方版：蓝/紫武器可出售，橙/专属不可售
+  const blueW = SAVE.weapons.find(id => WEAPONS[id].q === 2);
+  if (blueW) {
+    const before = SAVE.gold, n = SAVE.weapons.length;
+    const price = sellWeapon(blueW);
+    A(price === WEAPON_SELL[2], '出售蓝武器得 30 金');
+    A(SAVE.gold === before + price && SAVE.weapons.length === n - 1, '出售后武器仓与金币更新');
+  }
   console.log('商店/锻造 OK: 武器仓', SAVE.weapons.length, '把, 携带', SAVE.loadout.join(','));
 
-  // —— 抽卡：10馒头出5-7张 ——
+  // —— 抽卡：10馒头出5-7张；征兵定价递增（官方版） ——
   SAVE.tutorial = 99;        // 关闭新手引导，避免影响抽卡测试
   startBattle(1);
   const P = G.P;
@@ -58,7 +66,28 @@ eval(src + `
   const cards = doSummon(P);
   A(cards && cards.length >= 5 && cards.length <= 7, '一次抽5-7张');
   A(P.bar.filter(s => s.unit).length === cards.length + 1, '主将占位后抽卡全部入栏');
-  A(P.mantou === 999 - DRAW.cost, '固定10馒头');
+  A(P.mantou === 999 - DRAW.cost, '首次征兵 10 馒头');
+  P.mantou = 999;
+  P.bar.forEach(s => { s.unit = null; });   // 清栏，避免第二次征兵因栏满直接返回 null
+  doSummon(P);
+  A(P.mantou === 999 - (DRAW.cost + DRAW.costStep), '征兵定价递增(+' + DRAW.costStep + ')');
+  A(summonCost(P) <= DRAW.costMax, '单抽封顶 ' + DRAW.costMax);
+
+  // —— 核心对齐机制：命条、商人、重复武器掉落 ——
+  A(ADOU_HP === 3 && ADOU_HP_MAX === 9, '阿斗命条范围 3-9');
+  const merchant = rollMerchant();
+  A(merchant.offers.length === 3 && new Set(merchant.offers.map(o => o.name)).size === 3, '神秘商人三选一');
+  G.merchant = { offers: [{ name: '招贤', price: 1, tip: '', apply: MERCHANT_POOL[0].apply }] };
+  P.mantou = 10;
+  P.bar.forEach(s => { s.unit = null; });
+  buyMerchant(0);
+  A(!G.merchant && P.mantou === 9, '神秘商人购买扣款');
+  const oldGold = SAVE.gold, oldWeapons = SAVE.weapons.slice();
+  const oldRandom = Math.random;
+  Math.random = () => 0.99;
+  const noDrop = rollWeaponDrop(1);
+  Math.random = oldRandom;
+  A(noDrop === null && SAVE.gold === oldGold && SAVE.weapons.join(',') === oldWeapons.join(','), '武器掉落概率门控');
 
   // —— 对局基本操作 ——
   P.bar[0].unit = mkTroop('刀'); P.bar[1].unit = mkTroop('刀');

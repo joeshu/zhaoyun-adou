@@ -65,6 +65,13 @@ const ADOU_P = MAPS[0].ADOU_P, ADOU_E = MAPS[0].ADOU_E;
 const PATH_P = MAPS[0].PATH_P, PATH_E = MAPS[0].PATH_E;
 const ROWS_P = MAPS[0].ROWS_P, ROWS_E = MAPS[0].ROWS_E;
 const COLS = MAPS[0].COLS;
+
+// 每日轮换地图（官方版：巨鹿/云梦泽/虎牢关/赤壁按日轮换，当天有效）
+function todayMapIdx() {
+  const d = new Date();
+  const seed = d.getFullYear() * 372 + (d.getMonth() + 1) * 31 + d.getDate();  // 全年无同图连续两天同图
+  return seed % MAPS.length;
+}
 const CUM_P = pathCum(PATH_P), CUM_E = pathCum(PATH_E);
 function pathPos(pts, cum, d) {
   const len = cum[cum.length - 1];
@@ -107,6 +114,16 @@ const TROOPS = {
   骑: { rng: 60,  rate: 0.9, dmg: 13, hp: 80,  kind: 'splash', splash: 26, w: 10, tip: '突击克弩' },
   盾: { rng: 34,  rate: 0.8, dmg: 4,  hp: 240, kind: 'single', taunt: true, w: 8, tip: '嘲讽堵路' },
   甲: { rng: 34,  rate: 0.7, dmg: 6,  hp: 170, kind: 'single', armor: 0.5, w: 6, tip: '减伤抗BOSS' },
+};
+
+/* 克制闭环补全表（官方版刀克弓·弓克骑·骑克刀三角闭环，数据驱动，battle.dealDmg 单入口读取）：
+   键 = 玩家单位兵种（troop type），值 = { 怪物 type: 倍率 }。
+   仅登记"新增"克制；枪破甲（armor 特判）与武将克骑（HEROES.vs骑 特判）仍在 battle.js 保留，避免双倍叠加。
+   官方对照：刀=步兵→克弩(弓)、弓=弓兵→克骑、骑=骑兵→克兵/卒(步兵)。 */
+const VS_TABLE = {
+  刀: { 弩: 2 },          // 刀克弓（弩=弓类怪）
+  弓: { 骑: 2 },          // 弓克骑（骑兵怪）
+  骑: { 兵: 2, 卒: 2 },   // 骑克刀（兵/卒=步兵系，对应官方"刀"）
 };
 
 /* ---------- 武将（橙6 + 紫6） ---------- */
@@ -196,6 +213,16 @@ const ITEMS = {
   juexing:  { name: '觉醒丹', act: true, uses: 3, price: 200, tip: '点武将：觉醒+1级(全属性×1.3，上限3)' },
 };
 const LOADOUT_MAX = 6, LOADOUT_ACT_MAX = 2;
+
+/* ---------- 神秘商人（官方版：对局内随机刷新，馒头结算，选 1 购 1） ---------- */
+const MERCHANT_POOL = [
+  { name: '招贤',    price: 25, tip: '一张将字直接入栏',        apply: (S) => { const i = barFree(S); if (i < 0) return false; S.bar[i].unit = rollChar(); return true; } },
+  { name: '砺刃',    price: 30, tip: '本局全军伤害 +20%',       apply: () => { G.playerDmgMul *= 1.2; return true; } },
+  { name: '疾风',    price: 30, tip: '本局全军攻速 +15%',       apply: () => { G.playerRateMul *= 1.15; return true; } },
+  { name: '坚盾',    price: 20, tip: '阿斗护盾 +2',             apply: (S) => { S.shield = Math.min(2, (S.shield || 0) + 2); return true; } },
+  { name: '军粮',    price: 20, tip: '馒头 +50（小额净赚）',     apply: (S) => { S.mantou += 50; return true; } },
+  { name: '回春',    price: 25, tip: '阿斗回复 2 血',           apply: (S) => { S.hp = Math.min(S.maxhp, S.hp + 2); return true; } },
+];
 
 /* ---------- 怪物与 BOSS（击杀馒头按文档 7.1：步3 弓4 骑6 甲8 BOSS30） ---------- */
 const MOBS = {
@@ -288,12 +315,15 @@ const PUZZLE_LEVELS = [
 ];
 // 克制：枪 vs 甲怪(armor)×2；骑 vs 弩×2；怪骑 打 弓兵×2；马超 vs 骑×2
 const ADOU_HP = 3;
+const ADOU_HP_MAX = 9;              // 官方版：阿斗 3-9 命（主线胜利累计提升，上限9）
 const ESCORT_ADOU_HP = 5;     // 长坂独胆·阿斗专属血量（不复用 ADOU_HP=3）
 const INCOME_IV = 5, INCOME_N = 3;                 // 基础每5秒+3馒头；农民=2馒头/秒（文档7.1）
 
 /* ---------- 抽卡（文档一/二/三章） ---------- */
 const DRAW = {
-  cost: 10,                                        // 10 馒头一抽
+  cost: 10,                                        // 10 馒头一抽（基础价，随局内征兵次数递增）
+  costStep: 2,                                     // 每抽一次 +2 馒头（官方版递增定价）
+  costMax: 30,                                     // 单抽封顶 30 馒头
   counts: [[5, 40], [6, 45], [7, 15]],             // 出 5/6/7 张概率
   pityN: 3,                                        // 连续 3 次无将字 → 下次必出
   tenCost: 90,                                     // 十连保底 1 完整武将（文档：降价至90）

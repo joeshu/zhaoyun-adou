@@ -17,10 +17,11 @@ function mkSide(side, mapIdx) {
   }
   const bar = [];
   for (const y of BAR_ROWS) for (const x of BAR_COLS) bar.push({ x, y, unit: null });
-  let hp = ADOU_HP;
+  let hp = Math.min(SAVE.adouHp || ADOU_HP, ADOU_HP_MAX);   // 官方版命条 3-9：基础取存档累计，封顶9
   if (side > 0) {
     if (hasItem('dabuwan')) hp += 2;
     if (SAVE.eggs.acc) hp += 1;
+    hp = Math.min(hp, ADOU_HP_MAX);                          // 大补丸/彩蛋加成也封顶9
   }
   const pathP = side > 0 ? M.PATH_P : M.PATH_E;
   const cum = pathCum(pathP);
@@ -82,6 +83,7 @@ function startBattle(stage, endless, mapIdx) {
     heroRespawns: [],
     mapEventT: (MAPS[mapIdx || 0].effect || {}).iv || 0,
     buildings: [],
+    merchant: null,                                   // 神秘商人：{ offers:[{name,price,tip,apply}] }，主线/无尽每3波刷出
   };
   // 永久主将：每局开场自动放入合成栏，仍需由玩家拖至战场部署。
   if (G.P.side > 0 && SAVE.leadHero && SAVE.ownedHeroes[SAVE.leadHero]) {
@@ -142,6 +144,14 @@ function endBattle(win) {
       if (G.stage % 10 === 0) { SAVE.mat += 2; G.rewardTxt += ' · 材料 +2'; }
       if (G.stage === 30) SAVE.endless = true;
       SAVE.stage = Math.max(SAVE.stage, Math.min(G.stage + 1, STAGE_MAX));
+      // 官方版：主线每胜一场阿斗命条 +1（上限 9）
+      if (SAVE.adouHp < ADOU_HP_MAX) { SAVE.adouHp = Math.min(SAVE.adouHp + 1, ADOU_HP_MAX); G.rewardTxt += ' · 阿斗命 +1'; }
+    }
+    // 官方版：主线胜局按关卡概率掉落武器（越后越易掉），重复转 30 金
+    if (!G.endless && !G.mode && typeof rollWeaponDrop === 'function') {
+      const drop = rollWeaponDrop(G.stage);
+      if (drop && drop.duplicate) G.rewardTxt += ' · 重复武器转 30 金';
+      else if (drop) G.rewardTxt += ' · 获得 ' + Q_NAME[WEAPONS[drop.id].q] + '·' + WEAPONS[drop.id].name + '!';
     }
     // 永久招募碎片：主线每胜 1 片，Boss 关额外 2 片；特别玩法首胜/通关给 3 片。
     const shardN = G.mode ? 3 : (!G.endless ? 1 + (stageCfg(G.stage)[3] ? 2 : 0) : 1);

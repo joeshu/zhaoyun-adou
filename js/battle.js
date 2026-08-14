@@ -60,13 +60,22 @@ function dealDmg(S, m, dmg, byUnit, cell) {
   if (m.hp <= 0) return;
   // 攻击方归属：S 是防守方（怪物侧），玩家攻击特效需用 byUnit 反查，不能用 S.side
   const atkSide = byUnit && G.P.cells.some(c => c.unit === byUnit) ? 1 : -1;
-  // 克制
+  // 克制（官方三角闭环 + 传统特判，统一在此判定）
   const mb = MOBS[m.type];
   let crit = false;
+  const applyVS = (mult) => {
+    dmg *= mult; crit = crit || atkSide > 0;
+    if (atkSide > 0) { boom(m.x, m.y, '#ffd43b'); popFloat(m.x, m.y - 18, 'crit', null, { txt: '暴击!' }); }
+  };
   if (byUnit) {
-    if (mb.armor && ((byUnit.t === 'troop' && byUnit.type === '枪') || (byUnit.t === 'hero' && HEROES[byUnit.name].wq === '枪'))) { dmg *= 2; crit = crit || atkSide > 0; if (atkSide > 0) { boom(m.x, m.y, '#ffd43b'); popFloat(m.x, m.y - 18, 'crit', null, { txt: '暴击!' }); } }
-    if (m.type === '弩' && byUnit.t === 'troop' && byUnit.type === '骑') { dmg *= 2; crit = crit || atkSide > 0; if (atkSide > 0) { boom(m.x, m.y, '#ffd43b'); popFloat(m.x, m.y - 18, 'crit', null, { txt: '暴击!' }); } }
-    if (m.type === '骑' && byUnit.t === 'hero' && HEROES[byUnit.name].vs骑) { dmg *= HEROES[byUnit.name].vs骑; crit = crit || atkSide > 0; if (atkSide > 0) { boom(m.x, m.y, '#ffd43b'); popFloat(m.x, m.y - 18, 'crit', null, { txt: '暴击!' }); } }
+    // 新增闭环：刀克弓 / 弓克骑 / 骑克刀（数据驱动 VS_TABLE）
+    if (byUnit.t === 'troop' && VS_TABLE[byUnit.type] && VS_TABLE[byUnit.type][m.type]) applyVS(VS_TABLE[byUnit.type][m.type]);
+    // 传统：枪破甲（armor 怪）×2
+    if (mb.armor && ((byUnit.t === 'troop' && byUnit.type === '枪') || (byUnit.t === 'hero' && HEROES[byUnit.name].wq === '枪'))) applyVS(2);
+    // 传统：骑 vs 弩×2（保留旧"突击克弩"语义，防双倍按唯一命中设计）
+    if (m.type === '弩' && byUnit.t === 'troop' && byUnit.type === '骑') applyVS(2);
+    // 传统：武将 vs骑（马超/张辽/吕布）
+    if (m.type === '骑' && byUnit.t === 'hero' && HEROES[byUnit.name].vs骑) applyVS(HEROES[byUnit.name].vs骑);
   }
   if (mb.armor) dmg *= 1 - mb.armor;
   // 黄巾讨伐（raid）弱点门控：仅当前暴露侧(左/中/右)的单位对该 Boss 造成满额伤害，

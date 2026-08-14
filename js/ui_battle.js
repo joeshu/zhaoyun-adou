@@ -327,6 +327,51 @@ function getAnimT() {
 }
 
 function drawBase(u) {
+  // 官方版「浓墨」档：极简汉字字牌（水墨收敛——淡底 + 墨描边 + 大字居中，弱化瓷面渐变）
+  if (SAVE.mapSkin) {
+    ctx.save();
+    const hero = u.t === 'hero';
+    const isOrange = hero && HEROES[u.name].grade === 4;
+    if (u.t === 'troop') {
+      const tier = u.tier - 1;
+      const R = 18;
+      const bg = ctx.createRadialGradient(0, -4, 1, 0, 0, R);
+      bg.addColorStop(0, '#fdfaf2'); bg.addColorStop(1, '#f0e6d2');
+      ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.fillStyle = bg; ctx.fill();
+      ctx.beginPath(); ctx.arc(0, 0, R, 0, 7);
+      ctx.strokeStyle = TIER_COL[tier]; ctx.lineWidth = 2; ctx.stroke();
+      if (tier >= 2) {
+        const breath = 0.5 + Math.sin(getAnimT() * 2 + (u.x || 0) * 0.01) * 0.4;
+        ctx.save(); ctx.globalAlpha = 0.4 * breath;
+        ctx.beginPath(); ctx.arc(0, 0, R + 3, 0, 7); ctx.strokeStyle = TIER_COL[tier]; ctx.lineWidth = 1; ctx.stroke();
+        ctx.restore();
+      }
+    } else if (hero) {
+      const SZ = 19, g = isOrange ? '#d49010' : '#8a4cb8';
+      const hbg = ctx.createRadialGradient(0, -SZ * 0.4, 2, 0, 0, SZ * 1.2);
+      hbg.addColorStop(0, isOrange ? '#fdf3d2' : '#f3e6fb'); hbg.addColorStop(1, isOrange ? '#e8c878' : '#c8a8e4');
+      rr(-SZ, -SZ, SZ * 2, SZ * 2, 8); ctx.fillStyle = hbg; ctx.fill();
+      rr(-SZ, -SZ, SZ * 2, SZ * 2, 8);
+      ctx.strokeStyle = shade(g, isOrange ? 0.7 : 0.65); ctx.lineWidth = 2.4; ctx.stroke();
+      // 墨角点（官方字牌四点装饰）
+      ctx.fillStyle = 'rgba(40,30,20,.5)';
+      [[-SZ + 3, -SZ + 3], [SZ - 3, -SZ + 3], [-SZ + 3, SZ - 3], [SZ - 3, SZ - 3]].forEach(([px, py]) => {
+        ctx.beginPath(); ctx.arc(px, py, 1.4, 0, 7); ctx.fill();
+      });
+    } else if (u.t === 'char') {
+      const R = 18;
+      ctx.beginPath(); ctx.arc(0, 0, R, 0, 7);
+      ctx.fillStyle = 'rgba(240,230,214,.9)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(0, 0, R, 0, 7);
+      ctx.strokeStyle = 'rgba(90,60,30,.55)'; ctx.lineWidth = 1.6; ctx.setLineDash([4, 3]); ctx.stroke(); ctx.setLineDash([]);
+    } else {                       // 铲子 / 道具碎片等
+      const R = 15;
+      ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.fillStyle = 'rgba(247,243,233,.9)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.strokeStyle = 'rgba(120,120,120,.5)'; ctx.lineWidth = 1.4; ctx.stroke();
+    }
+    ctx.restore();
+    return;
+  }
   const hero = u.t === 'hero';
   const isOrange = hero && HEROES[u.name].grade === 4;
   const g = hero ? (isOrange ? '#d49010' : '#8a4cb8') : null;
@@ -586,8 +631,8 @@ function drawUnitAt(u, x, y, S) {
   drawBase(u);
   const col = unitCol(u);
 
-  // 右上角兵种类型小徽记（所有圆形/方形卡牌都加）
-  if (u.t === 'troop' || u.t === 'hero') {
+  // 右上角兵种类型小徽记（所有圆形/方形卡牌都加；浓墨档不画，保持极简）
+  if (!SAVE.mapSkin && (u.t === 'troop' || u.t === 'hero')) {
     const badgeIcon = u.t === 'troop' ? (TROOP_ICONS[u.type] || u.type) : (HEROES[u.name].grade === 4 ? '帝' : '将');
     const badgeCol = col;
     const bx = 15, by = -15;
@@ -651,7 +696,7 @@ function drawUnitAt(u, x, y, S) {
       }
     }
     // 觉醒星点（真正的五角星，带金色光晕）
-    if (u.awaken > 0) {
+    if (u.awaken > 0 && !SAVE.mapSkin) {
       for (let k = 0; k < u.awaken && k < 5; k++) {
         const sx = -8 + k * 8, sy = 22;
         ctx.save();
@@ -664,7 +709,7 @@ function drawUnitAt(u, x, y, S) {
       }
     }
     // 皮肤装饰
-    if (typeof currentSkin === 'function') {
+    if (!SAVE.mapSkin && typeof currentSkin === 'function') {
       const sk = currentSkin(u.name);
       if (sk && sk.decor && sk.decor !== 'none') {
         const dCol = sk.decor === 'gold' ? '#d4a828' : col;
@@ -1145,7 +1190,7 @@ function drawAdou(S) {
 
   // HP数值（右侧）
   const _hp = (G.mode === 'escort' && G.escort) ? G.escort.hp : S.hp;
-  const _baseHp = G.mode === 'escort' ? ESCORT_ADOU_HP : ADOU_HP;
+  const _baseHp = G.mode === 'escort' ? ESCORT_ADOU_HP : Math.max(S.maxhp || ADOU_HP, ADOU_HP);   // 命条 3-9 动态基准
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,.2)'; ctx.shadowBlur = 1; ctx.shadowOffsetY = 1;
   txt('♥' + Math.max(0, _hp), S.adou.x + 25, y + 4, 10, mine ? '#fffdf5' : '#ffe8e0', 'left', true);
@@ -1569,8 +1614,8 @@ function drawGame() {
   if (G.mode !== 'siege') btn(254, ay, 32, ah, '撤销', () => undoAction(),
     { size: 9, bg: '#8e98a3', disabled: G.ghostMode || !G.undoStack || !G.undoStack.length });
   if (G.mode !== 'puzzle' && G.mode !== 'siege') {
-    btn(8, ay, 62, ah, '抽卡 馒' + DRAW.cost, () => doSummon(G.P),
-      { size: 11, bg: '#c0392b', disabled: G.P.mantou < DRAW.cost || barFree(G.P) < 0 });
+    btn(8, ay, 62, ah, '抽卡 馒' + summonCost(G.P), () => doSummon(G.P),
+      { size: 11, bg: '#c0392b', disabled: G.P.mantou < summonCost(G.P) || barFree(G.P) < 0 });
     const tenCostNow = SAVE.firstTen ? (DRAW.tenCost / 2 | 0) : DRAW.tenCost;
     btn(74, ay, 62, ah, '十连 ' + tenCostNow, () => drawTen(G.P),
       { size: 11, bg: '#a61e4e', disabled: G.P.mantou < tenCostNow || barFree(G.P) < 0 });
@@ -1687,6 +1732,20 @@ function drawGame() {
   }
 
   /* Overlay states: win / lose / paused / rogue choices / chapter */
+  /* 神秘商人（官方版：主线/无尽每3波刷出，3选1，馒头结算，买后即离） */
+  if (G.merchant && G.merchant.offers && G.mode !== 'puzzle' && G.mode !== 'siege') {
+    btns = [];                         // 模态层拦截底层战场与操作栏按钮
+    ctx.fillStyle = 'rgba(26,24,35,.6)'; ctx.fillRect(0, 0, W, H);
+    panel(34, 232, 307, 200, { bg: '#fffdf9', stroke: '#d9c8a0', r: 14, blur: 4 });
+    txt('神秘商人', W / 2, 262, 20, '#8a6d3b', 'center', true);
+    txt('用馒头选购 · 买后离开 · 下一波再来', W / 2, 282, 10, '#868e96', 'center');
+    G.merchant.offers.forEach((o, i) => {
+      const cy = 298 + i * 42;
+      btn(54, cy, 219, 36, o.name + ' · ' + o.tip, () => buyMerchant(i), { size: 11, bg: G.P.mantou >= o.price ? '#8a6d3b' : '#adb5bd', disabled: G.P.mantou < o.price });
+      txt('馒' + o.price, 283, cy + 24, 12, '#b0801f', 'center', true);
+    });
+    btn(34 + 307 - 36, 232 + 8, 30, 24, '×', () => { G.merchant = null; }, { size: 13, bg: '#868e96' });
+  }
   /* 反向攻城·战前编成面板（复用 rogueChoices overlay 范式）：3 预设选择（§7.2） */
   if (G.siege && G.siege.build) {
     ctx.fillStyle = 'rgba(26,24,35,.72)'; ctx.fillRect(0, 0, W, H);

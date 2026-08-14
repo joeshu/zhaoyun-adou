@@ -3,7 +3,9 @@
 
 const slotArr = (S, area) => area === 'bar' ? S.bar : S.cells;
 const barFree = S => S.bar.findIndex(s => !s.unit);
-const summonCost = () => DRAW.cost;                         // 文档：固定 10 馒头一抽
+// 征兵递增定价（官方版）：基础 10 馒头，局内每抽一次 +2，封顶 +20（即 10→30）。
+// 十连不参与递增（保持 90 基础价，首十连半价），避免后期经济锁死。
+const summonCost = (S) => DRAW.cost + Math.min(DRAW.costStep * (S ? S.summons : 0), DRAW.costMax - DRAW.cost);
 
 /* ---------- 撤销：玩家侧操作前快照，支持回退上一步 ---------- */
 function pushUndo(S) {
@@ -111,9 +113,10 @@ function placeCards(S, cards) {                             // 入栏；栏满�
   return placed;
 }
 function doSummon(S) {
-  if (S.mantou < DRAW.cost || barFree(S) < 0) return null;
+  const cost = summonCost(S);
+  if (S.mantou < cost || barFree(S) < 0) return null;
   if (S.side > 0) pushUndo(S);
-  S.mantou -= DRAW.cost; S.summons++;
+  S.mantou -= cost; S.summons++;
   if (S.side > 0 && SAVE.stats) SAVE.stats.summons++;            // P2-2 统计
   const n = wpick(DRAW.counts);
   const cards = [];
@@ -165,6 +168,28 @@ function drawTen(S) {                                       // 十连：90馒头
   }
   return name;
 }
+
+/* ---------- 神秘商人（官方版：主线/无尽每3波刷出，3选1，馒头结算） ---------- */
+function rollMerchant() {
+  const pool = MERCHANT_POOL.slice();
+  const offers = [];
+  while (offers.length < 3 && pool.length) offers.push(pool.splice((Math.random() * pool.length) | 0, 1)[0]);
+  return { offers };
+}
+function buyMerchant(i) {
+  const M = G && G.merchant; if (!M || !M.offers[i]) return;
+  const o = M.offers[i];
+  if (G.P.mantou < o.price) { fl(G.P.adou.x, G.P.adou.y - 20, '馒头不足!', '#e03131'); return; }
+  const ok = o.apply(G.P);
+  if (ok !== false) {
+    G.P.mantou -= o.price;
+    fl(G.P.adou.x, G.P.adou.y - 20, o.name + '!', '#1c7ed6');
+    sfx('click'); G.merchant = null;                 // 买后即离开（官方版一档购一）
+  } else {
+    fl(G.P.adou.x, G.P.adou.y - 20, '栏位不足!', '#e03131');
+  }
+}
+
 function gainItem(S, id) {                                  // 碎片集齐 → 本局道具
   if (S.side <= 0) {                                        // ponytail: AI 不用道具，折现20馒头
     if (id === 'zhaoxian') S.zhaoxian = true; else S.mantou += 20;
@@ -447,7 +472,7 @@ function aiAct(S) {
   }
   // 经济管理：困难档保留至少 20 馒头应对突发；简单/普通无保留
   const reserve = lvl === 'hard' ? 20 : 0;
-  if (S.mantou >= DRAW.cost + reserve && barFree(S) >= 0) doSummon(S);
+  if (S.mantou >= summonCost(S) + reserve && barFree(S) >= 0) doSummon(S);
   // 困难档：BOSS 来前提前召唤（保留主动道具已由 loadout 控制，此处保留馒头）
   if (lvl === 'hard' && isBossWave && S.mantou >= DRAW.tenCost + reserve && barFree(S) >= 0) drawTen(S);
 }

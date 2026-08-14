@@ -2,7 +2,7 @@
 'use strict';
 
 let scr = 'menu';                 // menu | shop | forge | equip | game | help | save | wish | ach | daily | ghost | stats
-let btns = [], drag = null, selStage = 1, selMap = 0, forgeMsg = '';
+let btns = [], drag = null, selStage = 1, selMap = 0, selMapTouched = false, forgeMsg = '';
 let ghostList = [], ghostMsg = '';   // P1-4 录像列表 / 反馈
 let saveConfirm = false, saveMsg = '';   // 存档页：清除二次确认 / 保存反馈
 let canvas, ctx, scaleF = 1;
@@ -429,13 +429,19 @@ function drawMenu() {
 
   // 第一层：开始战斗（主按钮加光晕）
   selStage = clamp(selStage, 1, SAVE.stage);
+  // 每日轮换地图（官方版）：进菜单未手动选图时，默认今日地图并高亮
+  if (!selMapTouched) selMap = todayMapIdx();
   const ch = CHAPTERS[Math.min(3, ((selStage - 1) / 10) | 0)];
   groupLabel('— 开始战斗 —', 30, 175, 335); panel(20, 183, 335, 145, { corner: true });
   btn(34, 199, 42, 42, '◀', () => selStage--, { disabled: selStage <= 1, grad: THEME.slate, size: 15, r: 12 });
   btn(299, 199, 42, 42, '▶', () => selStage++, { disabled: selStage >= SAVE.stage, grad: THEME.slate, size: 15, r: 12 });
   txt('第 ' + selStage + ' 关 · ' + ch + (selStage % 10 === 0 ? ' · BOSS' : ''), W / 2, 224, 16, THEME.ink, 'center', true);
-  MAPS.forEach((m, i) => btn(24 + i * 82, 251, 80, 27, m.name, () => { selMap = i; }, { size: 11, grad: selMap === i ? THEME.vermilion : THEME.slate, r: 8, glow: selMap === i }));
-  const mapEffect = MAPS[selMap].effect; if (mapEffect) txt('战场机制 · ' + mapEffect.name, W / 2, 288, 10, THEME.inkSub, 'center');
+  MAPS.forEach((m, i) => {
+    const isToday = i === todayMapIdx();
+    btn(24 + i * 82, 251, 80, 27, m.name + (isToday ? '·今' : ''), () => { selMap = i; selMapTouched = true; }, { size: 11, grad: selMap === i ? THEME.vermilion : THEME.slate, r: 8, glow: selMap === i });
+    if (isToday && selMap !== i) { ctx.fillStyle = '#e8a005'; ctx.beginPath(); ctx.arc(30 + i * 82, 255, 2.5, 0, 7); ctx.fill(); }
+  });
+  const mapEffect = MAPS[selMap].effect; if (mapEffect) txt('战场机制 · ' + mapEffect.name + (selMap === todayMapIdx() ? ' · 今日' : ''), W / 2, 288, 10, THEME.inkSub, 'center');
   btn(30, 298, 150, 26, '画面:' + (SAVE.mapSkin ? '浓墨' : '标准'), () => { SAVE.mapSkin = SAVE.mapSkin ? 0 : 1; saveSave(); }, { size: 10, grad: SAVE.mapSkin ? THEME.vermilion : THEME.slate, r: 8 });
   // 开战主按钮（呼吸光晕）
   const fightGlow = 0.7 + Math.sin(animT * 2.5) * 0.3;
@@ -775,9 +781,14 @@ function drawForge() {
   SAVE.weapons.forEach((id, i) => {
     const w = WEAPONS[id], y = 216 + i * 24;
     txt(Q_NAME[w.q] + '·' + w.name + (w.lock ? '〔' + w.lock + '专属〕' : '〔' + w.wq + '系〕'), 24, y + 14, 12, Q_COL[w.q], 'left', true);
-    txtFit(w.tip, 200, y + 14, 10, '#868e96', 'left', false, 132);   // 小屏密度兜底（#9）
+    txtFit(w.tip, 200, y + 14, 10, '#868e96', 'left', false, 118);   // 小屏密度兜底（#9）
+    const sp = WEAPON_SELL[w.q];                        // 官方版：蓝/紫可出售（橙与专属不可）
+    if (sp) btn(326, y - 2, 36, 20, '售' + sp, () => {
+      const got = sellWeapon(id);
+      forgeMsg = got ? '出售 ' + w.name + ' +' + got + ' 金' : '不可出售';
+    }, { size: 8, bg: '#8e98a3' });
   });
-  txt('武器给对应「系」武将穿戴：加攻击/射程，专武带特效', W / 2, 588, 10, '#8a7e6c', 'center');
+  txt('武器给对应「系」武将穿戴：加攻击/射程，专武带特效；蓝/紫可出售', W / 2, 588, 10, '#8a7e6c', 'center');
   btn(30, 604, 210, 34, '→ 去武将装备穿戴', () => { goTo('equip'); }, { grad: THEME.purple, size: 12 });
   backBtn();
 }
