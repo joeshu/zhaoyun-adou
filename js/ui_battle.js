@@ -327,6 +327,18 @@ function getAnimT() {
 }
 
 function drawBase(u) {
+  const isHeroCard = u.t === 'hero';
+  const cardR = isHeroCard ? 8 : 18;
+  // 先画承托层，再画牌面，形成轻微厚度和落地阴影。
+  ctx.save();
+  ctx.globalAlpha = isHeroCard ? 0.25 : 0.18;
+  ctx.shadowColor = 'rgba(35,28,20,.55)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 3;
+  if (isHeroCard) {
+    rr(-19, -16, 38, 38, cardR); ctx.fillStyle = '#6d5c50'; ctx.fill();
+  } else {
+    ctx.beginPath(); ctx.arc(0, 2, 18, 0, 7); ctx.fillStyle = '#6d5c50'; ctx.fill();
+  }
+  ctx.restore();
   // 官方版「浓墨」档：极简汉字字牌（水墨收敛——淡底 + 墨描边 + 大字居中，弱化瓷面渐变）
   if (SAVE.mapSkin) {
     ctx.save();
@@ -350,7 +362,7 @@ function drawBase(u) {
       const SZ = 19, g = isOrange ? '#d49010' : '#8a4cb8';
       const hbg = ctx.createRadialGradient(0, -SZ * 0.4, 2, 0, 0, SZ * 1.2);
       hbg.addColorStop(0, isOrange ? '#fdf3d2' : '#f3e6fb'); hbg.addColorStop(1, isOrange ? '#e8c878' : '#c8a8e4');
-      rr(-SZ, -SZ, SZ * 2, SZ * 2, 8); ctx.fillStyle = hbg; ctx.fill();
+       rr(-SZ, -SZ, SZ * 2, SZ * 2, 8); ctx.fillStyle = hbg; ctx.fill();
       rr(-SZ, -SZ, SZ * 2, SZ * 2, 8);
       ctx.strokeStyle = shade(g, isOrange ? 0.7 : 0.65); ctx.lineWidth = 2.4; ctx.stroke();
       // 墨角点（官方字牌四点装饰）
@@ -462,6 +474,13 @@ function drawBase(u) {
     }
     rr(-SZ + 1, -SZ + 1, SZ * 2 - 2, SZ * 2 - 2, 8);
     ctx.fillStyle = hbg; ctx.fill();
+    // 玉牌底部反射带，形成前后层次。
+    ctx.save();
+    ctx.globalAlpha = 0.28;
+    const edge = ctx.createLinearGradient(0, SZ - 7, 0, SZ - 1);
+    edge.addColorStop(0, 'rgba(255,255,255,0)'); edge.addColorStop(1, isGold ? '#b0801f' : '#8a4cb8');
+    rr(-SZ + 4, SZ - 8, SZ * 2 - 8, 6, 3); ctx.fillStyle = edge; ctx.fill();
+    ctx.restore();
 
     // 外框描边（三层：深色外框+主色+内亮线）
     rr(-SZ, -SZ, SZ * 2, SZ * 2, 9);
@@ -627,9 +646,22 @@ function drawMiniBadge(bx, by, icon, bgCol, iconCol) {
 function drawUnitAt(u, x, y, S) {
   const pop = u.animT > 0 ? 1 + u.animT * 0.6 : 1;
   const animT = getAnimT();
+  const lifted = drag && ((drag.area === 'bar' && G.P.bar[drag.from] && G.P.bar[drag.from].unit === u) || (drag.area === 'board' && G.P.cells[drag.from] && G.P.cells[drag.from].unit === u));
   ctx.save(); ctx.translate(x, y); ctx.scale(pop, pop);
+  if (lifted) {
+    ctx.save();
+    ctx.globalAlpha = 0.24; ctx.shadowColor = '#bd7a2d'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 4;
+    if (u.t === 'hero') { rr(-20, -20, 40, 40, 9); ctx.fillStyle = '#bd7a2d'; ctx.fill(); }
+    else { ctx.beginPath(); ctx.arc(0, 0, 20, 0, 7); ctx.fillStyle = '#bd7a2d'; ctx.fill(); }
+    ctx.restore();
+  }
   drawBase(u);
   const col = unitCol(u);
+  if (lifted) {
+    ctx.strokeStyle = 'rgba(232,160,5,.9)'; ctx.lineWidth = 1.5;
+    if (u.t === 'hero') { rr(-21, -21, 42, 42, 10); ctx.stroke(); }
+    else { ctx.beginPath(); ctx.arc(0, 0, 20, 0, 7); ctx.stroke(); }
+  }
 
   // 右上角徽记只在高阶单位显示，避免普通单位周围信息过密。
   if (!SAVE.mapSkin && (u.t === 'hero' || (u.t === 'troop' && u.tier >= 3))) {
@@ -653,7 +685,7 @@ function drawUnitAt(u, x, y, S) {
     // 武将名（大字，更深文字阴影增加可读性）
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,.2)'; ctx.shadowBlur = 1.5; ctx.shadowOffsetY = 1.2;
-    txt(u.name, 0, 4, 14 + u.lvl, col, 'center', true);
+    txtFit(u.name, 0, 4, 14 + Math.min(2, u.lvl), col, 'center', true, 34);
     ctx.restore();
     // 等级/武器（小字，更精致，带微型标签底）
     const lvText = 'Lv' + u.lvl + (u.weapon ? '·' + WEAPONS[u.weapon].name[0] : '');
@@ -662,6 +694,16 @@ function drawUnitAt(u, x, y, S) {
     rr(-lvw/2, 12, lvw, 7.5, 3);
     ctx.fillStyle = 'rgba(0,0,0,.08)'; ctx.fill();
     txt(lvText, 0, 17.5, 7, shade(col, 0.75), 'center', true);
+
+    // 合成栏卡片增加紧凑职业标签，战场单位保持纯净以突出战斗状态。
+    if (!S) {
+      const role = HEROES[u.name].wq || '将';
+      ctx.font = 'bold 6px "PingFang SC","Microsoft YaHei",sans-serif';
+      const rw = ctx.measureText(role).width + 5;
+      rr(12 - rw, -18, rw, 7, 3);
+      ctx.fillStyle = isGold ? 'rgba(176,128,31,.88)' : 'rgba(138,76,184,.82)'; ctx.fill();
+      txt(role, 12 - rw / 2, -12.8, 6, '#fffdf5', 'center', true);
+    }
 
     // 技能CD环（精致玉璧环：双环+渐变+就绪脉冲）
     if (HEROES[u.name].skill) {
@@ -725,6 +767,15 @@ function drawUnitAt(u, x, y, S) {
     }
   } else if (u.t === 'troop') {
     const tier = u.tier - 1;
+    if (tier >= 3) {
+      ctx.save();
+      const sheen = 0.18 + Math.sin(animT * 2.4) * 0.08;
+      ctx.globalAlpha = sheen;
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, 0, 22, -2.5, -0.7); ctx.stroke();
+      ctx.restore();
+    }
     // 兵种字（带更深阴影更立体）
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,.15)'; ctx.shadowBlur = 1; ctx.shadowOffsetY = 1.2;
@@ -953,6 +1004,10 @@ function drawBarSlot(s, hide) {
 
   /* Always celadon fill (empty AND occupied) — player wants all celadon kept.
      No hard ink border frame on top (removed per feedback). */
+  ctx.save();
+  ctx.shadowColor = 'rgba(55,45,35,.2)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 3;
+  rr(x + 1, y + 2, CELL - 2, CELL - 1, 6); ctx.fillStyle = 'rgba(92,78,62,.22)'; ctx.fill();
+  ctx.restore();
   var cg = ctx.createLinearGradient(x, y, x, y + CELL);
   cg.addColorStop(0, cFill); cg.addColorStop(1, shade(cFill, 0.94));
   ctx.fillStyle = cg; ctx.fill();
@@ -961,7 +1016,15 @@ function drawBarSlot(s, hide) {
   hl.addColorStop(0, 'rgba(255,255,255,.28)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
   rr(x + 1, y + 1, CELL - 2, (CELL - 2) * 0.45, 5); ctx.fillStyle = hl; ctx.fill();
   ctx.restore();
+  // 合成栏底部内凹线，强化卡槽深度。
+  ctx.strokeStyle = 'rgba(72,62,52,.12)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x + 7, y + CELL - 4); ctx.lineTo(x + CELL - 7, y + CELL - 4); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x + 6, y + 3); ctx.lineTo(x + CELL - 6, y + 3); ctx.stroke();
   if (s.unit && !hide) drawUnitAt(s.unit, s.x, s.y, null);
+  if (!s.unit && G && G.betweenT > 0 && s.y === BAR_ROWS[0] && s.x === BAR_COLS[0]) {
+    txt('拖入', s.x, s.y + 4, 8, '#a49a8c', 'center');
+  }
   if (G && G.targeting && typeof canTargetItem === 'function' && canTargetItem(G.targeting, s.unit)) {
     ctx.strokeStyle = '#e8a005'; ctx.lineWidth = 3; ctx.setLineDash([3, 2]);
     ctx.strokeRect(x - 2, y - 2, CELL + 4, CELL + 4); ctx.setLineDash([]);
@@ -1355,6 +1418,11 @@ function drawGame() {
         const ht = drag.hintType;
         const col = ht === 'hero' ? '#e8a005' : ht === 'upgrade' || ht === 'item' ? '#2f9e44'
           : ht === 'deploy' || ht === 'move' ? '#1c7ed6' : ht === 'open' ? '#f59f00' : ht === 'swap' ? '#9c36b5' : '#e03131';
+        ctx.save();
+        ctx.globalAlpha = 0.22;
+        ctx.shadowColor = col; ctx.shadowBlur = 8;
+        ctx.fillStyle = col; ctx.fillRect(c.x - CELL / 2 + 3, c.y + CELL / 2 - 4, CELL - 6, 3);
+        ctx.restore();
         ctx.strokeStyle = col; ctx.lineWidth = 3;
         ctx.strokeRect(c.x - CELL / 2 - 2, c.y - CELL / 2 - 2, CELL + 4, CELL + 4);
       }
@@ -1368,6 +1436,11 @@ function drawGame() {
         const ht = drag.hintType;
         const col = ht === 'hero' ? '#e8a005' : ht === 'upgrade' || ht === 'item' ? '#2f9e44'
           : ht === 'move' ? '#1c7ed6' : ht === 'swap' ? '#9c36b5' : '#e03131';
+        ctx.save();
+        ctx.globalAlpha = 0.22;
+        ctx.shadowColor = col; ctx.shadowBlur = 8;
+        ctx.fillStyle = col; ctx.fillRect(s.x - CELL / 2 + 3, s.y + CELL / 2 - 4, CELL - 6, 3);
+        ctx.restore();
         ctx.strokeStyle = col; ctx.lineWidth = 3;
         ctx.strokeRect(s.x - CELL / 2 - 2, s.y - CELL / 2 - 2, CELL + 4, CELL + 4);
       }
@@ -1538,6 +1611,13 @@ function drawGame() {
     let s = '下波 ▸ ' + parts.join(' ') + (p.boss ? '  ☠BOSS' : '');
     txt(s, 8, 44, 10, '#8a7e6c', 'left');
   }
+  if (!G.mode && G.wave === 0 && G.betweenT > 0) {
+    const plan = G.wavePlan || (typeof wavePlan === 'function' ? wavePlan(G.stage, G.endless) : null);
+    if (plan) {
+      const foes = plan.pool.map(x => x[0] + '×' + Math.round(plan.per * x[1] / 100)).join(' ');
+      txtFit('首波敌军：' + foes + (plan.boss ? ' · BOSS' : ''), W / 2, 45, 9, '#8a6d3b', 'center', true, W - 120);
+    }
+  }
 
   /* Mode status bars */
   if (G.mode === 'fire') {
@@ -1568,6 +1648,9 @@ function drawGame() {
   } else if (G.mode === 'puzzle') {
     const pz = G.puzzle;
     txt('♟ ' + (pz.cur ? pz.cur.name : '群雄演武') + ' · 第 ' + pz.attempt + '/' + pz.maxAttempts + ' 次', W / 2, 48, 11, '#b78324', 'center', true);
+    if (pz.cur && pz.prep) {
+      txtFit('目标：歼灭敌阵 · ' + puzzleStrategyText(pz.cur), W / 2, 67, 9, '#8a6d3b', 'center', true, W - 28);
+    }
   } else if (G.mode === 'raid') {
     txt('👑 讨伐剩余 ' + Math.ceil(Math.max(0, G.raid.limit)) + ' 秒', W / 2, 48, 11, '#8d3543', 'center', true);
     drawRaidHud();
@@ -1623,6 +1706,7 @@ function drawGame() {
   if (G.mode !== 'siege') btn(254, ay, 32, ah, '撤销', () => undoAction(),
     { size: 9, bg: '#8e98a3', disabled: G.ghostMode || !G.undoStack || !G.undoStack.length });
   if (G.mode !== 'puzzle' && G.mode !== 'siege') {
+    if (!G.mode && G.betweenT > 0) btn(142, ay, 50, ah, '快速上阵', () => quickDeploy(), { size: 8, bg: '#318c4a', disabled: !G.P.bar.some(s => s.unit) || !G.P.cells.some(c => c.open && !c.unit) });
     btn(8, ay, 62, ah, '抽卡 馒' + summonCost(G.P), () => doSummon(G.P),
       { size: 11, bg: '#c0392b', disabled: G.P.mantou < summonCost(G.P) || barFree(G.P) < 0 });
     const tenCostNow = SAVE.firstTen ? (DRAW.tenCost / 2 | 0) : DRAW.tenCost;
@@ -1668,8 +1752,9 @@ function drawGame() {
 
   /* 群雄演武：布阵阶段给出「开战 / 选关」；自动战斗阶段仅观战，无额外按钮 */
   if (G.mode === 'puzzle' && G.puzzle && G.puzzle.prep) {
-    btn(40, 556, 140, 38, '开 战 ▶', () => puzzleStartAttempt(), { size: 16, bg: '#318c4a' });
-    btn(196, 556, 140, 38, '选 关', () => { G.puzzle.choosing = true; G.puzzle.cur = null; }, { size: 15, bg: '#7250b8' });
+    // 第二排合成栏占用 560-608，按钮下移到其下方，避免拦截武将拖拽起点。
+    btn(40, 610, 140, 24, '开战 ▶', () => puzzleStartAttempt(), { size: 12, bg: '#318c4a', disabled: !G.P.cells.some(c => c.unit) });
+    btn(196, 610, 140, 24, '选关', () => { G.puzzle.choosing = true; G.puzzle.cur = null; }, { size: 12, bg: '#7250b8' });
   }
 
   /* Targeting context */
@@ -1824,7 +1909,7 @@ function drawGame() {
     btn(W - 30 - 99, H - 63, 99, 34, '返回', () => { goTo('menu'); }, { grad: THEME.slate });
   } else if (G.state === 'win') {
     if (G.mode === 'puzzle') {
-      overlay('演武破阵', G.rewardTxt, [
+      overlay('演武破阵', (G.puzzle.stars ? '本关评价 ' + '★'.repeat(G.puzzle.stars) + ' · ' : '') + G.rewardTxt, [
         ['再来一局', () => puzzleLoadLevel(G.puzzle.levelIdx)],
         ['关卡选择', () => { G.puzzle.choosing = true; G.puzzle.cur = null; }],
         ['返回菜单', () => { goTo('menu'); }, '#868e96'],

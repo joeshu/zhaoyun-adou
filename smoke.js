@@ -275,6 +275,9 @@ eval(src + `
   // 群雄演武（残局）：禁抽卡/禁合成，固定敌阵 + 有限重试，歼灭即胜
   startBattle(12, false, 0, null, { mode: 'puzzle' });
   puzzleLoadLevel(0);
+  const initialPuzzleBar = G.P.bar.findIndex(s => s.unit);
+  const initialPuzzleCell = G.P.cells.findIndex(c => c.open && !c.unit);
+  dropUnit(G.P, 'bar', initialPuzzleBar, 'board', initialPuzzleCell);
   puzzleStartAttempt();
   A(G.P.mobs.length > 0, '残局敌阵已生成');
   G.P.mobs.forEach(m => m.hp = 0);
@@ -296,6 +299,21 @@ eval(src + `
   for (let i = 0; i < 60 * 30 && G.state === 'play'; i++) update(1 / 60);
   A(G.P.mobs.length === 0 && G.E.mobs.length <= 10, '火攻模式仅敌方出怪且上限10');
   console.log('特别玩法 OK: 火攻/试炼/护送/残局/讨伐');
+
+  // —— 群雄演武：布阵目标、空阵保护与三星判定 ——
+  startBattle(1, false, 0, null, { mode: 'puzzle' });
+  puzzleLoadLevel(0);
+  const puzzleBefore = G.puzzle.prep;
+  puzzleStartAttempt();
+  A(puzzleBefore && G.puzzle.prep, '群雄演武空阵禁止开战');
+  const puzzleBar = G.P.bar.find(s => s.unit);
+  const puzzleCell = G.P.cells.find(c => c.open && !c.unit);
+  A(puzzleBar && puzzleCell, '群雄演武存在可部署单位与开放阵位');
+  dropUnit(G.P, 'bar', G.P.bar.indexOf(puzzleBar), 'board', G.P.cells.indexOf(puzzleCell));
+  A(G.P.cells.some(c => c.unit), '群雄演武武将成功上阵');
+  G.puzzle.solved = true; G.puzzle.attempt = 1; G.P.hp = G.P.maxhp;
+  A(puzzleStars() === 3, '群雄演武三星判定');
+  console.log('群雄演武 OK: 空阵保护/拖拽上阵/三星判定');
 
   // —— 反向攻城（siege）：战前编成 → 突击队 → 敌工事射击 → 破城/全灭/超时 ——
   startBattle(12, false, 0, null, { mode: 'siege' });

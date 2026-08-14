@@ -214,6 +214,22 @@ function unlockCell(S, i) {
 
 /* ---------- 拖拽落子（栏/棋盘通用，AI 共用） ---------- */
 const noDeploy = u => u.t === 'char' || u.t === 'shovel' || u.t === 'ifrag';
+
+function quickDeploy() {
+  if (!G || !G.P || G.mode || G.state !== 'play') return;
+  const open = G.P.cells.filter(c => c.open && !c.unit);
+  const units = G.P.bar.filter(s => s.unit && !noDeploy(s.unit));
+  if (!open.length || !units.length) {
+    G.banner = { txt: !units.length ? '合成栏没有可上阵单位' : '阵位已满', t: 1.5 };
+    return;
+  }
+  const count = Math.min(open.length, units.length);
+  for (let i = 0; i < count; i++) {
+    const src = units[i], dst = open[i];
+    dropUnit(G.P, 'bar', G.P.bar.indexOf(src), 'board', G.P.cells.indexOf(dst));
+  }
+  G.banner = { txt: '已快速上阵 ' + count + ' 名单位', t: 1.5 };
+}
 // 返回 'open'|'move'|'upgrade'|'hero'|'item'|'swap'|null
 function dropUnit(S, a1, i1, a2, i2) {
   if (a1 === a2 && i1 === i2) return null;

@@ -63,9 +63,11 @@ function dealDmg(S, m, dmg, byUnit, cell) {
   // 克制（官方三角闭环 + 传统特判，统一在此判定）
   const mb = MOBS[m.type];
   let crit = false;
+  let counterLabel = '';
   const applyVS = (mult) => {
     dmg *= mult; crit = crit || atkSide > 0;
-    if (atkSide > 0) { boom(m.x, m.y, '#ffd43b'); popFloat(m.x, m.y - 18, 'crit', null, { txt: '暴击!' }); }
+    counterLabel = mult >= 1.8 ? '克制!' : '优势';
+    if (atkSide > 0) { boom(m.x, m.y, '#ffd43b'); popFloat(m.x, m.y - 18, 'crit', null, { txt: counterLabel }); }
   };
   if (byUnit) {
     // 新增闭环：刀克弓 / 弓克骑 / 骑克刀（数据驱动 VS_TABLE）

@@ -4,6 +4,18 @@
 function stageOf() { return G.endless ? STAGE_MAX : G.stage; }
 function stageCfg(st) { return STAGES[clamp(st, 1, STAGE_MAX) - 1]; }
 
+function wavePlan(stage, endless) {
+  const cfg = stageCfg(endless ? STAGE_MAX : stage);
+  const mix = cfg.mix || [];
+  const types = ['兵', '弩', '骑', '斧'];
+  const per = cfg.per === undefined ? cfg[1] : cfg.per;
+  return {
+    per,
+    pool: mix.map((w, i) => [types[i], w]).filter(x => x[1] > 0),
+    boss: !!(cfg[3] || cfg.boss),
+  };
+}
+
 function startWave() {
   G.wave++;
   if (SAVE.dynPath) {
@@ -37,6 +49,7 @@ function startWave() {
   // BOSS：本关末波（无尽每 10 波轮换名将，非无尽用本关配置）
   let bossTxt = '';
   const bossWave = G.endless ? G.wave % 10 === 0 : G.wave === waves;
+  G.wavePlan = { per, pool, boss: !!(boss && bossWave) };
   if (boss && bossWave) {
     const bossType = G.endless
       ? (['梁', '铁', '统', '帅', '兽', '曹', '懿'])[((G.wave / 10) - 1) % 7]

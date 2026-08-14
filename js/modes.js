@@ -554,7 +554,8 @@ function modeTick(dt) {
     const playerUnits = G.P.cells.some(c => c.unit) || G.P.bar.some(s => s.unit);
     if (enemies === 0) {
       p.solved = true;
-      G.rewardTxt = '残局破! 用 ' + p.attempt + '/' + p.maxAttempts + ' 次';
+      p.stars = puzzleStars();
+      G.rewardTxt = '残局破! ' + '★'.repeat(p.stars) + ' · 第' + p.attempt + '/' + p.maxAttempts + '次';
       endBattle(true);
     } else if (!playerUnits && p.attemptT > 3) {
       puzzleAttemptFail();                 // 玩家单位全灭且敌阵尚在 → 本次失败
@@ -931,6 +932,7 @@ function puzzleLoadLevel(idx) {
   G.puzzle.started = false;
   G.puzzle.spawned = false;
   G.puzzle.attemptT = 0;
+  G.puzzle.stars = 0;
   // 重置棋盘：群雄演武为布阵解谜，开放全部格（地形 pass 随后封锁），清空单位与地形
   G.P.cells.forEach(c => { c.open = true; c.terrain = null; c.unit = null; });
   G.P.bar.forEach(s => s.unit = null);
@@ -950,6 +952,24 @@ function puzzleLoadLevel(idx) {
   G.banner = { txt: '【群雄演武】' + lvl.name + ' · 布阵后开战（第1/' + lvl.par + '次）', t: 3 };
 }
 
+function puzzleStrategyText(lvl) {
+  if (!lvl) return '拖武将上阵后开战';
+  const enemyTypes = (lvl.enemyFormation || []).map(e => e.mobId);
+  const tips = [];
+  if (enemyTypes.includes('弩')) tips.push('盾兵顶前排挡弩');
+  if (enemyTypes.includes('骑')) tips.push('用弓兵优先处理骑兵');
+  if ((lvl.terrain || []).some(t => t.mod === 'high')) tips.push('弓兵站高地获得射程优势');
+  if ((lvl.terrain || []).some(t => t.mod === 'pass')) tips.push('隘口不可部署，避开锁格');
+  return tips.slice(0, 2).join(' · ') || '前排承伤，后排输出';
+}
+
+function puzzleStars() {
+  const p = G.puzzle, lvl = p && p.cur;
+  if (!p || !lvl || !p.solved) return 0;
+  const hpRatio = G.P.maxhp ? G.P.hp / G.P.maxhp : 0;
+  return p.attempt === 1 && hpRatio >= 0.7 ? 3 : p.attempt <= Math.max(1, lvl.par - 1) ? 2 : 1;
+}
+
 // 群雄演武：清空棋盘与栏，按当前关预置重新入栏（不消耗尝试）
 function puzzleResetToPrep() {
   G.P.cells.forEach(c => c.unit = null);
@@ -966,6 +986,11 @@ function puzzleResetToPrep() {
 // 群雄演武：开战（一次性生成固定敌阵，进入 auto-battle）
 function puzzleStartAttempt() {
   if (!G.puzzle.prep || G.puzzle.started) return;
+  if (!G.P.cells.some(c => c.unit)) {
+    G.puzzle.msg = '至少安排一名武将上阵';
+    G.banner = { txt: '请先拖武将到下方开放阵位', t: 2 };
+    return;
+  }
   G.puzzle.prep = false; G.puzzle.started = true; G.puzzle.spawned = true; G.puzzle.attemptT = 0;
   G.P.mobs = [];
   for (const e of G.puzzle.cur.enemyFormation) {
