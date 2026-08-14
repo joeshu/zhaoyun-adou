@@ -1140,14 +1140,22 @@ function onDown(p) {
     }
     return;   // run 阶段守军固定，忽略其它点击（按钮已在上方处理）
   }
-  // 赤壁火攻：点击空闲火油格点火；点击合成栏或棋盘单位继续走通用拖动流程。
+  // 赤壁火攻：编成操作优先于火油点击，避免油格命中半径抢走武将拖动。
   if (G.mode === 'fire' && G.fire) {
-    // 火攻模式单独优先锁定单位拖动，避免油区命中半径抢走 pointerdown。
+    if (bi >= 0 && G.P.bar[bi].unit) {
+      drag = { area: 'bar', from: bi, x: p.x, y: p.y, hint: '', hintType: '' };
+      return;
+    }
+    if (ci >= 0 && G.P.cells[ci].open && G.P.cells[ci].unit) {
+      drag = { area: 'board', from: ci, x: p.x, y: p.y, hint: '', hintType: '' };
+      return;
+    }
+    // 仅空闲油格响应点火，且命中中心区域，降低与棋盘阵位的误触概率。
     let best = null, bd = 34;
     for (const c of G.fire.cells) {
       if (c.state !== 'idle') continue;
       const d = Math.hypot(p.x - c.x, p.y - c.y);
-      if (d < bd) { bd = d; best = c; }
+      if (d < 22) { bd = d; best = c; }
     }
     if (best) { fireIgnite(best); return; }
   }

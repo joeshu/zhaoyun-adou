@@ -1854,7 +1854,8 @@ function drawGame() {
     const pz = G.puzzle;
     txt('♟ ' + (pz.cur ? pz.cur.name : '群雄演武') + ' · 第 ' + pz.attempt + '/' + pz.maxAttempts + ' 次', W / 2, 48, 11, '#b78324', 'center', true);
     if (pz.cur && pz.prep) {
-      txtFit('目标：歼灭敌阵 · ' + puzzleStrategyText(pz.cur), W / 2, 67, 9, '#8a6d3b', 'center', true, W - 28);
+      txtFit('手动拖动布阵 · 已上阵单位可互换位置', W / 2, 62, 8, '#8a6d3b', 'center', true, W - 28);
+      txtFit('目标：歼灭敌阵 · ' + puzzleStrategyText(pz.cur), W / 2, 74, 8, '#8a6d3b', 'center', true, W - 28);
     }
   } else if (G.mode === 'raid') {
     txt('👑 讨伐剩余 ' + Math.ceil(Math.max(0, G.raid.limit)) + ' 秒', W / 2, 48, 11, '#8d3543', 'center', true);
@@ -1958,7 +1959,7 @@ function drawGame() {
   /* 群雄演武：布阵阶段给出「开战 / 选关」；自动战斗阶段仅观战，无额外按钮 */
   if (G.mode === 'puzzle' && G.puzzle && G.puzzle.prep) {
     // 第二排合成栏占用 560-608，按钮下移到其下方，避免拦截武将拖拽起点。
-    btn(40, 610, 140, 24, '开战 ▶', () => { puzzleDeployPreset(); puzzleStartAttempt(); }, { size: 12, bg: '#318c4a', disabled: !G.P.cells.some(c => c.unit) && !G.P.bar.some(s => s.unit && !noDeploy(s.unit)) });
+    btn(40, 610, 140, 24, '开战 ▶', () => puzzleStartAttempt(), { size: 12, bg: '#318c4a', disabled: !G.P.cells.some(c => c.unit) });
     btn(196, 610, 140, 24, '选关', () => { G.puzzle.choosing = true; G.puzzle.cur = null; }, { size: 12, bg: '#7250b8' });
   }
 
