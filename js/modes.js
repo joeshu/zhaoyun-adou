@@ -724,22 +724,23 @@ function drawFire() {
   for (const c of f.cells) {
     if (c.state === 'burning') {
       ctx.save();
-      ctx.globalAlpha = 0.18; ctx.fillStyle = '#e8590c';
-      ctx.beginPath(); ctx.arc(c.x, c.y, FIRE_R, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
-      txt('🔥', c.x, c.y + 6, 18, '#e8590c', 'center');
+      ctx.globalAlpha = 0.14; ctx.fillStyle = '#e8590c';
+      ctx.beginPath(); ctx.arc(c.x, c.y, 13, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+      txt('火', c.x, c.y + 4, 11, '#d9480f', 'center', true);
       ctx.restore();
     } else {
       ctx.save();
-      ctx.strokeStyle = 'rgba(184,74,49,.6)'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
-      ctx.beginPath(); ctx.arc(c.x, c.y, 16, 0, 7); ctx.stroke(); ctx.setLineDash([]);
-      txt('油', c.x, c.y + 5, 13, '#bd4a31', 'center', true);
+      // 油区改成小型水面标记，保留点火提示，避免覆盖棋盘卡片。
+      ctx.strokeStyle = 'rgba(184,74,49,.46)'; ctx.lineWidth = 1.2; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.arc(c.x, c.y, 12, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+      txt('油', c.x, c.y + 4, 10, '#c24b32', 'center', true);
       ctx.restore();
     }
   }
   if (f.wild) for (const w of f.wild) {
     ctx.save(); ctx.globalAlpha = clamp(w.t / FIRE_WILD_T, 0, 1) * 0.9;
-    ctx.fillStyle = '#e8590c'; ctx.beginPath(); ctx.arc(w.x, w.y, 14, 0, 7); ctx.fill();
-    ctx.globalAlpha = 1; txt('🔥', w.x, w.y + 5, 13, '#e8590c', 'center'); ctx.restore();
+    ctx.fillStyle = '#e8590c'; ctx.beginPath(); ctx.arc(w.x, w.y, 10, 0, 7); ctx.fill();
+    ctx.globalAlpha = 1; txt('火', w.x, w.y + 4, 10, '#fff4e6', 'center', true); ctx.restore();
   }
 }
 

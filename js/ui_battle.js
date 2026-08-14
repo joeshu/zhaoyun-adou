@@ -1071,30 +1071,34 @@ function drawRiverBoundary() {
   const y0 = 280, h = 44;
   const mt = MAP_THEMES[(G && G.mapIdx) || 0] || MAP_THEMES[0];
   ctx.save();
-  ctx.globalAlpha = 0.18;
+  // 保留地图底色，只叠加一层极淡水色，避免河界变成新的色块。
+  ctx.globalAlpha = 0.12;
   const water = ctx.createLinearGradient(0, y0, 0, y0 + h);
-  water.addColorStop(0, mt.pathInner);
-  water.addColorStop(0.5, '#dbe8e4');
-  water.addColorStop(1, mt.pathInner);
+  water.addColorStop(0, '#b9d2d0');
+  water.addColorStop(0.45, '#e6efea');
+  water.addColorStop(0.55, '#e6efea');
+  water.addColorStop(1, '#b9d2d0');
   ctx.fillStyle = water;
   ctx.fillRect(0, y0, W, h);
-  ctx.globalAlpha = 0.3;
+  // 两岸使用断续细线，和战场道路的虚线语言保持一致。
+  ctx.globalAlpha = 0.26;
   ctx.strokeStyle = mt.pathCol;
   ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(0, y0 + 2); ctx.lineTo(W, y0 + 2); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(0, y0 + h - 2); ctx.lineTo(W, y0 + h - 2); ctx.stroke();
-  ctx.globalAlpha = 0.22;
-  ctx.strokeStyle = mt.pathInner;
+  ctx.setLineDash([10, 8]);
+  ctx.beginPath(); ctx.moveTo(0, y0 + 3); ctx.lineTo(W, y0 + 3); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, y0 + h - 3); ctx.lineTo(W, y0 + h - 3); ctx.stroke();
+  ctx.setLineDash([]);
+  // 水纹保持小幅度和低透明度，避免压住中间提示信息。
+  ctx.globalAlpha = 0.18;
+  ctx.strokeStyle = '#8eafb0';
   for (let x = -24; x < W + 24; x += 54) {
     ctx.beginPath();
-    ctx.moveTo(x, y0 + 13);
-    ctx.quadraticCurveTo(x + 14, y0 + 7, x + 28, y0 + 13);
-    ctx.quadraticCurveTo(x + 40, y0 + 19, x + 54, y0 + 13);
+    ctx.moveTo(x, y0 + 16);
+    ctx.quadraticCurveTo(x + 14, y0 + 10, x + 28, y0 + 16);
+    ctx.quadraticCurveTo(x + 40, y0 + 22, x + 54, y0 + 16);
     ctx.stroke();
   }
   ctx.restore();
-  txt('敌 方', 24, y0 + 12, 8, 'rgba(110,74,62,.65)', 'center', true);
-  txt('我 方', 24, y0 + h - 9, 8, 'rgba(55,91,76,.7)', 'center', true);
 }
 
 function drawMob(m) {
@@ -1224,17 +1228,19 @@ function drawAdou(S) {
     const _baseHp = Math.max(S.maxhp || ADOU_HP, ADOU_HP);
     const lifeTotal = Math.min(ADOU_HP_MAX, Math.max(ADOU_HP, _baseHp));
     const lifeNow = clamp(Math.ceil(_hp), 0, lifeTotal);
-    const barX = 112, barY = 58, barW = 151, barH = 20;
+    // 敌方阿斗属于上方敌方战区，放在首波提示下方的安全位置。
+    const barX = 112, barY = 72, barW = 151, barH = 20;
     rr(barX, barY, barW, barH, 8);
-    ctx.fillStyle = 'rgba(113,42,38,.86)'; ctx.fill();
-    ctx.strokeStyle = 'rgba(255,230,220,.75)'; ctx.lineWidth = 1; ctx.stroke();
-    txt('敌方阿斗', barX + 10, barY + 14, 10, '#fff4ee', 'left', true);
-    txt('♥' + Math.max(0, _hp), barX + barW - 10, barY + 14, 10, '#ffe8e0', 'right', true);
+    // 目标条保持透明，仅保留极细边缘提示，避免形成新的红色面板。
+    ctx.fillStyle = 'rgba(255,255,255,.04)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(142,74,69,.24)'; ctx.lineWidth = 0.8; ctx.stroke();
+    txt('敌方阿斗', barX + 10, barY + 14, 10, 'rgba(111,57,53,.84)', 'left', true);
+    txt('♥' + Math.max(0, _hp), barX + barW - 10, barY + 14, 10, 'rgba(111,57,53,.84)', 'right', true);
     const pipGap = 9, pipStart = barX + 64;
     for (let i = 0; i < lifeTotal; i++) {
       ctx.beginPath(); ctx.arc(pipStart + i * pipGap, barY + 10, 2.5, 0, 7);
-      ctx.fillStyle = i < lifeNow ? '#f08c83' : 'rgba(255,255,255,.22)'; ctx.fill();
-      ctx.strokeStyle = 'rgba(255,245,235,.65)'; ctx.lineWidth = .6; ctx.stroke();
+      ctx.fillStyle = i < lifeNow ? 'rgba(192,76,67,.68)' : 'rgba(255,255,255,.22)'; ctx.fill();
+      ctx.strokeStyle = 'rgba(142,74,69,.42)'; ctx.lineWidth = .6; ctx.stroke();
     }
     return;
   }
@@ -1439,6 +1445,9 @@ function drawGame() {
   /* ---- 敌我河界：扩大中间分隔带，提示文字放在透明水面内 ---- */
   drawRiverBoundary();
 
+  /* 赤壁火油标记先铺在地面层，棋盘卡片与单位保持主视觉。 */
+  if (G.mode === 'fire' && typeof drawFire === 'function') drawFire();
+
   /* ---- Path (double-line, bug #1 fixed) ---- */
   if (G.mode !== 'raid' && G.mode !== 'puzzle' && G.mode !== 'escort' && G.mode !== 'siege') { drawPath(G.E); drawPath(G.P); }
   if (G.mode === 'siege' && G.siege) drawPath(G.P);   // 突击队沿 SIEGE_PATH 上行
@@ -1561,8 +1570,8 @@ function drawGame() {
   /* ---- Orders + Fate：透明河界信息，保留信息同时让敌我区域保持完整 ---- */
   var hasOrders = G.orders && G.orders.length;
   var hasFate = G.P.fate.list && G.P.fate.list.length;
-  if (hasOrders || hasFate) {
-    var bandY = 282, bandH = 18, bandX = 12, gap = 6;
+  if ((hasOrders || hasFate) && !G.banner) {
+    var bandY = 303, bandH = 17, bandX = 12, gap = 6;
     var chipW = (W - bandX * 2 - gap) / (hasOrders && hasFate ? 2 : 1);
     var chipIndex = 0;
     if (hasOrders) {
@@ -1654,7 +1663,6 @@ function drawGame() {
   /* Mode status bars */
   if (G.mode === 'fire') {
     txt('🔥 风：' + (G.wind === '东南风' ? '东南' : '西北') + ' · 水寨♥' + Math.ceil(Math.max(0, G.fire.stronghold)) + ' · 控火油×' + Math.floor(G.fire.oil), W / 2, 48, 11, '#bd4a31', 'center', true);
-    drawFire();
   } else if (G.mode === 'escort') {
     const e = G.escort;
     if (!e.run) {
@@ -1824,12 +1832,12 @@ function drawGame() {
     ctx.globalAlpha = clamp(G.banner.t, 0, 1);
     const isTut = G.banner.t > 10;
     if (isTut) {
-      // 教程提示独占上方窄条，避开 288-312 的目标/羁绊朱砂带。
-      const tx = 10, ty = 264, tw = W - 20, th = 24;
+       // 教程提示使用河界透明层，避免遮盖棋盘单位和路径。
+       const tx = 10, ty = 290, tw = W - 20, th = 24;
       rr(tx, ty, tw, th, 12);
-      ctx.fillStyle = 'rgba(238,247,255,.94)'; ctx.fill();
-      ctx.strokeStyle = 'rgba(61,125,190,.35)'; ctx.lineWidth = 1; ctx.stroke();
-      txtFit(G.banner.txt, W / 2, ty + 16, 11, '#2c73b9', 'center', true, tw - 24);
+      ctx.fillStyle = 'rgba(244,250,247,.30)'; ctx.fill();
+      ctx.strokeStyle = 'rgba(94,137,130,.32)'; ctx.lineWidth = 1; ctx.stroke();
+      txtFit(G.banner.txt, W / 2, ty + 16, 11, '#356f78', 'center', true, tw - 24);
     } else {
       // 普通提示直接落在河界上，保持河水透明，避免出现红色信息框压缩敌我战区。
       ctx.save();

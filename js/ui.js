@@ -1106,12 +1106,25 @@ function onDown(p) {
     scrollDrag = { y0: p.y, s0: listScroll };
     return;
   }
-  if (scr !== 'game' || !G || G.state !== 'play' || G.paused) return;
+  if (scr !== 'game' || !G || G.state !== 'play') return;
   if (G.mode === 'rogue') return;   // 试炼无部署/走位，仅保留顶栏与军略弹窗按钮
   // P1-4 ghost 回放模式：禁止玩家手动操作（仅允许 UI 按钮）
   if (G.ghostMode) return;
   if (G.egg && Math.hypot(p.x - G.egg.x, p.y - G.egg.y) < 22) { collectEgg(); return; }
   const bi = barAt(p), ci = boardAt(p);
+  // 先锁定单位拖动，再处理暂停、火油和其它模式点击，确保特殊玩法不拦截编成操作。
+  if (bi >= 0 && G.P.bar[bi].unit) {
+    drag = { area: 'bar', from: bi, x: p.x, y: p.y, hint: '', hintType: '' };
+    return;
+  }
+  if (ci >= 0 && G.P.cells[ci].open && G.P.cells[ci].unit) {
+    drag = { area: 'board', from: ci, x: p.x, y: p.y, hint: '', hintType: '' };
+    return;
+  }
+  // 暂停时仍允许把卡牌拖入阵位；暂停只冻结战斗计时，不应冻结编成操作。
+  if (G.paused) {
+    return;
+  }
   if (G.targeting) {                      // 神兵符/攻速符/毛笔 选目标
     if (bi >= 0) applyTarget(G.targeting, 'bar', bi);
     else if (ci >= 0) applyTarget(G.targeting, 'board', ci);
@@ -1127,16 +1140,16 @@ function onDown(p) {
     }
     return;   // run 阶段守军固定，忽略其它点击（按钮已在上方处理）
   }
-  // 赤壁火攻·实时放火：点空闲火油格→点燃（禁用普通部署/开荒，纯新增不影响 escort/puzzle）
+  // 赤壁火攻：点击空闲火油格点火；点击合成栏或棋盘单位继续走通用拖动流程。
   if (G.mode === 'fire' && G.fire) {
+    // 火攻模式单独优先锁定单位拖动，避免油区命中半径抢走 pointerdown。
     let best = null, bd = 34;
     for (const c of G.fire.cells) {
       if (c.state !== 'idle') continue;
       const d = Math.hypot(p.x - c.x, p.y - c.y);
       if (d < bd) { bd = d; best = c; }
     }
-    if (best) fireIgnite(best);
-    return;   // fire 模式：点其它处不部署、不开荒
+    if (best) { fireIgnite(best); return; }
   }
   if (G.mode === 'siege' && G.siege) {
     if (G.siege.build) return;          // 战前编成面板开启时，战场点击忽略（面板按钮已在 btns 处理）
@@ -1203,8 +1216,12 @@ function boot() {
   // 首次用户交互后启用音频上下文（浏览器策略）
   const resumeOnce = () => { resumeAudio(); canvas.removeEventListener('pointerdown', resumeOnce); };
   canvas.addEventListener('pointerdown', resumeOnce);
-  canvas.addEventListener('pointerdown', ev => { ev.preventDefault(); onDown(pt(ev)); });
-  canvas.addEventListener('pointermove', ev => {
+  canvas.addEventListener('pointerdown', ev => {
+    ev.preventDefault();
+    if (canvas.setPointerCapture && ev.pointerId !== undefined) canvas.setPointerCapture(ev.pointerId);
+    onDown(pt(ev));
+  });
+  addEventListener('pointermove', ev => {
     const p = pt(ev);
     if (scrollDrag) { listScroll = clamp(scrollDrag.s0 + (scrollDrag.y0 - p.y), 0, listScrollMax); return; }
     if (G.mode === 'escort' && G.escort && G.escort.walkActive) {
@@ -1241,7 +1258,10 @@ function boot() {
     }
     drag.hint = hint; drag.hintType = hintType; drag.preview = preview;
   } });
-  addEventListener('pointerup', ev => onUp(pt(ev)));
+  addEventListener('pointerup', ev => {
+    onUp(pt(ev));
+    if (canvas.releasePointerCapture && ev.pointerId !== undefined && canvas.hasPointerCapture && canvas.hasPointerCapture(ev.pointerId)) canvas.releasePointerCapture(ev.pointerId);
+  });
   canvas.addEventListener('wheel', ev => {
     if (listScrollMax > 0) { ev.preventDefault(); listScroll = clamp(listScroll + ev.deltaY, 0, listScrollMax); }
   }, { passive: false });
