@@ -1065,6 +1065,38 @@ function drawPath(S) {
   ctx.setLineDash([]);
 }
 
+/* ========== 敌我河界 ========== */
+// 中央区域承担敌我分界与提示信息，使用低透明度水纹保持战场连续性。
+function drawRiverBoundary() {
+  const y0 = 280, h = 44;
+  const mt = MAP_THEMES[(G && G.mapIdx) || 0] || MAP_THEMES[0];
+  ctx.save();
+  ctx.globalAlpha = 0.18;
+  const water = ctx.createLinearGradient(0, y0, 0, y0 + h);
+  water.addColorStop(0, mt.pathInner);
+  water.addColorStop(0.5, '#dbe8e4');
+  water.addColorStop(1, mt.pathInner);
+  ctx.fillStyle = water;
+  ctx.fillRect(0, y0, W, h);
+  ctx.globalAlpha = 0.3;
+  ctx.strokeStyle = mt.pathCol;
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, y0 + 2); ctx.lineTo(W, y0 + 2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, y0 + h - 2); ctx.lineTo(W, y0 + h - 2); ctx.stroke();
+  ctx.globalAlpha = 0.22;
+  ctx.strokeStyle = mt.pathInner;
+  for (let x = -24; x < W + 24; x += 54) {
+    ctx.beginPath();
+    ctx.moveTo(x, y0 + 13);
+    ctx.quadraticCurveTo(x + 14, y0 + 7, x + 28, y0 + 13);
+    ctx.quadraticCurveTo(x + 40, y0 + 19, x + 54, y0 + 13);
+    ctx.stroke();
+  }
+  ctx.restore();
+  txt('敌 方', 24, y0 + 12, 8, 'rgba(110,74,62,.65)', 'center', true);
+  txt('我 方', 24, y0 + h - 9, 8, 'rgba(55,91,76,.7)', 'center', true);
+}
+
 function drawMob(m) {
   if (m.rogueLead || m.rogueTroop) { drawRogueMob(m); return; }   // 试炼纵队单位走专属绘制（非 MOBS）
   if (m.siegeAssault) { drawSiegeMob(m); return; }   // 反向攻城：突击队走专属绘制（蓝描边，非 MOBS）
@@ -1388,7 +1420,7 @@ function drawSiege() {
    Key upgrades over baseline:
    - Background from cached getMapBg() instead of flat fills
    - 备战 banner → 朱砂/墨色 capsule (bug fix #3, was blue)
-   - 羁绊 banners → central safe zone at y=288 as 朱砂 capsule #bf3b2d (bug fix #2)
+   - 羁绊/军令 → transparent river boundary, keeping both battlefields open
    - All other rendering preserved. */
 function drawGame() {
   if (G.mode === 'autochess' && typeof drawAutoChess === 'function') { drawAutoChess(); return; }
@@ -1403,6 +1435,9 @@ function drawGame() {
 
   /* ---- 战场环境氛围（#8）：绘制于路径/单位之下，≤20 粒子、时间驱动、无每帧分配 ---- */
   drawAmbient(G.mapIdx);
+
+  /* ---- 敌我河界：扩大中间分隔带，提示文字放在透明水面内 ---- */
+  drawRiverBoundary();
 
   /* ---- Path (double-line, bug #1 fixed) ---- */
   if (G.mode !== 'raid' && G.mode !== 'puzzle' && G.mode !== 'escort' && G.mode !== 'siege') { drawPath(G.E); drawPath(G.P); }
@@ -1523,27 +1558,21 @@ function drawGame() {
     ctx.globalAlpha = 1;
   }
 
-  /* ---- Orders + Fate：低阻断状态芯片，保留信息同时让战场保持连续 ---- */
+  /* ---- Orders + Fate：透明河界信息，保留信息同时让敌我区域保持完整 ---- */
   var hasOrders = G.orders && G.orders.length;
   var hasFate = G.P.fate.list && G.P.fate.list.length;
   if (hasOrders || hasFate) {
-    var bandY = 288, bandH = 20, bandX = 12, gap = 6;
+    var bandY = 282, bandH = 18, bandX = 12, gap = 6;
     var chipW = (W - bandX * 2 - gap) / (hasOrders && hasFate ? 2 : 1);
     var chipIndex = 0;
     if (hasOrders) {
       const brief = G.orders.map(o => (o.done ? '✓' : '') + o.name + ' ' + o.value + '/' + o.need).join(' · ');
       const x = bandX + chipIndex++ * (chipW + gap);
-      rr(x, bandY, chipW, bandH, 8);
-      ctx.fillStyle = 'rgba(111,47,42,.72)'; ctx.fill();
-      ctx.strokeStyle = 'rgba(236,153,140,.55)'; ctx.lineWidth = 1; ctx.stroke();
-      txtFit('破阵 ' + brief, x + chipW / 2, bandY + 14, 8, 'rgba(255,245,240,.94)', 'center', true, chipW - 10);
+      txtFit('破阵 · ' + brief, x + chipW / 2, bandY + 13, 8, 'rgba(111,70,55,.82)', 'center', true, chipW - 10);
     }
     if (hasFate) {
       const x = bandX + chipIndex++ * (chipW + gap);
-      rr(x, bandY, chipW, bandH, 8);
-      ctx.fillStyle = 'rgba(51,78,68,.78)'; ctx.fill();
-      ctx.strokeStyle = 'rgba(137,186,157,.55)'; ctx.lineWidth = 1; ctx.stroke();
-      txtFit('羁绊 ' + G.P.fate.list.join('·'), x + chipW / 2, bandY + 14, 8, 'rgba(239,255,243,.94)', 'center', true, chipW - 10);
+      txtFit('羁绊 · ' + G.P.fate.list.join('·'), x + chipW / 2, bandY + 13, 8, 'rgba(55,91,76,.86)', 'center', true, chipW - 10);
     }
   }
 
@@ -1588,21 +1617,24 @@ function drawGame() {
   if (G.shake > 0) G.shake = Math.max(0, G.shake - 0.6);
   ctx.restore();
 
-  ctx.fillStyle = '#fffdf9'; ctx.fillRect(0, 0, W, TOP);
-  ctx.fillStyle = '#e4d9c8'; ctx.fillRect(0, TOP - 3, W, 3);
+  const hudG = ctx.createLinearGradient(0, 0, 0, TOP);
+  hudG.addColorStop(0, '#fffdf8'); hudG.addColorStop(1, '#f0e6d4');
+  ctx.fillStyle = hudG; ctx.fillRect(0, 0, W, TOP);
+  ctx.fillStyle = '#c7a96b'; ctx.fillRect(0, TOP - 3, W, 3);
   ctx.fillStyle = 'rgba(139,94,60,.08)'; ctx.fillRect(0, 0, W, 1);
   ctx.strokeStyle = 'rgba(139,94,60,.16)'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(148, 5); ctx.lineTo(148, 27); ctx.moveTo(236, 5); ctx.lineTo(236, 27); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(144, 5); ctx.lineTo(144, 27); ctx.moveTo(236, 5); ctx.lineTo(236, 27); ctx.stroke();
 
   /* Resource chips: left side remains stable while the center carries battle state. */
   if (G.mode !== 'puzzle') resChip('馒 ' + G.P.mantou, 6, 7, '#8b5e3c');
   resChip('金 ' + SAVE.gold, 76, 7, '#b0801f');
 
-  /* Stage/wave info */
+  /* Stage/wave info: fixed central plaque keeps text clear of controls at 375px. */
   const battleLabel = (G.mode ? G.modeLabel : (G.endless ? '无尽' : '第' + G.stage + '关'));
   const waveLabel = G.mode ? '' : '第' + G.wave + '波';
-  txt(battleLabel, 190, 13, 10, '#8a7e6c', 'center', true);
-  txt(waveLabel + (SAVE.invincible ? ' ·无敌' : ''), 190, 25, 11, '#343a40', 'center', true);
+  panel(148, 3, 84, 25, { bg: '#fffaf0', stroke: '#d8c29a', r: 8, blur: 2, offsetY: 1, depth: false });
+  txtFit(battleLabel, 190, 13, 9, '#8a7e6c', 'center', true, 72);
+  txtFit(waveLabel + (SAVE.invincible ? ' ·无敌' : ''), 190, 24, 10, '#343a40', 'center', true, 76);
 
   /* Next wave preview */
   if (G.previewQ && G.previewQ.pool && G.previewQ.pool.length) {
@@ -1799,7 +1831,11 @@ function drawGame() {
       ctx.strokeStyle = 'rgba(61,125,190,.35)'; ctx.lineWidth = 1; ctx.stroke();
       txtFit(G.banner.txt, W / 2, ty + 16, 11, '#2c73b9', 'center', true, tw - 24);
     } else {
-      txt(G.banner.txt, W / 2, 288, 14, '#343a40', 'center', true);
+      // 普通提示直接落在河界上，保持河水透明，避免出现红色信息框压缩敌我战区。
+      ctx.save();
+      ctx.globalAlpha = clamp(G.banner.t, 0, 1);
+      txtFit(G.banner.txt, W / 2, 307, 12, '#4f4034', 'center', true, W - 58);
+      ctx.restore();
     }
     ctx.globalAlpha = 1;
     if (!isTut) { G.banner.t -= DT60; if (G.banner.t <= 0) G.banner = null; }

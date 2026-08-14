@@ -131,6 +131,14 @@ function panel(x, y, w, h, opt = {}) {
     // 右下
     ctx.beginPath(); ctx.moveTo(x + w - r - cs, y + h); ctx.lineTo(x + w - r, y + h); ctx.lineTo(x + w - r, y + h - cs); ctx.closePath(); ctx.fill();
   }
+  // 卡片底部压边，模拟原版纸牌的轻微厚度。
+  if (h > 18 && opt.depth !== false) {
+    ctx.save();
+    ctx.globalAlpha = 0.24;
+    rr(x + 5, y + h - 4, w - 10, 2, 1);
+    ctx.fillStyle = 'rgba(90,65,35,.32)'; ctx.fill();
+    ctx.restore();
+  }
 }
 function sectionLabel(label, x, y) {
   txt(label.toUpperCase(), x, y, 9, '#a48b63', 'left', true);
@@ -224,13 +232,26 @@ function resChip(label, x, y, dot) {
   rr(x, y, cw, ch, 9); ctx.fillStyle = cg; ctx.fill();
   // 细描边
   rr(x, y, cw, ch, 9); ctx.strokeStyle = 'rgba(180,150,100,.25)'; ctx.lineWidth = 0.8; ctx.stroke();
-  // 色点（带光晕）
+  // 资源图标：用极简 Canvas 符号替代纯文字色点，提升扫读速度。
   ctx.save();
   ctx.shadowColor = dot; ctx.shadowBlur = 3;
-  ctx.fillStyle = dot; ctx.beginPath(); ctx.arc(x + 11, y + 9, 4.5, 0, 7); ctx.fill();
+  ctx.fillStyle = dot;
+  const icon = String(label).trim().charAt(0);
+  if (icon === '金') {
+    ctx.beginPath(); ctx.arc(x + 11, y + 9, 5, 0, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.65)'; ctx.lineWidth = 1; ctx.stroke();
+  } else if (icon === '馒') {
+    rr(x + 6, y + 5, 10, 8, 4); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.45)'; ctx.fillRect(x + 8, y + 6, 5, 1);
+  } else if (icon === '材') {
+    ctx.save(); ctx.translate(x + 11, y + 9); ctx.rotate(Math.PI / 4);
+    ctx.fillRect(-4, -4, 8, 8); ctx.restore();
+  } else {
+    ctx.beginPath(); ctx.arc(x + 11, y + 9, 4.5, 0, 7); ctx.fill();
+  }
   ctx.restore();
-  // 色点高光
-  ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.beginPath(); ctx.arc(x + 10, y + 7.5, 1.8, 0, 7); ctx.fill();
+  // 图标高光
+  ctx.fillStyle = 'rgba(255,255,255,.42)'; ctx.beginPath(); ctx.arc(x + 10, y + 7.5, 1.5, 0, 7); ctx.fill();
   // 文字
   txt(label, x + 22, y + 13, 11, '#4a3f30', 'left', true);
 }
@@ -247,6 +268,19 @@ function goTo(s) {
 // 右下对齐、尺寸一致、风格统一；底部预留不压列表末项。所有子屏均经此返回主菜单。
 function backBtn() {
   btn(W - 30 - 99, H - 63, 99, 34, '返回', () => { goTo('menu'); }, { grad: THEME.slate });
+}
+
+// 子页面统一标题栏：标题、印章、金线和副标题使用同一视觉锚点。
+function screenHeader(label, sub = '', opt = {}) {
+  inkTop(58);
+  const col = opt.col || THEME.ink;
+  title(label, W / 2, 42, opt.size || 22, { col, seal: opt.seal || label.slice(0, 1) });
+  if (sub) txtFit(sub, W / 2, 66, 10, THEME.inkSub, 'center', false, 330);
+  ctx.save();
+  const line = ctx.createLinearGradient(28, 0, W - 28, 0);
+  line.addColorStop(0, 'rgba(180,140,60,0)'); line.addColorStop(.5, 'rgba(180,140,60,.48)'); line.addColorStop(1, 'rgba(180,140,60,0)');
+  ctx.fillStyle = line; ctx.fillRect(28, 78, W - 56, 1);
+  ctx.restore();
 }
 
 // 列表滚动容器：裁剪绘制区 + 应用 g_scrollY 偏移 + 右侧滚动条；contentH 为内容总高
@@ -487,8 +521,7 @@ function drawMenu() {
 
 /* ---------- 设置与实验室 ---------- */
 function drawLab() {
-  txt('设置 · 实验室', W / 2, 48, 23, '#2f3540', 'center', true);
-  txt('难度与实验规则；默认关闭，不影响正常主线体验', W / 2, 70, 10, '#8a7e6c', 'center');
+  screenHeader('设置 · 实验室', '难度与实验规则 · 默认关闭，不影响主线体验', { seal: '设' });
   const DIFF_NAMES = { easy: '简单', normal: '普通', hard: '困难' };
   btn(30, 92, 150, 34, '难度 · ' + (DIFF_NAMES[SAVE.difficulty] || '普通'), () => { const c=['easy','normal','hard']; SAVE.difficulty=c[(c.indexOf(SAVE.difficulty)+1)%3]; saveSave(); }, { size: 12, bg: '#318c4a' });
   btn(195, 92, 150, 34, 'AI · ' + (DIFF_NAMES[SAVE.aiLevel] || '普通'), () => { const c=['easy','normal','hard']; SAVE.aiLevel=c[(c.indexOf(SAVE.aiLevel)+1)%3]; saveSave(); }, { size: 12, bg: '#7250b8' });
@@ -510,7 +543,7 @@ function drawLab() {
 
 /* ---------- 玩法说明 ---------- */
 function drawHelp() {
-  txt('玩法说明', W / 2, 46, 22, '#343a40', 'center', true);
+  screenHeader('玩法说明', '抽卡、合成、布阵与兵种克制', { seal: '策' });
   // 分组：每组首行为标题（带【】），其余为正文；空行/分组线作为视觉间距
   const groups = [
     ['🎯【核心目标】守住阿斗（♥3），打完全部波次即通关；阿斗掉血归零则失败。'],
@@ -528,7 +561,7 @@ function drawHelp() {
      '· 菜单「兵种无敌」可开启（仅玩家作战单位免伤，阿斗仍会掉血）。',
      '· 通关 30 关解锁无尽模式，每 10 波轮换一名历史名将 BOSS。'],
   ];
-  let y = 78;
+  let y = 90;
   const leftX = 20, maxW = 335;
   groups.forEach((g, gi) => {
     if (gi > 0) {
@@ -547,10 +580,7 @@ function drawHelp() {
 /* ---------- 存档管理（多槽 / 手动保存 / 导出导入 / 继续游戏） ---------- */
 /* ---------- 心愿单面板（1.2.4，直接生效，仅玩家侧） ---------- */
 function drawWish() {
-  ctx.fillStyle = '#3b2f2f'; ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'center';
-  ctx.fillText('心愿单', W / 2, 70);
-  ctx.font = '14px sans-serif'; ctx.fillStyle = '#666';
-  ctx.fillText('选择一名橙将，抽卡时该将字出现概率 ×1.5', W / 2, 96);
+  screenHeader('心愿单', '选择一名橙将，抽卡时该将字出现概率 ×1.5', { seal: '愿' });
   // 状态行：未设置时给红色引导，已设置时显示当前+取消提示（旧实现「全空无引导」问题修复）
   if (!SAVE.wish) {
     ctx.font = 'bold 13px sans-serif'; ctx.fillStyle = '#bf3b2d';
@@ -571,8 +601,7 @@ function drawWish() {
   backBtn();
 }
 function drawSave() {
-  txt('存档管理', W / 2, 46, 22, '#343a40', 'center', true);
-  txt('当前进度：' + fmtSaved(), W / 2, 78, 13, '#868e96', 'center');
+  screenHeader('存档管理', '当前进度：' + fmtSaved(), { seal: '档' });
   // 资源条：4 个 resChip 一行（与战斗顶栏统一风格）
   resChip('金 ' + SAVE.gold, 18, 94, '#b0801f');
   resChip('关 ' + SAVE.stage, 102, 94, '#1c7ed6');
@@ -651,9 +680,8 @@ function downloadGhost(id) {
   }).catch(() => { ghostMsg = '下载失败：服务未连接'; });
 }
 function drawGhost() {
-  txt('对战录像', W / 2, 46, 22, '#343a40', 'center', true);
-  txt('本地 ' + (Array.isArray(SAVE.ghosts) ? SAVE.ghosts.length : 0) + ' 条 / 共享 ' + ghostList.filter(g => g.src === 'remote').length + ' 条', W / 2, 70, 11, '#868e96', 'center');
-  txt('点击录像进入回放（自动重现玩家操作）', W / 2, 86, 10, '#adb5bd', 'center');
+  screenHeader('对战录像', '本地 ' + (Array.isArray(SAVE.ghosts) ? SAVE.ghosts.length : 0) + ' 条 / 共享 ' + ghostList.filter(g => g.src === 'remote').length + ' 条', { seal: '录' });
+  txt('点击录像进入回放（自动重现玩家操作）', W / 2, 92, 10, '#adb5bd', 'center');
   // 上传按钮：上传本地最新一条到共享池
   btn(20, 96, 162, 28, '上传最新到共享', () => {
     const arr = Array.isArray(SAVE.ghosts) ? SAVE.ghosts : [];
@@ -695,7 +723,7 @@ function fmtTime(s) {
   return Math.floor(s / 3600) + 'h' + Math.floor((s % 3600) / 60) + 'm';
 }
 function drawStats() {
-  txt('战绩档案', W / 2, 46, 22, '#343a40', 'center', true);
+  screenHeader('战绩档案', '胜负、击杀、合成与皮肤收集进度', { seal: '战' });
   const st = SAVE.stats || {};
   // 上半：核心数据 2 列
   const rows = [
@@ -714,14 +742,14 @@ function drawStats() {
   ];
   rows.forEach((r, i) => {
     const col = i % 2, row = (i / 2) | 0;
-    const x = 20 + col * 175, y = 80 + row * 32;
+    const x = 20 + col * 175, y = 96 + row * 32;
     rr(x, y, 168, 28, 5); ctx.fillStyle = '#f8f9fa'; ctx.fill();
     ctx.strokeStyle = '#dee2e6'; ctx.lineWidth = 1; ctx.stroke();
     txt(r[0], x + 8, y + 18, 11, '#868e96', 'left');
     txt(String(r[1]), x + 160, y + 18, 13, r[2], 'right', true);
   });
   // 下半：皮肤解锁总览
-  txt('皮肤图鉴', W / 2, 296, 16, '#343a40', 'center', true);
+  txt('皮肤图鉴', W / 2, 312, 16, '#343a40', 'center', true);
   let unlocked = 0, total = 0;
   HERO_LIST.forEach((name) => {
     if (typeof heroSkins !== 'function') return;
@@ -729,11 +757,11 @@ function drawStats() {
     total += skins.length;
     unlocked += skins.filter(s => checkSkinUnlock(name, s.cond)).length;
   });
-  txt('已解锁 ' + unlocked + '/' + total + ' (' + Math.round(unlocked / total * 100) + '%)', W / 2, 316, 12, '#2f9e44', 'center', true);
+  txt('已解锁 ' + unlocked + '/' + total + ' (' + Math.round(unlocked / total * 100) + '%)', W / 2, 332, 12, '#2f9e44', 'center', true);
   // 各武将当前皮肤快速预览
   HERO_LIST.forEach((name, i) => {
     const col = i % 3, row = (i / 3) | 0;
-    const x = 20 + col * 115, y = 332 + row * 32;
+    const x = 20 + col * 115, y = 348 + row * 32;
     rr(x, y, 110, 28, 5); ctx.fillStyle = '#f8f9fa'; ctx.fill();
     const sk = (typeof currentSkin === 'function') ? currentSkin(name) : null;
     const col2 = (sk && sk.col) ? sk.col : (HEROES[name].grade === 4 ? '#e8a005' : '#9c36b5');
@@ -745,7 +773,7 @@ function drawStats() {
 
 /* ---------- 商店（购买 + 携带 ≤6，主动 ≤2） ---------- */
 function drawShop() {
-  txt('道具商店', W / 2, 46, 22, '#343a40', 'center', true);
+  screenHeader('道具商店', '', { seal: '商' });
   // 资源条：与战斗顶栏 resChip 风格统一
   resChip('金 ' + SAVE.gold, 60, 58, '#b0801f');
   resChip('携 ' + SAVE.loadout.length + '/' + LOADOUT_MAX, 220, 58, '#5f3dc4');
@@ -767,7 +795,7 @@ function drawShop() {
 
 /* ---------- 锻造 ---------- */
 function drawForge() {
-  txt('锻造装备', W / 2, 46, 22, '#343a40', 'center', true);
+  screenHeader('锻造装备', '', { seal: '铸' });
   // 资源条：与战斗顶栏 resChip 风格统一（Phase 0 #32 资源图标化）
   resChip('金 ' + SAVE.gold, 60, 58, '#b0801f');
   resChip('材 ' + SAVE.mat, 220, 58, '#1c7ed6');
@@ -800,8 +828,7 @@ function drawForge() {
 
 /* ---------- 武将装备（点武将轮换武器 + P2-1 皮肤切换） ---------- */
 function drawEquip() {
-  txt('武将装备', W / 2, 46, 22, '#343a40', 'center', true);
-  txt('点武将行换武器 · 点右侧皮肤按钮换肤', W / 2, 68, 11, '#868e96', 'center');
+  screenHeader('武将装备', '点击武将切换武器 · 右侧切换皮肤', { seal: '武' });
   const rowH = 42, top = 82, listH = 512;
   clipList(14, top, 347, listH, top + HERO_LIST.length * rowH);
   HERO_LIST.forEach((name, i) => {
@@ -837,15 +864,14 @@ function drawEquip() {
 /* ---------- 武将营：永久招募、心愿与主将选择 ---------- */
 let campMsg = '';
 function drawCamp() {
-  txt('武将营', W / 2, 44, 24, '#2f3540', 'center', true);
-  txt('碎片招募 · 20 碎片解锁 · 每局仅携带 1 名主将', W / 2, 66, 10, '#8a7e6c', 'center');
+  screenHeader('武将营', '碎片招募 · 20 碎片解锁 · 每局携带 1 名主将', { seal: '将', size: 24 });
   const lead = SAVE.leadHero || '未选择';
-  panel(20, 76, 335, 42, { bg: '#fff9ed', stroke: '#ead7ad', r: 10, blur: 4 });
-  txt('当前主将：' + lead + (SAVE.ownedHeroes[lead] ? '  ★' + heroStar(lead) : ''), 32, 101, 14, '#b78324', 'left', true);
-  txt('心愿：' + (SAVE.heroWish || '未设置'), 340, 101, 11, '#8a7e6c', 'right');
+  panel(20, 84, 335, 42, { bg: '#fff9ed', stroke: '#ead7ad', r: 10, blur: 4 });
+  txt('当前主将：' + lead + (SAVE.ownedHeroes[lead] ? '  ★' + heroStar(lead) : ''), 32, 109, 14, '#b78324', 'left', true);
+  txt('心愿：' + (SAVE.heroWish || '未设置'), 340, 109, 11, '#8a7e6c', 'right');
   HERO_LIST.forEach((name, i) => {
     const col = i % 2, row = (i / 2) | 0;
-    const x = 18 + col * 171, y = 128 + row * 48;
+    const x = 18 + col * 171, y = 136 + row * 48;
     const own = !!SAVE.ownedHeroes[name], star = heroStar(name), n = shardCount(name);
     rr(x, y, 168, 42, 8); ctx.fillStyle = own ? '#fffdf9' : '#f0ece4'; ctx.fill(); ctx.strokeStyle = own ? '#dfc98d' : '#ded8ce'; ctx.stroke();
     const c = HEROES[name].grade === 4 ? '#b78324' : '#8050a0';
@@ -857,14 +883,13 @@ function drawCamp() {
       btn(x + 126, y + 7, 34, 27, need ? '升星' : '满星', () => { campMsg = upgradeHeroStar(name) ? name + ' 升至 ★' + heroStar(name) : '碎片不足（需要 ' + (need || 0) + '）'; }, { size: 8, bg: need ? '#b78324' : '#9099a1', disabled: !need });
     } else btn(x + 110, y + 7, 48, 27, SAVE.heroWish === name ? '心愿中' : '设心愿', () => { SAVE.heroWish = SAVE.heroWish === name ? '' : name; saveSave(); campMsg = SAVE.heroWish ? '已设定心愿：' + name : '已取消心愿'; }, { size: 9, bg: SAVE.heroWish === name ? '#bd4a31' : '#7c8792' });
   });
-  if (campMsg) txt(campMsg, W / 2, 570, 11, campMsg.includes('不足') ? '#bd4a31' : '#318c4a', 'center', true);
+  if (campMsg) txt(campMsg, W / 2, 578, 11, campMsg.includes('不足') ? '#bd4a31' : '#318c4a', 'center', true);
   backBtn();
 }
 
 
 function drawCommand() {
-  txt('军师与军令', W / 2, 48, 23, '#2f3540', 'center', true);
-  txt('选择军师后，下局战斗立即生效', W / 2, 70, 11, '#8a7e6c', 'center');
+  screenHeader('军师与军令', '选择军师后，下局战斗立即生效', { seal: '令' });
   Object.entries(ADVISERS).forEach(([id, a], i) => {
     const y = 96 + i * 70, on = SAVE.adviser === id;
     panel(20, y, 335, 58, { bg: on ? '#fff8e8' : '#fffdf9', stroke: on ? a.col : '#e5ddd0', r: 10, blur: 3 });
@@ -879,10 +904,9 @@ function drawCommand() {
 }
 
 function drawRoster() {
-  txt('群英谱', W / 2, 48, 24, '#2f3540', 'center', true);
-  txt('征战记录 · 英雄挑战', W / 2, 70, 10, '#8a7e6c', 'center');
-  txt('前6位英雄有4套专属皮肤，其余2套通用', W / 2, 82, 9, '#90949a', 'center');
-  var rowH = 44, top = 88, listH = 500;   // 18 英雄超屏→可滚动（与 equip 同款 clipList），否则末行皮肤钮撞返回键
+  screenHeader('群英谱', '征战记录 · 英雄挑战 · 皮肤图鉴', { seal: '谱', size: 24 });
+  txt('前6位英雄有4套专属皮肤，其余2套通用', W / 2, 88, 9, '#90949a', 'center');
+  var rowH = 44, top = 100, listH = 488;   // 18 英雄超屏→可滚动（与 equip 同款 clipList），否则末行皮肤钮撞返回键
   clipList(20, top, 335, listH, top + HERO_LIST.length * rowH);
   HERO_LIST.forEach(function(name, i) {
     var rec = typeof heroRecord === 'function' ? heroRecord(name) : { kills: 0, deployments: 0, wins: 0 };
@@ -915,8 +939,7 @@ function drawRoster() {
 }
 
 function drawModes() {
-  txt('特别玩法', W / 2, 54, 25, '#2f3540', 'center', true);
-  txt('改变胜利目标，而不是单纯增加波次', W / 2, 76, 11, '#90949a', 'center');
+  screenHeader('特别玩法', '改变胜利目标 · 每种玩法都有独特战术', { seal: '战', size: 25 });
   // 列表独立裁剪并预留底部返回键区域，避免最后一项与返回按钮重叠
   const top = 90, listH = Math.max(260, H - 180);
   clipList(20, top, 335, listH, top + SPECIAL_MODES.length * 86);
@@ -936,8 +959,14 @@ function drawModes() {
 function draw() {
   const dpr = (typeof devicePixelRatio === 'number' ? devicePixelRatio : 1);
   ctx.setTransform(scaleF * dpr, 0, 0, scaleF * dpr, 0, 0);
-  ctx.fillStyle = '#f3eee3'; ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = '#e1d4bf'; ctx.fillRect(0, 0, W, 4);
+  const paper = ctx.createLinearGradient(0, 0, 0, H);
+  paper.addColorStop(0, '#f7f0e3'); paper.addColorStop(0.52, '#f2e8d3'); paper.addColorStop(1, '#e9dcc4');
+  ctx.fillStyle = paper; ctx.fillRect(0, 0, W, H);
+  ctx.save();
+  ctx.globalAlpha = 0.055; ctx.strokeStyle = '#9b7b4d'; ctx.lineWidth = 1;
+  for (let y = 12; y < H; y += 24) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y + 3); ctx.stroke(); }
+  ctx.restore();
+  ctx.fillStyle = '#c7a96b'; ctx.fillRect(0, 0, W, 3);
   btns = [];
   if (scr !== _lastScr) {                       // 切屏：进场淡入 + 滚动复位 + 清除残留按压态
     _lastScr = scr; _wipe = 0.3; listScroll = 0; scrollDrag = null;
@@ -980,7 +1009,7 @@ function draw() {
 let achMsg = '';
 let achMsgT = 0;
 function drawAch() {
-  txt('成就', W / 2, 46, 22, '#343a40', 'center', true);
+  screenHeader('成就', '完成挑战，领取金钱与材料奖励', { seal: '成' });
   // 检查一次成就（玩家进入页面时实时同步）
   const newly = checkAchievements();
   if (newly.length > 0) {
@@ -989,12 +1018,12 @@ function drawAch() {
   }
   if (achMsgT > 0) {
     achMsgT -= DT60;
-    txt(achMsg, W / 2, 70, 12, '#e8a005', 'center', true);
+    txt(achMsg, W / 2, 88, 12, '#e8a005', 'center', true);
   } else {
     const done = ACHIEVEMENTS.filter(a => SAVE.ach[a.id]).length;
-    txt('已解锁 ' + done + '/' + ACHIEVEMENTS.length, W / 2, 70, 12, '#868e96', 'center');
+    txt('已解锁 ' + done + '/' + ACHIEVEMENTS.length, W / 2, 88, 12, '#868e96', 'center');
   }
-  const startY = 88, rowH = 33, listH = 512;
+  const startY = 102, rowH = 33, listH = 498;
   clipList(14, startY, 347, listH, startY + ACHIEVEMENTS.length * rowH);  // 长列表滚动，底部预留不压返回键
   ACHIEVEMENTS.forEach((a, i) => {
     const y = startY + i * rowH, on = !!SAVE.ach[a.id];
@@ -1014,9 +1043,7 @@ function drawAch() {
 /* ---------- 每日签到面板（P1-2） ---------- */
 let dailyMsg = '';
 function drawDaily() {
-  txt('每日签到', W / 2, 46, 22, '#343a40', 'center', true);
-  txt('连续签到 ' + SAVE.dailyStreak + ' 天', W / 2, 70, 13, '#868e96', 'center');
-  txt('今日：' + todayStr(), W / 2, 88, 11, '#adb5bd', 'center');
+  screenHeader('每日签到', '连续签到 ' + SAVE.dailyStreak + ' 天 · 今日：' + todayStr(), { seal: '签' });
   // 7 格签到条
   const bw = 44, gap = 6, total = 7 * bw + 6 * gap;
   const x0 = (W - total) / 2, y0 = 120;

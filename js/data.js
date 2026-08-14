@@ -5,7 +5,7 @@
 const W = 375, H = 667, TOP = 32, CELL = 48;
 // 全局 UI 安全区：战斗界面不得绕开这些区域直接硬编码坐标。
 const UI_LAYOUT = {
-  topBar: { y: 0, h: 32 }, enemyField: { y: 32, h: 264 }, messageBand: { y: 296, h: 28 }, playerField: { y: 324, h: 204 },
+  topBar: { y: 0, h: 32 }, enemyField: { y: 32, h: 248 }, messageBand: { y: 280, h: 44 }, playerField: { y: 324, h: 204 },
   heroStatus: { y: 498, h: 24 }, handRows: [538, 584], actionBar: { y: 636, h: 28 },
   recycle: { x: 288, y: 636, w: 80, h: 28 }, tempDrawer: { x: 8, y: 504, w: 272, h: 66 },
 };
