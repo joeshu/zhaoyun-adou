@@ -37,28 +37,83 @@ function acShop() {
 }
 function acUnit(c) { return { ...c, star: 1, uid: Math.random().toString(36).slice(2) }; }
 
+function acSkillName(u) {
+  return ({ 盾: '坚守', 猛将: '重击', 近战: '突刺', 骑: '冲锋', 枪: '横扫', 弓: '穿云', 谋士: '火计' }[u.job] || '绝技');
+}
+
 /* ---- 合成 ---- */
 function acMerge() {
-  const cells = G.P.cells, groups = {};
-  cells.forEach((c, i) => { if (c.unit) (groups[c.unit.id + '@' + c.unit.star] || (groups[c.unit.id + '@' + c.unit.star] = [])).push(i); });
+  const slots = G.P.cells.map((c, i) => ({ unit: c.unit, set: G.P.cells, index: i }));
+  const bench = G.autoChess.bench || [];
+  bench.forEach((unit, i) => slots.push({ unit, set: bench, index: i, bench: true }));
+  const groups = {};
+  slots.forEach(slot => { if (slot.unit) (groups[slot.unit.id + '@' + slot.unit.star] || (groups[slot.unit.id + '@' + slot.unit.star] = [])).push(slot); });
   Object.keys(groups).forEach(k => {
-    const ids = groups[k], parts = k.split('@'), next = +parts[1] + 1;
-    if (ids.length >= 3 && next <= 3) {
-      const keep = cells[ids[0]].unit;
+    const group = groups[k], parts = k.split('@'), next = +parts[1] + 1;
+    if (group.length >= 3 && next <= 3) {
+      const keep = group[0].unit;
       keep.star = next;
-      // 升星只记录星级；战斗属性统一在 fightStats() 里计算，避免重复放大
-      ids.slice(1, 3).forEach(i => cells[i].unit = null);
+      group.slice(1, 3).forEach(slot => {
+        if (slot.bench) slot.set[slot.index] = null;
+        else slot.set[slot.index].unit = null;
+      });
       G.autoChess.msg = keep.id + ' 升至 ' + next + ' 星！';
     }
   });
+  G.autoChess.bench = bench.filter(Boolean);
 }
 function acBoardCount() { return G.P.cells.filter(c => c.unit).length; }
 function acPlace(u) {
   const c = G.P.cells.find(c => !c.unit);
-  if (!c) return false;
-  c.unit = acUnit(u);
+  const unit = acUnit(u);
+  if (c) c.unit = unit;
+  else {
+    if (G.autoChess.bench.length >= 8) return false;
+    G.autoChess.bench.push(unit);
+  }
   acMerge();
   return true;
+}
+function acClickBoard(i) {
+  const a = G.autoChess;
+  if (!a || a.phase !== 'prep') return;
+  if (a.selectedBoard === i) { a.selectedBoard = null; return; }
+  if (a.selectedBoard === null || a.selectedBoard === undefined) { a.selectedBoard = i; a.msg = G.P.cells[i].unit ? '已选中 ' + G.P.cells[i].unit.id + '，点击另一格交换' : '空位'; return; }
+  const first = G.P.cells[a.selectedBoard].unit;
+  G.P.cells[a.selectedBoard].unit = G.P.cells[i].unit;
+  G.P.cells[i].unit = first;
+  a.selectedBoard = null;
+  a.msg = '已调整上阵位置';
+}
+function acClickBench(i) {
+  const a = G.autoChess;
+  if (!a || a.phase !== 'prep' || !a.bench[i]) return;
+  if (a.selectedBoard !== null && a.selectedBoard !== undefined) {
+    const boardUnit = G.P.cells[a.selectedBoard].unit;
+    G.P.cells[a.selectedBoard].unit = a.bench[i];
+    if (boardUnit) a.bench[i] = boardUnit;
+    else a.bench.splice(i, 1);
+    a.selectedBoard = null;
+    a.msg = '已替换上阵武将';
+    return;
+  }
+  const empty = G.P.cells.findIndex(c => !c.unit);
+  if (empty < 0) { a.msg = '请先点击棋盘武将，再点击候补武将'; return; }
+  G.P.cells[empty].unit = a.bench.splice(i, 1)[0];
+  a.msg = '候补武将已上阵';
+}
+function acManualSkill(uid) {
+  const a = G.autoChess;
+  if (!a || a.phase !== 'fight') return;
+  const u = (a.fightUnits || []).find(x => x.uid === uid && !x.dead);
+  if (!u || u.skillCd > 0) return;
+  const foes = (a.fightEnemy || []).filter(x => !x.dead);
+  if (!foes.length) return;
+  const nearest = foes.reduce((best, f) => Math.hypot(u.curX - f.curX, u.curY - f.curY) < Math.hypot(u.curX - best.curX, u.curY - best.curY) ? f : best, foes[0]);
+  const oldX = u.curX, oldY = u.curY;
+  if (Math.hypot(u.curX - nearest.curX, u.curY - nearest.curY) >= 105) { u.curX = nearest.curX; u.curY = nearest.curY; }
+  if (acSkill(u, foes)) u.skillCd = 3.5;
+  u.curX = oldX; u.curY = oldY;
 }
 
 /* ---- 羁绊 ---- */
@@ -77,9 +132,9 @@ function acBondText() {
 
 function acBuy(i) {
   const a = G.autoChess, u = a.shop[i];
-  if (!u || a.gold < u.cost || acBoardCount() >= a.pop) return;
+  if (!u || a.gold < u.cost || (acBoardCount() >= a.pop && a.bench.length >= 8)) return;
   a.gold -= u.cost;
-  acPlace(u);
+  if (!acPlace(u)) { a.gold += u.cost; return; }
   a.shop[i] = null;
   a.msg = '招募 ' + u.id + ' · ' + u.faction + ' ' + u.job;
 }
@@ -181,12 +236,17 @@ function acInitFightGrid() {
   a.fightUnits = []; a.fightEnemy = [];
   const us = G.P.cells.filter(x => x.unit).map(x => x.unit);
   const ai = a.ai[(a.round - 1) % a.ai.length], en = ai.units;
+  // 三路错位战线：前排居中，中排靠侧，后排保持射击距离。
+  const playerSlots = [[52, 178], [52, 300], [52, 238], [92, 212], [92, 328], [132, 270]];
+  const enemySlots = [[323, 238], [323, 360], [323, 300], [283, 328], [283, 212], [243, 270]];
   for (let i = 0; i < us.length; i++) {
-    const st = fightStats(us[i], 'player', us), ax = 40 + (i % 5) * 36, ay = 150 + Math.floor(i / 5) * 54;
+    const [ax, ay] = playerSlots[i] || playerSlots[playerSlots.length - 1];
+    const st = fightStats(us[i], 'player', us);
     a.fightUnits.push({ ...us[i], side: 'player', row: Math.floor(i / 5), ax, ay, stats: st, hp: st.hp, maxhp: st.hp, acc: 0, skillCd: 0, flash: 0, damage: 0, curX: ax, curY: ay, dead: false });
   }
   for (let i = 0; i < en.length; i++) {
-    const st = fightStats(en[i], 'enemy', en), ax = 210 + (i % 5) * 36, ay = 150 + Math.floor(i / 5) * 54;
+    const [ax, ay] = enemySlots[i] || enemySlots[enemySlots.length - 1];
+    const st = fightStats(en[i], 'enemy', en);
     a.fightEnemy.push({ ...en[i], side: 'enemy', row: Math.floor(i / 5), ax, ay, stats: st, hp: st.hp, maxhp: st.hp, acc: 0, skillCd: 0, flash: 0, damage: 0, curX: ax, curY: ay, dead: false });
   }
   a.fightTimer = 0; a.fightPhase = 'approach'; a.fightAI = ai; a.combatFx = [];
@@ -222,6 +282,8 @@ function acSkill(u, foes) {
     acDamage(u, near[0], base * 0.9, 'physical');
   } else if (u.job === '弓') {
     acDamage(u, near[0], base * 0.75, 'physical');
+  } else if (u.job === '猛将' || u.job === '近战') {
+    acDamage(u, near[0], base * 1.35, 'physical');
   } else return false;
   return true;
 }
@@ -265,7 +327,8 @@ function acFightTick(dt) {
     let best = null, bd = 1e9;
     foes.forEach(f => { const d = Math.hypot(u.curX - f.curX, u.curY - f.curY); if (d < bd) { bd = d; best = f; } });
     if (!best) return;
-    const backline = foes.filter(f => f.row > 0);
+    // 远程与骑兵优先寻找后排，近战则锁定距离最近的单位，形成不同职责。
+    const backline = foes.filter(f => f.curY >= 300);
     if ((u.job === '弓' || u.job === '谋士' || u.job === '骑') && backline.length) {
       best = backline.reduce((x, f) => f.hp < x.hp ? f : x, backline[0]);
     }
@@ -280,7 +343,8 @@ function acFightTick(dt) {
     const charge = u.job === '骑' && a.fightTimer < 1.2 ? 1.55 : 1;
     if (dist > attackRange) {
       u.curX += (dx / dist) * step * 30 * charge;
-      u.curY += (dy / dist) * step * 30 * charge;
+      // 纵深只做小幅修正，保持前中后排的战术层次。
+      u.curY += (dy / dist) * step * 7;
     } else {
       u.acc += dt * (0.8 + ((u.stats && u.stats.rate) || 0) / 100);
       if (u.acc >= 1) {
@@ -314,23 +378,27 @@ function acFightTick(dt) {
 }
 function acAfterCombat() {
   const a = G.autoChess;
+  if (a.phase !== 'fight') return;                 // 防止同一战斗重复结算
   a.resultT = 1.4;
   a.phase = 'result';
   a.msg = a.lastFight && a.lastFight.win ? '战斗胜利！' : '战斗失败！';
 }
 function acAdvanceRound() {
   const a = G.autoChess;
+  if (a.phase !== 'result') return;
   const alive = a.ai.filter(x => x.hp > 0).length;
   if (a.hp <= 0 || a.round >= 20 || alive <= 0) {
-    G.rewardTxt = a.hp <= 0 ? '群雄争霸出局' : '群雄争霸完成';
-    endBattle(a.hp > 0);
+    G.rewardTxt = a.hp <= 0 ? '群雄逐鹿出局' : '群雄逐鹿完成';
+    a.phase = 'ended';
+    G.rewardTxt = a.hp > 0 ? '群雄逐鹿完成' : '群雄逐鹿出局';
   } else {
     a.round++; a.phase = 'prep'; a.timer = 15;
     acEconomy();
     if (!a.locked) acShop();
     a.fightTimer = 0; a.fightUnits = null; a.fightEnemy = null; a.fightPhase = 'done';
+    a.lastFight = null;
     a.ai.forEach(x => {
-      if (x.hp > 0) x.units = x.jobs.map((job, j) => {
+      if (x.hp > 0) x.units = x.jobs.slice(0, Math.min(3, a.round + 1)).map((job, j) => {
         const pool = AC_HEROES.filter(h => h.job === job && h.faction === x.faction);
         const factionPool = AC_HEROES.filter(h => h.faction === x.faction);
         const source = pool.length ? pool : factionPool;
@@ -341,6 +409,12 @@ function acAdvanceRound() {
     });
     if (a.round % 5 === 0 && a.items.length < 3) acItemOffer();
   }
+}
+function acContinueRound() {
+  const a = G.autoChess;
+  if (!a || a.phase !== 'result') return;
+  a.resultT = 0;
+  acAdvanceRound();
 }
 function nAtk(u) { return (u.stats && u.stats.atk) || u.atk * (u.star === 2 ? 1.7 : u.star === 3 ? 2.7 : 1); }
 function acMakeAI() {
@@ -354,7 +428,7 @@ function acMakeAI() {
       const pool = AC_HEROES.filter(x => x.job === job && x.faction === faction);
       return acUnit((pool.length ? pool : factionPool)[(i + j) % Math.max(1, (pool.length ? pool : factionPool).length)] || AC_HEROES[0]);
     });
-    return { name, faction, jobs, units, bondText: acBondTextFor(units) };
+    return { name, faction, jobs, units, hp: 100, maxhp: 100, bondText: acBondTextFor(units) };
   });
 }
 function acBondTextFor(units) {
@@ -372,7 +446,7 @@ function acChooseLord() {
 /* ---- 状态机 ---- */
 function autoChessSetup() {
   G.autoChess = {
-    round: 1, gold: 3, hp: 100, pop: 2,
+    round: 1, gold: 5, hp: 100, pop: 3,
     phase: 'prep', timer: 15,
     shop: [], locked: false,
     items: [], itemChoices: null,
@@ -387,12 +461,13 @@ function autoChessSetup() {
     lordIdx: 0, lord: null,
     ai: acMakeAI(),
     fightTimer: 0, fightUnits: null, fightEnemy: null, fightPhase: null, fightAI: null,
-    resultT: 0, combatSpeed: 1,
+    resultT: 0, combatSpeed: 1, bench: [], selectedBoard: null,
   };
   G.P.cells.forEach(c => { c.open = true; c.unit = null; });
   G.E.cells.forEach(c => { c.open = false; c.unit = null; });
+  G.autoChess.ai.forEach(x => { x.units = x.units.slice(0, 2); });
   acShop();
-  G.banner = { txt: '【群雄争霸】先选主公，再招募武将', t: 3 };
+  G.banner = { txt: '【群雄逐鹿】先选主公，再招募武将', t: 3 };
 }
 function autoChessTick(dt) {
   const a = G.autoChess;
@@ -408,16 +483,23 @@ function drawAutoChess() {
   const a = G.autoChess;
   ctx.fillStyle = '#e9e0cd'; ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = '#3f5648'; ctx.fillRect(0, 0, W, 32);
-  txt('群雄争霸', 12, 22, 16, '#fffdf5', 'left', true);
+  txt('群雄逐鹿', 12, 22, 16, '#fffdf5', 'left', true);
   txt('第' + a.round + '/20回合', W / 2, 22, 12, '#f4d58b', 'center', true);
   txt('金 ' + a.gold + '  血 ' + a.hp + '  人口 ' + acBoardCount() + '/' + a.pop, W - 8, 22, 11, '#fffdf5', 'right', true);
 
-  txt(a.phase === 'prep' ? '准备阶段 ' + Math.ceil(a.timer) + 's' : '自动战斗中', W / 2, 48, 12, a.phase === 'prep' ? '#a61e4e' : '#bd4a31', 'center', true);
+  const phaseLabel = a.phase === 'prep' ? '准备阶段 ' + Math.ceil(a.timer) + 's' : (a.phase === 'ended' ? '本局结束' : '自动战斗中');
+  txt(phaseLabel, W / 2, 48, 12, a.phase === 'prep' ? '#a61e4e' : '#bd4a31', 'center', true);
   txt(a.lord ? a.lord.name : '主公未选 · 点击下方选择', W / 2, 68, 10, '#6b6256', 'center', true);
 
   // 战斗阶段绘制双方对战
   if (a.phase === 'fight' && a.fightUnits && a.fightEnemy) {
     ctx.fillStyle = '#1a2420'; ctx.fillRect(0, 120, W, H - 120 - 200);
+    ctx.strokeStyle = 'rgba(216,199,159,.16)'; ctx.lineWidth = 1; ctx.setLineDash([5, 5]);
+    [210, 270, 330].forEach(y => { ctx.beginPath(); ctx.moveTo(24, y); ctx.lineTo(W - 24, y); ctx.stroke(); });
+    ctx.setLineDash([]);
+    txt('前排', 10, 214, 8, '#b7a982', 'left', true);
+    txt('中排', 10, 274, 8, '#b7a982', 'left', true);
+    txt('后排', 10, 334, 8, '#b7a982', 'left', true);
     txt('敌方：' + a.fightAI.name + ' · ' + (a.fightAI.faction || '') + ' · ' + (a.fightAI.bondText || '无羁绊'), W / 2, 128, 10, '#d8c79f', 'center');
     // 左侧=玩家棋子
     a.fightUnits.forEach(u => {
@@ -447,6 +529,11 @@ function drawAutoChess() {
     (a.combatFx || []).forEach(f => { ctx.globalAlpha = Math.max(0, f.t / 0.7); txt(f.text, f.x, f.y - (0.7 - f.t) * 22, 12, f.col, 'center', true); ctx.globalAlpha = 1; });
     txt('我方 ' + a.fightUnits.filter(u => !u.dead).length + ' vs ' + a.fightEnemy.filter(u => !u.dead).length + ' 敌', W / 2, H - 180, 12, '#aaa', 'center');
     btn(12, H - 145, 78, 28, '速度×' + a.combatSpeed, () => { a.combatSpeed = a.combatSpeed === 1 ? 2 : 1; }, { size: 9, bg: '#7250b8' });
+    a.fightUnits.slice(0, 8).forEach((u, i) => {
+      if (u.dead) return;
+      const col = i % 4, row = Math.floor(i / 4);
+      btn(98 + col * 52, H - 145 + row * 32, 48, 28, u.skillCd > 0 ? Math.ceil(u.skillCd) + 's' : acSkillName(u), () => acManualSkill(u.uid), { size: 7, bg: u.skillCd > 0 ? '#777' : '#bd7a2d', disabled: u.skillCd > 0 });
+    });
     return;
   }
   if (a.phase === 'result') {
@@ -455,6 +542,16 @@ function drawAutoChess() {
     txt(a.msg, W / 2, 224, 12, '#5f574e', 'center', true);
     txt('存活：我方 ' + (a.lastFight ? a.lastFight.p : 0) + ' · 敌方 ' + (a.lastFight ? a.lastFight.e : 0), W / 2, 254, 12, '#6b6256', 'center');
     txt('下一回合准备中…', W / 2, 300, 11, '#8a7e6c', 'center');
+    btn(116, 320, 143, 34, '进入下一回合', acContinueRound, { size: 11, bg: '#3f5648' });
+    return;
+  }
+
+  if (a.phase === 'ended') {
+    panel(18, 150, 339, 210, { bg: a.hp > 0 ? '#edf8ee' : '#fff0ed', stroke: a.hp > 0 ? '#62a66b' : '#d66b5e', r: 14 });
+    txt(a.hp > 0 ? '群雄逐鹿完成' : '群雄逐鹿出局', W / 2, 205, 24, a.hp > 0 ? '#2f8f46' : '#bd3b2d', 'center', true);
+    txt(a.hp > 0 ? '坚持到第 ' + a.round + ' 回合' : '血量耗尽，战斗结束', W / 2, 242, 12, '#5f574e', 'center', true);
+    btn(62, 290, 112, 34, '再来一局', () => startSpecialMode('autochess'), { size: 11, bg: '#3f5648' });
+    btn(201, 290, 112, 34, '返回菜单', () => { goTo('menu'); }, { size: 11, bg: '#777' });
     return;
   }
 
@@ -474,6 +571,7 @@ function drawAutoChess() {
   txt(a.lastFight ? (a.lastFight.win ? '上一战胜利 · ' + a.lastFight.ai : '上一战失败 · ' + a.lastFight.ai)
     : 'AI 对手：' + ((a.ai[(a.round - 1) % a.ai.length] || {}).name || '等待匹配'),
     W / 2, 100, 12, a.lastFight ? (a.lastFight.win ? '#318c4a' : '#bd3b2d') : '#6b6256', 'center', true);
+  txt('前排承伤 · 后排输出 · 侧翼可改变集火目标', W / 2, 120, 9, '#8a7e6c', 'center');
 
   // 装备栏
   if (a.items.length) {
@@ -484,10 +582,10 @@ function drawAutoChess() {
     }
     const chessY = a.items.length > 2 ? 162 : 154;
     drawChessBoard(chessY);
-    drawACShop(chessY + 170);
+    drawACShop(chessY + 195);
   } else {
     drawChessBoard(150);
-    drawACShop(320);
+    drawACShop(350);
   }
 }
 function drawChessBoard(y0) {
@@ -497,6 +595,10 @@ function drawChessBoard(y0) {
     ctx.fillStyle = '#f7f4ea'; ctx.fill();
     ctx.strokeStyle = i < 5 ? '#b78324' : '#79a2aa'; ctx.lineWidth = 2; ctx.stroke();
     const u = G.P.cells[i] && G.P.cells[i].unit;
+    if (G.autoChess.selectedBoard === i) {
+      ctx.strokeStyle = '#bd3b2d'; ctx.lineWidth = 3; rr(x - 27, y - 27, 54, 54, 9); ctx.stroke();
+    }
+    btn(x - 25, y - 25, 50, 50, '', () => acClickBoard(i), { size: 1, bg: 'rgba(0,0,0,0)' });
     if (u) {
       txt(autoChessUnitGlyph(u), x, y + 7, 28, u.faction === '蜀' ? '#2f7f9d' : u.faction === '魏' ? '#555b78' : '#bd4a31', 'center', true);
       txt(u.id + '★' + u.star, x, y + 35, 7, '#6b6256', 'center');
@@ -505,6 +607,18 @@ function drawChessBoard(y0) {
   }
   txt('前排', 10, y0 + 3, 9, '#8a6d3b', 'left', true);
   txt('后排', 10, y0 + 79, 9, '#467d86', 'left', true);
+  const a = G.autoChess;
+  txt('候补席 · 点击换上阵', 10, y0 + 133, 9, '#6b6256', 'left', true);
+  for (let i = 0; i < 8; i++) {
+    const x = 30 + i * 43, y = y0 + 154, u = a.bench[i];
+    rr(x - 19, y - 19, 38, 38, 6); ctx.fillStyle = u ? '#fff8e7' : '#e1d8c8'; ctx.fill();
+    ctx.strokeStyle = u ? '#bd7a2d' : '#c4b8a6'; ctx.stroke();
+    if (u) {
+      txt(autoChessUnitGlyph(u), x, y + 5, 19, u.faction === '蜀' ? '#2f7f9d' : u.faction === '魏' ? '#555b78' : '#bd4a31', 'center', true);
+      txt(u.id + ' ' + u.star + '星', x, y + 30, 6, '#6b6256', 'center');
+      btn(x - 19, y - 19, 38, 38, '', () => acClickBench(i), { size: 1, bg: 'rgba(0,0,0,0)' });
+    }
+  }
 }
 function drawACShop(y0) {
   const a = G.autoChess;
@@ -516,7 +630,7 @@ function drawACShop(y0) {
       txt(u.id, x + 33, y0 + 23, 14, u.cost >= 3 ? '#9c36b5' : '#6b6256', 'center', true);
       txt(u.cost + '费 ' + u.faction, x + 33, y0 + 42, 8, '#777', 'center');
       txt(u.job, x + 33, y0 + 57, 8, '#777', 'center');
-      btn(x, y0, 67, 83, ' ' + u.id + ' ' + u.cost + '费', () => acBuy(i), { size: 8, bg: 'rgba(0,0,0,0)', disabled: a.gold < u.cost || acBoardCount() >= a.pop });
+      btn(x, y0, 67, 83, ' ' + u.id + ' ' + u.cost + '费', () => acBuy(i), { size: 8, bg: 'rgba(0,0,0,0)', disabled: a.gold < u.cost || (acBoardCount() >= a.pop && a.bench.length >= 8) });
     }
   }
   const by = y0 + 90;

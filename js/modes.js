@@ -8,7 +8,7 @@ const SPECIAL_MODES = [
   { id: 'puzzle', icon: '♟', name: '群雄演武', sub: '每日残局 · 三星挑战', col: '#b78324', unlock: 4 },
   { id: 'raid', icon: '👑', name: '黄巾讨伐', sub: '90 秒讨伐 · 阶段 Boss', col: '#8d3543', unlock: 20 },
   { id: 'siege', icon: '🏯', name: '反向攻城', sub: '夺隘破垒 · 逆袭敌营', col: '#8a6d3b', unlock: 24 },
-  { id: 'autochess', icon: '♜', name: '群雄争霸', sub: '抽卡升星 · 阵容博弈', col: '#3f5648', unlock: 1 },
+  { id: 'autochess', icon: '♜', name: '群雄逐鹿', sub: '招募换阵 · 升星放技', col: '#3f5648', unlock: 1 },
 ];
 const specialMode = id => SPECIAL_MODES.find(m => m.id === id);
 const modeUnlocked = m => SAVE.stage >= m.unlock;

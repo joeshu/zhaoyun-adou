@@ -631,8 +631,8 @@ function drawUnitAt(u, x, y, S) {
   drawBase(u);
   const col = unitCol(u);
 
-  // 右上角兵种类型小徽记（所有圆形/方形卡牌都加；浓墨档不画，保持极简）
-  if (!SAVE.mapSkin && (u.t === 'troop' || u.t === 'hero')) {
+  // 右上角徽记只在高阶单位显示，避免普通单位周围信息过密。
+  if (!SAVE.mapSkin && (u.t === 'hero' || (u.t === 'troop' && u.tier >= 3))) {
     const badgeIcon = u.t === 'troop' ? (TROOP_ICONS[u.type] || u.type) : (HEROES[u.name].grade === 4 ? '帝' : '将');
     const badgeCol = col;
     const bx = 15, by = -15;
@@ -669,16 +669,16 @@ function drawUnitAt(u, x, y, S) {
       var cdRatio = 1 - Math.min(1, Math.max(0, (u.cd || 0) / cdMax));
       const cdR = 22;
       // 外环底色（深灰）
-      ctx.strokeStyle = 'rgba(0,0,0,.06)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(0,0,0,.10)'; ctx.lineWidth = 2; ctx.lineCap = 'round';
       ctx.beginPath(); ctx.arc(0, -5, cdR, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2); ctx.stroke();
       // 内环底色（浅灰白）
-      ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1.2; ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 1; ctx.lineCap = 'round';
       ctx.beginPath(); ctx.arc(0, -5, cdR - 1, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2); ctx.stroke();
       // CD进度（渐变）
       const cdCol = cdRatio >= 1 ? '#3a9a52' : col;
       const cdGrad = ctx.createRadialGradient(0, -5, cdR - 2, 0, -5, cdR + 1);
       cdGrad.addColorStop(0, shade(cdCol, 1.15)); cdGrad.addColorStop(1, cdCol);
-      ctx.strokeStyle = cdGrad; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+      ctx.strokeStyle = cdGrad; ctx.lineWidth = 2; ctx.lineCap = 'round';
       ctx.beginPath(); ctx.arc(0, -5, cdR, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * cdRatio); ctx.stroke();
       // 就绪时脉冲光效
       if (cdRatio >= 1) {
@@ -796,7 +796,7 @@ function drawUnitAt(u, x, y, S) {
   ctx.restore();
 
   /* buff 标识（精致圆形小徽章） */
-  if (S && S.side > 0) {
+  if (S && S.side > 0 && !SAVE.mapSkin && (u.rateMul > 1 || u.buffN > 0 || (u.t === 'hero' && SAVE.manualUlt))) {
     let _bx = x - 22;
     if (u.rateMul > 1) {
       drawMiniBadge(_bx, y - 21, '⚡', '#f59f00');
@@ -829,7 +829,9 @@ function drawUnitAt(u, x, y, S) {
       rr(hbx, hby, hbw, hbh, 2.5); ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fill();
       // 血量渐变
       const hpRatio = u.hp / st.maxhp;
-      const hpCol = hpRatio > 0.5 ? '#3a9a52' : hpRatio > 0.25 ? '#f0a020' : '#e03838';
+      const hpCol = S.side > 0
+        ? (hpRatio > 0.5 ? '#3a9a52' : hpRatio > 0.25 ? '#f0a020' : '#e03838')
+        : (hpRatio > 0.5 ? '#b34a42' : hpRatio > 0.25 ? '#d97b32' : '#8f3030');
       const hpGrad = ctx.createLinearGradient(hbx, hby, hbx, hby + hbh);
       hpGrad.addColorStop(0, shade(hpCol, 1.2)); hpGrad.addColorStop(0.4, hpCol); hpGrad.addColorStop(1, shade(hpCol, 0.85));
       rr(hbx, hby, hbw * clamp(hpRatio, 0, 1), hbh, 2.5); ctx.fillStyle = hpGrad; ctx.fill();
@@ -1121,6 +1123,27 @@ function drawAdou(S) {
     ctx.restore();
   }
 
+  // 敌方目标只保留顶部窄条，避免木匾遮挡敌方布阵区和中央战况。
+  if (!mine) {
+    const _hp = S.hp;
+    const _baseHp = Math.max(S.maxhp || ADOU_HP, ADOU_HP);
+    const lifeTotal = Math.min(ADOU_HP_MAX, Math.max(ADOU_HP, _baseHp));
+    const lifeNow = clamp(Math.ceil(_hp), 0, lifeTotal);
+    const barX = 112, barY = 58, barW = 151, barH = 20;
+    rr(barX, barY, barW, barH, 8);
+    ctx.fillStyle = 'rgba(113,42,38,.86)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,230,220,.75)'; ctx.lineWidth = 1; ctx.stroke();
+    txt('敌方阿斗', barX + 10, barY + 14, 10, '#fff4ee', 'left', true);
+    txt('♥' + Math.max(0, _hp), barX + barW - 10, barY + 14, 10, '#ffe8e0', 'right', true);
+    const pipGap = 9, pipStart = barX + 64;
+    for (let i = 0; i < lifeTotal; i++) {
+      ctx.beginPath(); ctx.arc(pipStart + i * pipGap, barY + 10, 2.5, 0, 7);
+      ctx.fillStyle = i < lifeNow ? '#f08c83' : 'rgba(255,255,255,.22)'; ctx.fill();
+      ctx.strokeStyle = 'rgba(255,245,235,.65)'; ctx.lineWidth = .6; ctx.stroke();
+    }
+    return;
+  }
+
   const plaqueCol = mine ? '#2f9e44' : '#c9302c';
   const plaqueGold = mine ? '#5a8a5e' : '#a02828';
   const textCol = mine ? '#2a4a2e' : '#7a2020';
@@ -1197,31 +1220,19 @@ function drawAdou(S) {
   ctx.restore();
   ctx.restore();
 
-  // 精致血条（匾额下方）
-  const hpPct = Math.max(0, _hp) / _baseHp;
-  const hw = 54, hh = 6, hx = S.adou.x - hw / 2, hy = y + 24;
-  // 投影
-  ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,.2)'; ctx.shadowBlur = 3; ctx.shadowOffsetY = 1;
-  rr(hx, hy, hw, hh, 3); ctx.fillStyle = 'rgba(0,0,0,.15)'; ctx.fill();
-  ctx.restore();
-  // 槽底
-  const slotG = ctx.createLinearGradient(hx, hy, hx, hy + hh);
-  slotG.addColorStop(0, 'rgba(0,0,0,.2)'); slotG.addColorStop(1, 'rgba(0,0,0,.08)');
-  rr(hx, hy, hw, hh, 3); ctx.fillStyle = slotG; ctx.fill();
-  // 血量渐变
-  const hpCol = hpPct > 0.5 ? '#3a9a52' : hpPct > 0.25 ? '#f0a020' : '#e03838';
-  const hpGrad = ctx.createLinearGradient(hx, hy, hx, hy + hh);
-  hpGrad.addColorStop(0, shade(hpCol, 1.2)); hpGrad.addColorStop(0.4, hpCol); hpGrad.addColorStop(1, shade(hpCol, 0.85));
-  rr(hx, hy, hw * hpPct, hh, 3); ctx.fillStyle = hpGrad; ctx.fill();
-  // 血条高光
-  if (hpPct > 0.05) {
-    ctx.save();
-    const hhl = ctx.createLinearGradient(hx, hy, hx, hy + hh * 0.5);
-    hhl.addColorStop(0, 'rgba(255,255,255,.4)'); hhl.addColorStop(1, 'rgba(255,255,255,0)');
-    rr(hx + 0.5, hy + 0.5, Math.max(0, hw * hpPct - 1), hh * 0.45, 2.5); ctx.fillStyle = hhl; ctx.fill();
-    ctx.restore();
+  // 命牌：最多 9 命，以实心/空心直观看清当前剩余命数
+  const lifeTotal = Math.min(ADOU_HP_MAX, Math.max(ADOU_HP, _baseHp));
+  const lifeNow = clamp(Math.ceil(_hp), 0, lifeTotal);
+  const pipGap = 10, pipStart = S.adou.x - ((lifeTotal - 1) * pipGap) / 2;
+  for (let i = 0; i < lifeTotal; i++) {
+    const px = pipStart + i * pipGap;
+    ctx.beginPath(); ctx.arc(px, y + 25, 3.2, 0, 7);
+    ctx.fillStyle = i < lifeNow ? (mine ? '#c74b3c' : '#8f3030') : 'rgba(255,255,255,.28)';
+    ctx.fill();
+    ctx.strokeStyle = i < lifeNow ? 'rgba(255,245,220,.8)' : 'rgba(80,50,40,.42)';
+    ctx.lineWidth = 0.8; ctx.stroke();
   }
+  txt(lifeNow + '/' + lifeTotal, S.adou.x + 30, y + 28, 8, mine ? '#fffdf5' : '#ffe8e0', 'left', true);
 
   // 精致护盾图标（血条下方）
   const shieldCount = S.shield || 0;
@@ -1439,35 +1450,27 @@ function drawGame() {
     ctx.globalAlpha = 1;
   }
 
-  /* ---- Orders + Fate unified into 朱砂/墨色 divider band (bug fixes #2 & #3) ---- */
+  /* ---- Orders + Fate：低阻断状态芯片，保留信息同时让战场保持连续 ---- */
   var hasOrders = G.orders && G.orders.length;
   var hasFate = G.P.fate.list && G.P.fate.list.length;
   if (hasOrders || hasFate) {
-    var bandY = 288; /* Central safe divider band */
-    var bandH = 24;
-    var bandW = W - 20;
-    var bandX = 10;
-
-    /* 朱砂 capsule background (#bf3b2d) */
-    ctx.save();
-    rr(bandX, bandY, bandW, bandH, 12);
-    var bandGrad = ctx.createLinearGradient(bandX, bandY, bandX, bandY + bandH);
-    bandGrad.addColorStop(0, '#bf3b2d'); bandGrad.addColorStop(1, '#a33225');
-    ctx.fillStyle = bandGrad; ctx.fill();
-    ctx.strokeStyle = 'rgba(180,50,35,.6)'; ctx.lineWidth = 1; ctx.stroke();
-    ctx.restore();
-
-    /* Content layout within capsule */
-    var curX = bandX + 10;
+    var bandY = 288, bandH = 20, bandX = 12, gap = 6;
+    var chipW = (W - bandX * 2 - gap) / (hasOrders && hasFate ? 2 : 1);
+    var chipIndex = 0;
     if (hasOrders) {
       const brief = G.orders.map(o => (o.done ? '✓' : '') + o.name + ' ' + o.value + '/' + o.need).join(' · ');
-      txt(brief, curX, bandY + bandH / 2 + 4, 9, 'rgba(255,245,240,.92)', 'left', true);
-      curX += ctx.measureText ? ctx.measureText(brief).width + 12 : 160;
+      const x = bandX + chipIndex++ * (chipW + gap);
+      rr(x, bandY, chipW, bandH, 8);
+      ctx.fillStyle = 'rgba(111,47,42,.72)'; ctx.fill();
+      ctx.strokeStyle = 'rgba(236,153,140,.55)'; ctx.lineWidth = 1; ctx.stroke();
+      txtFit('破阵 ' + brief, x + chipW / 2, bandY + 14, 8, 'rgba(255,245,240,.94)', 'center', true, chipW - 10);
     }
     if (hasFate) {
-      /* Separator dot if both present */
-      if (hasOrders) { txt(' · ', curX, bandY + bandH / 2 + 4, 9, 'rgba(255,200,190,.6)', 'left', true); curX += 14; }
-      txt('羁绊：' + G.P.fate.list.join('·'), curX, bandY + bandH / 2 + 4, 9, 'rgba(255,235,225,.92)', 'left', true);
+      const x = bandX + chipIndex++ * (chipW + gap);
+      rr(x, bandY, chipW, bandH, 8);
+      ctx.fillStyle = 'rgba(51,78,68,.78)'; ctx.fill();
+      ctx.strokeStyle = 'rgba(137,186,157,.55)'; ctx.lineWidth = 1; ctx.stroke();
+      txtFit('羁绊 ' + G.P.fate.list.join('·'), x + chipW / 2, bandY + 14, 8, 'rgba(239,255,243,.94)', 'center', true, chipW - 10);
     }
   }
 
@@ -1514,13 +1517,19 @@ function drawGame() {
 
   ctx.fillStyle = '#fffdf9'; ctx.fillRect(0, 0, W, TOP);
   ctx.fillStyle = '#e4d9c8'; ctx.fillRect(0, TOP - 3, W, 3);
+  ctx.fillStyle = 'rgba(139,94,60,.08)'; ctx.fillRect(0, 0, W, 1);
+  ctx.strokeStyle = 'rgba(139,94,60,.16)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(148, 5); ctx.lineTo(148, 27); ctx.moveTo(236, 5); ctx.lineTo(236, 27); ctx.stroke();
 
-  /* Resource chips */
+  /* Resource chips: left side remains stable while the center carries battle state. */
   if (G.mode !== 'puzzle') resChip('馒 ' + G.P.mantou, 6, 7, '#8b5e3c');
   resChip('金 ' + SAVE.gold, 76, 7, '#b0801f');
 
   /* Stage/wave info */
-  txt((G.mode ? G.modeLabel : (G.endless ? '无尽' : '第' + G.stage + '关')) + (G.mode ? '' : '·第' + G.wave + '波') + (SAVE.invincible ? ' ·无敌' : ''), 232, 20, 12, '#495057', 'right', true);
+  const battleLabel = (G.mode ? G.modeLabel : (G.endless ? '无尽' : '第' + G.stage + '关'));
+  const waveLabel = G.mode ? '' : '第' + G.wave + '波';
+  txt(battleLabel, 190, 13, 10, '#8a7e6c', 'center', true);
+  txt(waveLabel + (SAVE.invincible ? ' ·无敌' : ''), 190, 25, 11, '#343a40', 'center', true);
 
   /* Next wave preview */
   if (G.previewQ && G.previewQ.pool && G.previewQ.pool.length) {
@@ -1697,7 +1706,16 @@ function drawGame() {
   if (G.banner) {
     ctx.globalAlpha = clamp(G.banner.t, 0, 1);
     const isTut = G.banner.t > 10;
-    txt(G.banner.txt, W / 2, 288, 17, isTut ? '#1c7ed6' : '#343a40', 'center', true);
+    if (isTut) {
+      // 教程提示独占上方窄条，避开 288-312 的目标/羁绊朱砂带。
+      const tx = 10, ty = 264, tw = W - 20, th = 24;
+      rr(tx, ty, tw, th, 12);
+      ctx.fillStyle = 'rgba(238,247,255,.94)'; ctx.fill();
+      ctx.strokeStyle = 'rgba(61,125,190,.35)'; ctx.lineWidth = 1; ctx.stroke();
+      txtFit(G.banner.txt, W / 2, ty + 16, 11, '#2c73b9', 'center', true, tw - 24);
+    } else {
+      txt(G.banner.txt, W / 2, 288, 14, '#343a40', 'center', true);
+    }
     ctx.globalAlpha = 1;
     if (!isTut) { G.banner.t -= DT60; if (G.banner.t <= 0) G.banner = null; }
   }

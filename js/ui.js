@@ -441,13 +441,18 @@ function drawMenu() {
     btn(24 + i * 82, 251, 80, 27, m.name + (isToday ? '·今' : ''), () => { selMap = i; selMapTouched = true; }, { size: 11, grad: selMap === i ? THEME.vermilion : THEME.slate, r: 8, glow: selMap === i });
     if (isToday && selMap !== i) { ctx.fillStyle = '#e8a005'; ctx.beginPath(); ctx.arc(30 + i * 82, 255, 2.5, 0, 7); ctx.fill(); }
   });
-  const mapEffect = MAPS[selMap].effect; if (mapEffect) txt('战场机制 · ' + mapEffect.name + (selMap === todayMapIdx() ? ' · 今日' : ''), W / 2, 288, 10, THEME.inkSub, 'center');
+  const mapEffect = MAPS[selMap].effect;
+  if (mapEffect) {
+    const today = selMap === todayMapIdx();
+    rr(32, 278, 311, 18, 9); ctx.fillStyle = today ? 'rgba(232,160,5,.12)' : 'rgba(90,100,110,.08)'; ctx.fill();
+    txt((today ? '今日推荐 · ' : '战场机制 · ') + mapEffect.name, W / 2, 291, 9, today ? '#a56f08' : THEME.inkSub, 'center', true);
+  }
   btn(30, 298, 150, 26, '画面:' + (SAVE.mapSkin ? '浓墨' : '标准'), () => { SAVE.mapSkin = SAVE.mapSkin ? 0 : 1; saveSave(); }, { size: 10, grad: SAVE.mapSkin ? THEME.vermilion : THEME.slate, r: 8 });
   // 开战主按钮（呼吸光晕）
   const fightGlow = 0.7 + Math.sin(animT * 2.5) * 0.3;
   ctx.save();
   ctx.shadowColor = '#c94a3d'; ctx.shadowBlur = 10 * fightGlow;
-  btn(195, 296, 150, 30, '开 战', () => { startBattle(selStage, false, selMap); goTo('game'); }, { size: 20, grad: THEME.vermilion, r: 9, glow: true });
+  btn(195, 296, 150, 30, '开 战  ▶', () => { startBattle(selStage, false, selMap); goTo('game'); }, { size: 18, grad: THEME.vermilion, r: 9, glow: true });
   ctx.restore();
   btn(30, 348, 154, 30, '特别玩法', () => { goTo('modes'); }, { size: 11, grad: THEME.vermilion, r: 9 });
   btn(191, 348, 154, 30, SAVE.endless ? '无尽挑战 · ' + SAVE.bestWave + '波' : '无尽挑战（30关解锁）', () => { startBattle(STAGE_MAX, true, selMap); goTo('game'); }, { size: 10, grad: THEME.indigo, disabled: !(SAVE.endless || SAVE.endlessOn), r: 9 });
