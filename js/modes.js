@@ -1002,6 +1002,17 @@ function puzzleStartAttempt() {
   G.banner = { txt: '开战！歼灭敌阵', t: 1.2 };
 }
 
+function puzzleDeployPreset() {
+  if (!G || !G.puzzle || !G.puzzle.prep || G.P.cells.some(c => c.unit)) return;
+  const targets = G.P.cells.filter(c => c.open && !c.unit);
+  const sources = G.P.bar
+    .map((slot, index) => ({ slot, index }))
+    .filter(item => item.slot.unit && !noDeploy(item.slot.unit));
+  for (let i = 0; i < Math.min(targets.length, sources.length); i++) {
+    dropUnit(G.P, 'bar', sources[i].index, 'board', G.P.cells.indexOf(targets[i]));
+  }
+}
+
 // 群雄演武：本次尝试失败 → 消耗一次尝试；仍有余次则重置布阵，否则判负
 function puzzleAttemptFail() {
   G.puzzle.attempt++;

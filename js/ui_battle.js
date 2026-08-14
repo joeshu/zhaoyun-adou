@@ -145,6 +145,155 @@ function drawAmbient(mapIdx) {
   ctx.restore();
 }
 
+/* 地图识别层：以低透明度地标和分区刻度建立每张地图的空间记忆。 */
+function drawMapGuides(mapIdx) {
+  var mt = MAP_THEMES[mapIdx] || MAP_THEMES[0];
+  var accent = SAVE.mapSkin ? mt.accentBold : mt.accent;
+  var enemyY = UI_LAYOUT.enemyField.y + 28;
+  var playerY = UI_LAYOUT.playerField.y + UI_LAYOUT.playerField.h - 16;
+  ctx.save();
+  ctx.globalAlpha = SAVE.mapSkin ? 0.34 : 0.22;
+  ctx.strokeStyle = accent;
+  ctx.fillStyle = accent;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 5]);
+  ctx.beginPath(); ctx.moveTo(10, enemyY); ctx.lineTo(72, enemyY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(W - 72, playerY); ctx.lineTo(W - 10, playerY); ctx.stroke();
+  ctx.setLineDash([]);
+  txt(mt.name, 12, enemyY - 6, 8, accent, 'left', true);
+  txt('我军布阵', W - 12, playerY - 6, 8, accent, 'right', true);
+
+  // 为不同地图补充轻量的地形边界，帮助玩家读懂路线和部署区的关系。
+  ctx.globalAlpha = SAVE.mapSkin ? 0.18 : 0.11;
+  ctx.strokeStyle = accent;
+  ctx.setLineDash([8, 7]);
+  if (mapIdx === 0) {
+    ctx.beginPath(); ctx.moveTo(8, 312); ctx.lineTo(W - 8, 312); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(8, 466); ctx.lineTo(W - 8, 466); ctx.stroke();
+  } else if (mapIdx === 1) {
+    ctx.beginPath(); ctx.moveTo(8, 294); ctx.lineTo(W - 8, 294); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(8, 468); ctx.lineTo(W - 8, 468); ctx.stroke();
+  } else if (mapIdx === 2) {
+    ctx.beginPath(); ctx.moveTo(8, 292); ctx.lineTo(W - 8, 292); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(8, 398); ctx.lineTo(W - 8, 398); ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.moveTo(54, 300); ctx.lineTo(54, 452); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(W - 54, 300); ctx.lineTo(W - 54, 452); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  if (mapIdx === 0) {
+    _drawMapSeal(18, 112, '尘'); _drawMapSeal(W - 18, 430, '坂');
+  } else if (mapIdx === 1) {
+    _drawMapSeal(20, 112, '江'); _drawMapSeal(W - 20, 430, '风');
+  } else if (mapIdx === 2) {
+    _drawMapSeal(20, 112, '关'); _drawMapSeal(W - 20, 430, '隘');
+  } else if (mapIdx === 3) {
+    _drawMapSeal(20, 112, '壁'); _drawMapSeal(W - 20, 430, '险');
+  }
+  ctx.restore();
+}
+
+function drawMapLandmark(mapIdx) {
+  var mt = MAP_THEMES[mapIdx] || MAP_THEMES[0];
+  var accent = SAVE.mapSkin ? mt.accentBold : mt.accent;
+  ctx.save();
+  if (mapIdx === 1) {
+    // 赤壁水寨位于敌方路径终点，使用低矮寨门和两侧桅杆建立目标位置。
+    var sx = 187, sy = 55;
+    ctx.globalAlpha = SAVE.mapSkin ? 0.42 : 0.28;
+    ctx.fillStyle = '#6d5960';
+    ctx.fillRect(sx - 30, sy - 8, 60, 14);
+    ctx.fillStyle = '#8f7070';
+    for (var i = -24; i <= 24; i += 16) ctx.fillRect(sx + i, sy - 17, 8, 9);
+    ctx.strokeStyle = accent; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(sx - 38, sy - 21); ctx.lineTo(sx - 38, sy + 6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(sx + 38, sy - 21); ctx.lineTo(sx + 38, sy + 6); ctx.stroke();
+    ctx.fillStyle = '#bd4a31';
+    ctx.beginPath(); ctx.moveTo(sx - 38, sy - 21); ctx.lineTo(sx - 24, sy - 16); ctx.lineTo(sx - 38, sy - 12); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(sx + 38, sy - 21); ctx.lineTo(sx + 52, sy - 16); ctx.lineTo(sx + 38, sy - 12); ctx.closePath(); ctx.fill();
+    txt('水寨', sx, sy - 24, 9, accent, 'center', true);
+    if (G && G.mode === 'fire' && G.fire) {
+      var hp = clamp(G.fire.stronghold / FIRE_STRONG_HP, 0, 1);
+      ctx.globalAlpha = 0.8;
+      ctx.fillStyle = 'rgba(40,35,35,.42)'; ctx.fillRect(sx - 27, sy + 10, 54, 4);
+      ctx.fillStyle = hp > 0.5 ? '#3a9a52' : hp > 0.25 ? '#f59f00' : '#d94841';
+      ctx.fillRect(sx - 27, sy + 10, 54 * hp, 4);
+      txt(Math.ceil(G.fire.stronghold) + '/' + FIRE_STRONG_HP, sx, sy + 24, 8, accent, 'center', true);
+    }
+  } else if (mapIdx === 3) {
+    // 函谷关在中央通道尽头加一座窄门，强化“驻军守关”的空间关系。
+    var gx = 187, gy = 118;
+    ctx.globalAlpha = SAVE.mapSkin ? 0.34 : 0.2;
+    ctx.strokeStyle = accent; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(gx - 28, gy + 18); ctx.lineTo(gx - 28, gy - 5);
+    ctx.quadraticCurveTo(gx, gy - 31, gx + 28, gy - 5);
+    ctx.lineTo(gx + 28, gy + 18); ctx.stroke();
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(gx - 20, gy + 18); ctx.lineTo(gx - 20, gy - 3);
+    ctx.quadraticCurveTo(gx, gy - 21, gx + 20, gy - 3);
+    ctx.lineTo(gx + 20, gy + 18); ctx.stroke();
+    txt('函谷关', gx, gy + 31, 9, accent, 'center', true);
+    ctx.setLineDash([2, 4]);
+    ctx.beginPath(); ctx.moveTo(28, 300); ctx.lineTo(28, 456); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(W - 28, 300); ctx.lineTo(W - 28, 456); ctx.stroke();
+    ctx.setLineDash([]);
+    txt('驻军护关', W / 2, 454, 8, accent, 'center', true);
+  } else if (mapIdx === 2) {
+    // 街亭用山口和两面军旗强调横向布阵区，援军仍从底部合成栏进入。
+    var px = 187, py = 302;
+    ctx.globalAlpha = SAVE.mapSkin ? 0.32 : 0.2;
+    ctx.strokeStyle = accent; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(px - 34, py + 12); ctx.lineTo(px - 18, py - 16);
+    ctx.lineTo(px, py - 27); ctx.lineTo(px + 18, py - 16); ctx.lineTo(px + 34, py + 12); ctx.stroke();
+    _drawMiniFlag(ctx, px - 48, py - 2, '#c94a3a');
+    _drawMiniFlag(ctx, px + 48, py - 2, '#c94a3a');
+    txt('街亭山口', px, py - 31, 9, accent, 'center', true);
+    txt('援军入列', W - 12, 514, 8, accent, 'right', true);
+  } else if (mapIdx === 0) {
+    // 长坂坡用补给车和尘路方向表达定时补给，放在边缘避免覆盖布阵格。
+    var sx0 = 24, sy0 = 302;
+    ctx.globalAlpha = SAVE.mapSkin ? 0.34 : 0.2;
+    ctx.fillStyle = '#8b6b3a'; ctx.fillRect(sx0 - 10, sy0 - 6, 20, 10);
+    ctx.fillStyle = '#6b4f2a';
+    ctx.beginPath(); ctx.arc(sx0 - 6, sy0 + 6, 3, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(sx0 + 6, sy0 + 6, 3, 0, 7); ctx.fill();
+    ctx.strokeStyle = accent; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(sx0 + 10, sy0 - 6); ctx.lineTo(sx0 + 23, sy0 - 13); ctx.stroke();
+    txt('补给', sx0, sy0 - 15, 8, accent, 'center', true);
+    ctx.setLineDash([2, 5]);
+    ctx.beginPath(); ctx.moveTo(sx0 + 18, sy0 + 8); ctx.lineTo(82, sy0 + 8); ctx.stroke();
+    ctx.setLineDash([]);
+    txt('百姓援路', 12, 514, 8, accent, 'left', true);
+  }
+  ctx.restore();
+}
+
+function drawMapEffectStatus() {
+  if (!G || G.mode || !MAPS[G.mapIdx] || !MAPS[G.mapIdx].effect) return;
+  var effect = MAPS[G.mapIdx].effect;
+  var mt = MAP_THEMES[G.mapIdx] || MAP_THEMES[0];
+  var accent = SAVE.mapSkin ? mt.accentBold : mt.accent;
+  var readyIn = Math.ceil(Math.max(0, G.mapEventT || 0));
+  var text = effect.name + ' · ' + readyIn + 's';
+  ctx.save();
+  ctx.globalAlpha = 0.78;
+  rr(10, 54, 128, 16, 8);
+  ctx.fillStyle = 'rgba(255,253,248,.48)'; ctx.fill();
+  ctx.strokeStyle = accent; ctx.lineWidth = 0.7; ctx.stroke();
+  txtFit(text, 74, 65, 8, accent, 'center', true, 116);
+  ctx.restore();
+}
+
+function _drawMapSeal(x, y, label) {
+  ctx.save();
+  ctx.globalAlpha *= 0.75;
+  ctx.beginPath(); ctx.arc(x, y, 10, 0, 7);
+  ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = 1; ctx.stroke();
+  txt(label, x, y + 3, 9, ctx.fillStyle, 'center', true);
+  ctx.restore();
+}
+
 /* --- Motif: 长坂坡 Dust (warm sand tone) ---
    APPROVED look: mostly sand color, subtle atmospheric patches, no heavy silhouettes. */
 function paintDust(cx, w, h, intensity) {
@@ -1041,6 +1190,7 @@ function drawPath(S) {
   var bold = SAVE.mapSkin === 1;
   var outerCol = bold ? mt.pathColBold : mt.pathCol;
   var innerCol = bold ? mt.pathInnerBold : mt.pathInner;
+  var guideCol = bold ? mt.accentBold : mt.accent;
 
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
 
@@ -1063,6 +1213,15 @@ function drawPath(S) {
   S.path.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
   ctx.stroke();
   ctx.setLineDash([]);
+
+  // 路线端点标记让敌我入口、阿斗方向和地图机制更容易识别。
+  ctx.save();
+  ctx.globalAlpha = 0.42;
+  ctx.fillStyle = guideCol;
+  var start = S.path[0], end = S.path[S.path.length - 1];
+  ctx.beginPath(); ctx.arc(start[0], start[1], 3, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(end[0], end[1], 4, 0, 7); ctx.fill();
+  ctx.restore();
 }
 
 /* ========== 敌我河界 ========== */
@@ -1070,9 +1229,10 @@ function drawPath(S) {
 function drawRiverBoundary() {
   const y0 = 280, h = 44;
   const mt = MAP_THEMES[(G && G.mapIdx) || 0] || MAP_THEMES[0];
+  const mapIdx = (G && G.mapIdx) || 0;
   ctx.save();
   // 保留地图底色，只叠加一层极淡水色，避免河界变成新的色块。
-  ctx.globalAlpha = 0.12;
+  ctx.globalAlpha = mapIdx === 1 ? 0.16 : 0.10;
   const water = ctx.createLinearGradient(0, y0, 0, y0 + h);
   water.addColorStop(0, '#b9d2d0');
   water.addColorStop(0.45, '#e6efea');
@@ -1090,7 +1250,7 @@ function drawRiverBoundary() {
   ctx.setLineDash([]);
   // 水纹保持小幅度和低透明度，避免压住中间提示信息。
   ctx.globalAlpha = 0.18;
-  ctx.strokeStyle = '#8eafb0';
+  ctx.strokeStyle = mapIdx === 1 ? '#789eae' : '#8eafb0';
   for (let x = -24; x < W + 24; x += 54) {
     ctx.beginPath();
     ctx.moveTo(x, y0 + 16);
@@ -1442,6 +1602,10 @@ function drawGame() {
   /* ---- 战场环境氛围（#8）：绘制于路径/单位之下，≤20 粒子、时间驱动、无每帧分配 ---- */
   drawAmbient(G.mapIdx);
 
+  /* ---- 地图识别层：分区刻度与地图专属地标 ---- */
+  drawMapGuides(G.mapIdx);
+  drawMapLandmark(G.mapIdx);
+
   /* ---- 敌我河界：扩大中间分隔带，提示文字放在透明水面内 ---- */
   drawRiverBoundary();
 
@@ -1659,6 +1823,7 @@ function drawGame() {
       txtFit('首波敌军：' + foes + (plan.boss ? ' · BOSS' : ''), W / 2, 45, 9, '#8a6d3b', 'center', true, W - 120);
     }
   }
+  drawMapEffectStatus();
 
   /* Mode status bars */
   if (G.mode === 'fire') {
@@ -1793,7 +1958,7 @@ function drawGame() {
   /* 群雄演武：布阵阶段给出「开战 / 选关」；自动战斗阶段仅观战，无额外按钮 */
   if (G.mode === 'puzzle' && G.puzzle && G.puzzle.prep) {
     // 第二排合成栏占用 560-608，按钮下移到其下方，避免拦截武将拖拽起点。
-    btn(40, 610, 140, 24, '开战 ▶', () => puzzleStartAttempt(), { size: 12, bg: '#318c4a', disabled: !G.P.cells.some(c => c.unit) });
+    btn(40, 610, 140, 24, '开战 ▶', () => { puzzleDeployPreset(); puzzleStartAttempt(); }, { size: 12, bg: '#318c4a', disabled: !G.P.cells.some(c => c.unit) && !G.P.bar.some(s => s.unit && !noDeploy(s.unit)) });
     btn(196, 610, 140, 24, '选关', () => { G.puzzle.choosing = true; G.puzzle.cur = null; }, { size: 12, bg: '#7250b8' });
   }
 

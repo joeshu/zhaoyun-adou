@@ -479,7 +479,7 @@ function drawMenu() {
   if (mapEffect) {
     const today = selMap === todayMapIdx();
     rr(32, 278, 311, 18, 9); ctx.fillStyle = today ? 'rgba(232,160,5,.12)' : 'rgba(90,100,110,.08)'; ctx.fill();
-    txt((today ? '今日推荐 · ' : '战场机制 · ') + mapEffect.name, W / 2, 291, 9, today ? '#a56f08' : THEME.inkSub, 'center', true);
+    txtFit((today ? '今日推荐 · ' : '战场机制 · ') + mapEffect.name + ' · ' + mapEffect.tip, W / 2, 291, 8, today ? '#a56f08' : THEME.inkSub, 'center', true, 292);
   }
   btn(30, 298, 150, 26, '画面:' + (SAVE.mapSkin ? '浓墨' : '标准'), () => { SAVE.mapSkin = SAVE.mapSkin ? 0 : 1; saveSave(); }, { size: 10, grad: SAVE.mapSkin ? THEME.vermilion : THEME.slate, r: 8 });
   // 开战主按钮（呼吸光晕）
