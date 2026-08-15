@@ -236,6 +236,7 @@ function rogueHurtMob(S, m) {
   m.dead = true;
   const dmg = m.dmg;
   G.P.hp -= dmg;
+  G.adouHitT = Math.max(G.adouHitT || 0, 0.45);
   boom(G.P.adou.x, G.P.adou.y, '#e03131');
   if (G) { G.flash = Math.max(G.flash, 0.4); addShake(4); popFloat(G.P.adou.x, G.P.adou.y - 30, 'dmg', dmg, { txt: '阿斗受袭 -' + dmg }); }
   if (G.P.hp <= 0) { endBattle(false); G.rewardTxt = '阿斗营破 · 纵队溃散'; }
@@ -724,15 +725,22 @@ function drawFire() {
   for (const c of f.cells) {
     if (c.state === 'burning') {
       ctx.save();
-      ctx.globalAlpha = 0.14; ctx.fillStyle = '#e8590c';
+      const pulse = 0.82 + Math.sin(G.time * 7 + c.x) * 0.18;
+      ctx.globalAlpha = 0.16 * pulse; ctx.fillStyle = '#e8590c';
       ctx.beginPath(); ctx.arc(c.x, c.y, 13, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
-      txt('火', c.x, c.y + 4, 11, '#d9480f', 'center', true);
+      ctx.globalAlpha = 0.28; ctx.strokeStyle = '#ffb14e'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(c.x, c.y, 15 + pulse * 3, 0, 7); ctx.stroke();
+      ctx.globalAlpha = 1; txt('火', c.x, c.y + 4, 11, '#d9480f', 'center', true);
+      ctx.fillStyle = '#fff1c1'; ctx.beginPath(); ctx.arc(c.x, c.y - 7, 2, 0, 7); ctx.fill();
       ctx.restore();
     } else {
       ctx.save();
-      // 油区改成小型水面标记，保留点火提示，避免覆盖棋盘卡片。
-      ctx.strokeStyle = 'rgba(184,74,49,.46)'; ctx.lineWidth = 1.2; ctx.setLineDash([3, 3]);
+      // 油区使用木桶底座和油膜高光，保持可点范围同时提升材质辨识度。
+      ctx.globalAlpha = 0.18; ctx.fillStyle = '#6e4f3d'; ctx.beginPath(); ctx.ellipse(c.x, c.y + 4, 13, 5, 0, 0, 7); ctx.fill();
+      ctx.globalAlpha = 1; ctx.strokeStyle = 'rgba(184,74,49,.58)'; ctx.lineWidth = 1.2; ctx.setLineDash([3, 3]);
       ctx.beginPath(); ctx.arc(c.x, c.y, 12, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+      ctx.strokeStyle = 'rgba(232,202,141,.7)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(c.x - 3, c.y - 3, 5, Math.PI * 1.1, Math.PI * 1.8); ctx.stroke();
       txt('油', c.x, c.y + 4, 10, '#c24b32', 'center', true);
       ctx.restore();
     }
@@ -798,8 +806,9 @@ function tickEscortThreats(e, S, dt) {
     if (t.kind === 'arrow') {
       t.t -= dt;
       if (t.phase === 'warn' && t.t <= 0) {
-        if (Math.abs(S.adou.x - t.xCenter) <= t.halfWidth) {
-          e.hp -= 1;
+          if (Math.abs(S.adou.x - t.xCenter) <= t.halfWidth) {
+            e.hp -= 1;
+            G.adouHitT = Math.max(G.adouHitT || 0, 0.35);
           popFloat(S.adou.x, S.adou.y - 30, 'dmg', 1, { txt: '箭雨 -1', col: '#e03131' });
           boom(S.adou.x, S.adou.y, '#e03131');
         }
@@ -814,6 +823,7 @@ function tickEscortThreats(e, S, dt) {
         if (t.y >= S.adou.y) {   // 落到阿斗所在行
           if (Math.abs(S.adou.x - t.xRock) <= t.R) {
             e.hp -= 1;
+            G.adouHitT = Math.max(G.adouHitT || 0, 0.35);
             popFloat(S.adou.x, S.adou.y - 30, 'dmg', 1, { txt: '落石 -1', col: '#e03131' });
             boom(S.adou.x, S.adou.y, '#e03131');
           }

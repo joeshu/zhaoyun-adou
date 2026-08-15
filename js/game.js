@@ -11,8 +11,9 @@ function mkSide(side, mapIdx) {
   for (const y of rows) for (const x of cols) cells.push({ x, y, open: false, unit: null });
   // 开放格：优先用 M.open（索引列表，精确还原原布局），否则回退 openRows（前N行全开）
   if (M.open) M.open.forEach(i => { if (cells[i]) cells[i].open = true; });
-  else if (M.openRows) {
-    const or = Math.min(M.openRows, rows.length);
+   else if (M.openRows || M.openRowsP || M.openRowsE) {
+     const configuredRows = side > 0 ? M.openRowsP : M.openRowsE;
+     const or = Math.min(configuredRows || M.openRows || 0, rows.length);
     cells.forEach((c, i) => { if (Math.floor(i / cols.length) < or) c.open = true; });
   }
   const bar = [];
@@ -69,6 +70,7 @@ function startBattle(stage, endless, mapIdx) {
     fx: [], parts: [], floats: [], deaths: [], ultFx: null, banner: null, flash: 0, summonFx: null,
     undoStack: [],                            // 玩家侧操作快照栈（撤销用）
     shake: 0,                                 // 屏震幅度（打击感）
+    adouHitT: 0,                              // 阿斗受击反馈倒计时
     playerDmgMul: 1, playerRateMul: 1, playerHpMul: 1,   // 遗物系统：本局玩家全军增益（#27）
     goldEarn: 0, resultT: 0,
     egg: null,

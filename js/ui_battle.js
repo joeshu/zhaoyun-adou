@@ -84,7 +84,40 @@ function paintMapBg(cx, w, h, mapIdx, intensity) {
   var g = cx.createLinearGradient(0, 0, 0, h);
   g.addColorStop(0, tTop); g.addColorStop(1, tBot);
   cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+  paintTerrainDepth(cx, w, h, mapIdx, intensity | 0);
   drawMapMotif(cx, w, h, mapIdx, intensity);
+}
+
+/* Static 2.5D terrain planes: low contrast so routes and units remain primary. */
+function paintTerrainDepth(cx, w, h, mapIdx, intensity) {
+  var bold = intensity >= 1;
+  var alpha = bold ? 0.13 : 0.08;
+  cx.save();
+  cx.globalAlpha = alpha;
+  if (mapIdx === 0) {
+    cx.fillStyle = '#8f704f';
+    cx.beginPath(); cx.moveTo(0, TOP + 10); cx.lineTo(w * .28, TOP - 2); cx.lineTo(w * .54, TOP + 14); cx.lineTo(w * .8, TOP - 5); cx.lineTo(w, TOP + 12); cx.lineTo(w, TOP + 62); cx.lineTo(0, TOP + 62); cx.closePath(); cx.fill();
+    cx.fillStyle = '#c8a477'; cx.fillRect(0, 306, w, 8); cx.fillRect(0, 466, w, 7);
+  } else if (mapIdx === 1) {
+    var water = cx.createLinearGradient(0, TOP, 0, h);
+    water.addColorStop(0, '#315664'); water.addColorStop(.52, '#567f88'); water.addColorStop(1, '#294652');
+    cx.globalAlpha = bold ? 0.18 : 0.12; cx.fillStyle = water; cx.fillRect(0, TOP, w, h - TOP);
+    cx.globalAlpha = alpha * 1.5; cx.fillStyle = '#c9a15d';
+    cx.fillRect(0, 286, w, 7); cx.fillRect(0, 470, w, 5);
+  } else if (mapIdx === 2) {
+    cx.fillStyle = '#5f654f';
+    cx.beginPath(); cx.moveTo(0, 302); cx.lineTo(62, 260); cx.lineTo(124, 294); cx.lineTo(187, 248); cx.lineTo(255, 292); cx.lineTo(322, 258); cx.lineTo(w, 302); cx.lineTo(w, 340); cx.lineTo(0, 340); cx.closePath(); cx.fill();
+    cx.globalAlpha = alpha * 1.4; cx.fillStyle = '#b4a17a'; cx.fillRect(0, 397, w, 6);
+  } else {
+    var left = cx.createLinearGradient(0, 0, 72, 0);
+    left.addColorStop(0, '#252c32'); left.addColorStop(1, 'rgba(37,44,50,0)');
+    cx.fillStyle = left; cx.fillRect(0, TOP, 72, h - TOP);
+    var right = cx.createLinearGradient(w - 72, 0, w, 0);
+    right.addColorStop(0, 'rgba(37,44,50,0)'); right.addColorStop(1, '#252c32');
+    cx.fillStyle = right; cx.fillRect(w - 72, TOP, 72, h - TOP);
+    cx.globalAlpha = alpha * 1.4; cx.fillStyle = '#a59b82'; cx.fillRect(62, 300, 4, 152); cx.fillRect(w - 66, 300, 4, 152);
+  }
+  cx.restore();
 }
 
 /* Per-map motif dispatcher */
@@ -202,8 +235,10 @@ function drawMapLandmark(mapIdx) {
     // 赤壁水寨位于敌方路径终点，使用低矮寨门和两侧桅杆建立目标位置。
     var sx = 187, sy = 55;
     ctx.globalAlpha = SAVE.mapSkin ? 0.42 : 0.28;
-    ctx.fillStyle = '#6d5960';
-    ctx.fillRect(sx - 30, sy - 8, 60, 14);
+     ctx.shadowColor = 'rgba(22,35,42,.45)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 4;
+     ctx.fillStyle = '#6d5960';
+     ctx.fillRect(sx - 30, sy - 8, 60, 14);
+     ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
     ctx.fillStyle = '#8f7070';
     for (var i = -24; i <= 24; i += 16) ctx.fillRect(sx + i, sy - 17, 8, 9);
     ctx.strokeStyle = accent; ctx.lineWidth = 1.2;
@@ -212,7 +247,10 @@ function drawMapLandmark(mapIdx) {
     ctx.fillStyle = '#bd4a31';
     ctx.beginPath(); ctx.moveTo(sx - 38, sy - 21); ctx.lineTo(sx - 24, sy - 16); ctx.lineTo(sx - 38, sy - 12); ctx.closePath(); ctx.fill();
     ctx.beginPath(); ctx.moveTo(sx + 38, sy - 21); ctx.lineTo(sx + 52, sy - 16); ctx.lineTo(sx + 38, sy - 12); ctx.closePath(); ctx.fill();
-    txt('水寨', sx, sy - 24, 9, accent, 'center', true);
+     txt('水寨', sx, sy - 24, 9, accent, 'center', true);
+     ctx.globalAlpha = SAVE.mapSkin ? 0.28 : 0.18;
+     ctx.fillStyle = '#d59a4b';
+     ctx.beginPath(); ctx.ellipse(sx, sy + 5, 42, 5, 0, 0, 7); ctx.fill();
     if (G && G.mode === 'fire' && G.fire) {
       var hp = clamp(G.fire.stronghold / FIRE_STRONG_HP, 0, 1);
       ctx.globalAlpha = 0.8;
@@ -269,6 +307,133 @@ function drawMapLandmark(mapIdx) {
   ctx.restore();
 }
 
+/* 前景边缘层：只占画面边缘，制造纸绘地图的近景遮挡和纵深。 */
+function drawMapForeground(mapIdx) {
+  var mt = MAP_THEMES[mapIdx] || MAP_THEMES[0];
+  var pulse = 0.82 + Math.sin(getAnimT() * 1.4) * 0.18;
+  ctx.save();
+  ctx.globalAlpha = SAVE.mapSkin ? 0.18 : 0.11;
+  if (mapIdx === 0) {
+    ctx.fillStyle = '#76583c';
+    for (var i = 0; i < 5; i++) {
+      var x = 8 + i * 84, y = 527 + (i % 2) * 4;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 9, y - 18); ctx.lineTo(x + 18, y); ctx.closePath(); ctx.fill();
+    }
+  } else if (mapIdx === 1) {
+    ctx.strokeStyle = '#b8d2d0'; ctx.lineWidth = 1.5;
+    for (var j = 0; j < 4; j++) {
+      var wy = 315 + j * 48;
+      ctx.beginPath(); ctx.moveTo(-10, wy); ctx.quadraticCurveTo(35, wy - 8, 82, wy); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(W - 82, wy + 17); ctx.quadraticCurveTo(W - 35, wy + 9, W + 10, wy + 17); ctx.stroke();
+    }
+    ctx.globalAlpha = (SAVE.mapSkin ? 0.22 : 0.14) * pulse;
+    ctx.fillStyle = '#e6bd72'; ctx.beginPath(); ctx.ellipse(24, 530, 26, 5, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(W - 24, 530, 26, 5, 0, 0, 7); ctx.fill();
+  } else if (mapIdx === 2) {
+    ctx.fillStyle = '#5a5b4e';
+    ctx.beginPath(); ctx.moveTo(0, 530); ctx.lineTo(22, 500); ctx.lineTo(48, 530); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(W, 530); ctx.lineTo(W - 22, 500); ctx.lineTo(W - 48, 530); ctx.closePath(); ctx.fill();
+  } else {
+    ctx.fillStyle = '#30363b';
+    ctx.fillRect(0, 504, 22, 32); ctx.fillRect(W - 22, 504, 22, 32);
+    ctx.fillStyle = mt.accent; ctx.globalAlpha = 0.18;
+    ctx.fillRect(8, 510, 6, 2); ctx.fillRect(W - 14, 510, 6, 2);
+  }
+  ctx.restore();
+}
+
+// 近景地形的实体切面：把地图底部边缘从平面纹理提升为可见的地貌台阶。
+function drawTerrainCutaway(mapIdx) {
+  var mt = MAP_THEMES[mapIdx] || MAP_THEMES[0];
+  var topY = mapIdx === 1 ? 520 : 526;
+  var bottomY = 538;
+  var face = mapIdx === 0 ? '#8e6b45' : mapIdx === 1 ? '#3f626d' : mapIdx === 2 ? '#676656' : '#343b42';
+  var light = mapIdx === 0 ? '#c09a61' : mapIdx === 1 ? '#86aeb2' : mapIdx === 2 ? '#a69a76' : '#68717a';
+  ctx.save();
+  ctx.globalAlpha = SAVE.mapSkin ? 0.24 : 0.16;
+  ctx.fillStyle = face;
+  ctx.beginPath();
+  ctx.moveTo(0, topY + 5); ctx.lineTo(W, topY - 2); ctx.lineTo(W, bottomY); ctx.lineTo(0, bottomY); ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 0.45;
+  ctx.fillStyle = light;
+  ctx.beginPath();
+  ctx.moveTo(0, topY + 5); ctx.lineTo(W, topY - 2); ctx.lineTo(W, topY + 2); ctx.lineTo(0, topY + 9); ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 0.22;
+  ctx.strokeStyle = mt.accentBold || mt.accent;
+  ctx.lineWidth = 1;
+  for (var y = topY + 10; y < bottomY; y += 8) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y - 7); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawAdouStand(S) {
+  if (!S || !S.adou) return;
+  var x = S.adou.x, y = S.adou.y + 19;
+  var mapIdx = (G && G.mapIdx) || 0;
+  ctx.save();
+  ctx.globalAlpha = 0.2;
+  ctx.fillStyle = mapIdx === 1 ? '#7b9b9e' : mapIdx === 3 ? '#51585d' : '#8b6b3a';
+  ctx.shadowColor = 'rgba(20,24,26,.5)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 4;
+  ctx.beginPath(); ctx.ellipse(x, y, 42, 8, 0, 0, 7); ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.globalAlpha = 0.42; ctx.strokeStyle = mapIdx === 1 ? '#c8a35e' : '#b78c4e'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.ellipse(x, y - 1, 35, 5, 0, 0, 7); ctx.stroke();
+  ctx.restore();
+}
+
+function drawUnitGrounding(S) {
+  if (!S || !S.cells) return;
+  ctx.save();
+  ctx.globalAlpha = 0.18;
+  ctx.fillStyle = '#273238';
+  for (var i = 0; i < S.cells.length; i++) {
+    var c = S.cells[i];
+    if (!c.unit) continue;
+    ctx.beginPath(); ctx.ellipse(c.x, c.y + 22, 17, 4, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// 连续阵位台面：把同一排格子连接成一个有厚度的战场平台，建立整体透视关系。
+function drawFormationPlatforms(S) {
+  if (!S || !S.cells || !S.cells.length) return;
+  var mt = MAP_THEMES[(G && G.mapIdx) || 0] || MAP_THEMES[0];
+  var groups = {};
+  for (var i = 0; i < S.cells.length; i++) {
+    var c = S.cells[i];
+    if (!c.open) continue;
+    if (!groups[c.y]) groups[c.y] = [];
+    groups[c.y].push(c.x);
+  }
+  ctx.save();
+  for (var key in groups) {
+    var xs = groups[key];
+    var minX = Math.min.apply(null, xs) - CELL / 2 - 5;
+    var maxX = Math.max.apply(null, xs) + CELL / 2 + 5;
+    var cy = Number(key), top = cy - CELL / 2 - 3, depth = 8;
+    var topCol = S.side > 0 ? mt.cellFill : mt.cellFillBold;
+    var faceCol = S.side > 0 ? shade(mt.cellBorder, 0.72) : shade(mt.cellBorderBold, 0.68);
+    ctx.globalAlpha = SAVE.mapSkin ? 0.32 : 0.2;
+    ctx.fillStyle = faceCol;
+    ctx.beginPath();
+    ctx.moveTo(minX, top + 5); ctx.lineTo(maxX, top + 5);
+    ctx.lineTo(maxX, top + CELL + depth); ctx.lineTo(minX, top + CELL + depth); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = SAVE.mapSkin ? 0.11 : 0.07;
+    ctx.fillStyle = topCol;
+    rr(minX, top, maxX - minX, CELL + 3, 8); ctx.fill();
+    ctx.globalAlpha = 0.3;
+    ctx.strokeStyle = '#fffdf3'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(minX + 7, top + 2); ctx.lineTo(maxX - 7, top + 2); ctx.stroke();
+    ctx.strokeStyle = shade(faceCol, 0.75); ctx.globalAlpha = 0.38;
+    ctx.beginPath(); ctx.moveTo(minX + 8, top + CELL + depth - 2); ctx.lineTo(maxX - 8, top + CELL + depth - 2); ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function drawMapEffectStatus() {
   if (!G || G.mode || !MAPS[G.mapIdx] || !MAPS[G.mapIdx].effect) return;
   var effect = MAPS[G.mapIdx].effect;
@@ -282,6 +447,47 @@ function drawMapEffectStatus() {
   ctx.fillStyle = 'rgba(255,253,248,.48)'; ctx.fill();
   ctx.strokeStyle = accent; ctx.lineWidth = 0.7; ctx.stroke();
   txtFit(text, 74, 65, 8, accent, 'center', true, 116);
+  ctx.restore();
+}
+
+// 地图机制反馈：让倒计时与空间目标保持视觉关联。
+function drawMapMechanicPulse() {
+  if (!G || G.mode || !MAPS[G.mapIdx] || !MAPS[G.mapIdx].effect) return;
+  var mt = MAP_THEMES[G.mapIdx] || MAP_THEMES[0];
+  var accent = SAVE.mapSkin ? mt.accentBold : mt.accent;
+  var pulse = 0.5 + 0.5 * Math.sin(getAnimT() * 3.2);
+  var x = W / 2, y = 300;
+  if (G.mapIdx === 0) { x = 52; y = 302; }
+  else if (G.mapIdx === 1) { x = 187; y = 60; }
+  else if (G.mapIdx === 2) { x = 187; y = 302; }
+  else if (G.mapIdx === 3) { x = 187; y = 118; }
+  ctx.save();
+  ctx.globalAlpha = (SAVE.mapSkin ? 0.13 : 0.08) + pulse * 0.04;
+  ctx.strokeStyle = accent; ctx.lineWidth = 1.5; ctx.setLineDash([3, 5]);
+  ctx.beginPath(); ctx.arc(x, y, 44 + pulse * 8, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]); ctx.globalAlpha *= 0.7; ctx.fillStyle = accent;
+  ctx.beginPath(); ctx.arc(x, y, 2 + pulse * 2, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function drawAdouFeedback(S) {
+  if (!G || !S || !S.adou || S.side < 0) return;
+  var hpRatio = S.maxhp ? clamp(S.hp / S.maxhp, 0, 1) : 1;
+  var hit = clamp((G.adouHitT || 0) / 0.45, 0, 1);
+  var danger = 1 - hpRatio;
+  if (hit <= 0 && danger < 0.34 && !(S.shield > 0)) return;
+  var pulse = 0.5 + 0.5 * Math.sin(getAnimT() * 5.5);
+  var col = hit > 0 ? '#e03131' : S.shield > 0 ? '#1c7ed6' : '#e8a005';
+  ctx.save();
+  ctx.globalAlpha = hit > 0 ? 0.3 + hit * 0.35 : 0.12 + danger * 0.12;
+  ctx.strokeStyle = col; ctx.lineWidth = hit > 0 ? 2.2 : 1.4;
+  ctx.setLineDash(hit > 0 ? [4, 3] : [2, 5]);
+  ctx.beginPath(); ctx.arc(S.adou.x, S.adou.y, 35 + pulse * 3 + hit * 5, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]);
+  if (S.shield > 0 && hit <= 0) {
+    ctx.globalAlpha = 0.18 + pulse * 0.08; ctx.fillStyle = '#1c7ed6';
+    ctx.beginPath(); ctx.arc(S.adou.x, S.adou.y, 27 + pulse * 2, 0, Math.PI * 2); ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -797,6 +1003,16 @@ function drawUnitAt(u, x, y, S) {
   const animT = getAnimT();
   const lifted = drag && ((drag.area === 'bar' && G.P.bar[drag.from] && G.P.bar[drag.from].unit === u) || (drag.area === 'board' && G.P.cells[drag.from] && G.P.cells[drag.from].unit === u));
   ctx.save(); ctx.translate(x, y); ctx.scale(pop, pop);
+  // 接触阴影固定在地面，单位抬起时阴影变小，形成稳定的 2.5D 高低关系。
+  ctx.save();
+  ctx.globalAlpha = lifted ? 0.12 : 0.22;
+  ctx.fillStyle = 'rgba(24, 30, 34, .72)';
+  ctx.shadowColor = 'rgba(20, 24, 28, .45)'; ctx.shadowBlur = lifted ? 3 : 5;
+  ctx.shadowOffsetY = lifted ? 2 : 4;
+  ctx.beginPath();
+  ctx.ellipse(0, lifted ? 18 : 20, u.t === 'hero' ? 18 : 14, lifted ? 4 : 5, 0, 0, 7);
+  ctx.fill();
+  ctx.restore();
   if (lifted) {
     ctx.save();
     ctx.globalAlpha = 0.24; ctx.shadowColor = '#bd7a2d'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 4;
@@ -999,11 +1215,11 @@ function drawUnitAt(u, x, y, S) {
   if (S && S.side > 0 && !SAVE.mapSkin && (u.rateMul > 1 || u.buffN > 0 || (u.t === 'hero' && SAVE.manualUlt))) {
     let _bx = x - 22;
     if (u.rateMul > 1) {
-      drawMiniBadge(_bx, y - 21, '⚡', '#f59f00');
+      drawMiniBadge(_bx, y - 21, '!', '#f59f00');
       _bx += 14;
     }
     if (u.buffN > 0) {
-      drawMiniBadge(_bx, y - 21, '⚔', '#e8590c');
+      drawMiniBadge(_bx, y - 21, '+', '#e8590c');
       _bx += 14;
     }
     if (SAVE.manualUlt && u.t === 'hero' && HEROES[u.name].skill && u.cd <= 0) {
@@ -1066,6 +1282,17 @@ function drawCell(c, S, hide) {
   const x = c.x - CELL / 2, y = c.y - CELL / 2;
   rr(x, y, CELL, CELL, 6);
 
+  // 统一使用轻微落地阴影，整体厚度由连续阵位平台承担。
+  ctx.save();
+  ctx.globalAlpha = 0.12;
+  ctx.shadowColor = 'rgba(35, 43, 52, .38)';
+  ctx.shadowBlur = 3;
+  ctx.shadowOffsetY = 2;
+  rr(x + 2, y + 1, CELL - 4, CELL - 2, 5);
+  ctx.fillStyle = 'rgba(67, 78, 86, .24)';
+  ctx.fill();
+  ctx.restore();
+
   /* 群雄演武地形：隘口(pass)锁定不可部署；高地(high)在普通开放格基础上加射程高亮 */
   if (S && S.side > 0 && G && G.mode === 'puzzle' && c.terrain === 'pass') {
     ctx.fillStyle = 'rgba(80,70,60,.20)'; ctx.fill();
@@ -1098,8 +1325,8 @@ function drawCell(c, S, hide) {
     ctx.fillStyle = bg; ctx.fill();
     /* Dashed outline */
     ctx.setLineDash([3, 3]); ctx.strokeStyle = bb; ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
-    txt('荒', c.x, c.y - 1, 10, shade(bb, 0.75), 'center');
-    if (S && S.side > 0) txt('馒' + cellCost(S), c.x, c.y + 13, 8, shade(bb, 0.65), 'center');
+    txt('荒', c.x, c.y - 1, 9, shade(bb, 0.68), 'center');
+    if (S && S.side > 0) txt(cellCost(S), c.x + 14, c.y - 14, 8, shade(bb, 0.62), 'center', true);
     /* Gravel dots */
     ctx.fillStyle = shade(bb, 0.5); ctx.globalAlpha = 0.35;
     var gx = [x + 8, x + CELL - 10, x + CELL/2], gy = [y + CELL - 8, y + CELL - 6, y + CELL - 10];
@@ -1112,6 +1339,14 @@ function drawCell(c, S, hide) {
   var cg = ctx.createLinearGradient(x, y, x, y + CELL);
   cg.addColorStop(0, cFill); cg.addColorStop(1, shade(cFill, 0.94));
   ctx.fillStyle = cg; ctx.fill();
+
+  // 阵位底沿和内高光形成卡槽的前后关系。
+  ctx.fillStyle = 'rgba(73, 83, 87, .14)';
+  rr(x + 3, y + CELL - 5, CELL - 6, 3, 1.5); ctx.fill();
+
+  // 卡槽前沿增加一道窄台阶，强化单位站在阵位上的感觉。
+  ctx.fillStyle = 'rgba(255,255,255,.22)';
+  rr(x + 4, y + CELL - 7, CELL - 8, 1.5, 0.75); ctx.fill();
 
   /* Top highlight strip (瓷面高光) */
   ctx.save();
@@ -1157,6 +1392,13 @@ function drawBarSlot(s, hide) {
   ctx.shadowColor = 'rgba(55,45,35,.2)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 3;
   rr(x + 1, y + 2, CELL - 2, CELL - 1, 6); ctx.fillStyle = 'rgba(92,78,62,.22)'; ctx.fill();
   ctx.restore();
+  ctx.save();
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle = shade(cFill, 0.62);
+  ctx.beginPath();
+  ctx.moveTo(x + 4, y + CELL - 1); ctx.lineTo(x + CELL - 4, y + CELL - 1);
+  ctx.lineTo(x + CELL - 4, y + CELL + 4); ctx.lineTo(x + 4, y + CELL + 4); ctx.closePath(); ctx.fill();
+  ctx.restore();
   var cg = ctx.createLinearGradient(x, y, x, y + CELL);
   cg.addColorStop(0, cFill); cg.addColorStop(1, shade(cFill, 0.94));
   ctx.fillStyle = cg; ctx.fill();
@@ -1165,6 +1407,8 @@ function drawBarSlot(s, hide) {
   hl.addColorStop(0, 'rgba(255,255,255,.28)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
   rr(x + 1, y + 1, CELL - 2, (CELL - 2) * 0.45, 5); ctx.fillStyle = hl; ctx.fill();
   ctx.restore();
+  ctx.fillStyle = 'rgba(73, 83, 87, .12)';
+  rr(x + 3, y + CELL - 5, CELL - 6, 3, 1.5); ctx.fill();
   // 合成栏底部内凹线，强化卡槽深度。
   ctx.strokeStyle = 'rgba(72,62,52,.12)'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(x + 7, y + CELL - 4); ctx.lineTo(x + CELL - 7, y + CELL - 4); ctx.stroke();
@@ -1194,6 +1438,26 @@ function drawPath(S) {
 
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
 
+  ctx.save();
+  ctx.globalAlpha = 0.16;
+  ctx.shadowColor = 'rgba(36, 45, 53, .55)';
+  ctx.shadowBlur = 3;
+  ctx.shadowOffsetY = 2;
+  ctx.strokeStyle = '#45515a'; ctx.lineWidth = 9;
+  ctx.beginPath();
+  S.path.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+  ctx.stroke();
+  ctx.restore();
+
+  // 道路前侧厚度：宽暗底 + 上移窄面，让路径脱离背景平面。
+  ctx.save();
+  ctx.globalAlpha = 0.46;
+  ctx.strokeStyle = shade(outerCol, 0.62); ctx.lineWidth = 7;
+  ctx.beginPath();
+  S.path.forEach((p, i) => i ? ctx.lineTo(p[0], p[1] + 5) : ctx.moveTo(p[0], p[1] + 5));
+  ctx.stroke();
+  ctx.restore();
+
   /* Outer line: 5px map-themed color */
   ctx.strokeStyle = outerCol; ctx.lineWidth = 5;
   ctx.beginPath();
@@ -1222,6 +1486,18 @@ function drawPath(S) {
   ctx.beginPath(); ctx.arc(start[0], start[1], 3, 0, 7); ctx.fill();
   ctx.beginPath(); ctx.arc(end[0], end[1], 4, 0, 7); ctx.fill();
   ctx.restore();
+
+  // 路线方向点帮助移动端快速识别敌我行进方向。
+  var flow = (getAnimT() * 0.34) % 1;
+  var segment = Math.floor(flow * (S.path.length - 1));
+  var local = flow * (S.path.length - 1) - segment;
+  var p0 = S.path[segment], p1 = S.path[Math.min(segment + 1, S.path.length - 1)];
+  if (p0 && p1) {
+    var fx = lerp(p0[0], p1[0], local), fy = lerp(p0[1], p1[1], local);
+    ctx.save(); ctx.globalAlpha = 0.55; ctx.fillStyle = guideCol;
+    ctx.shadowColor = guideCol; ctx.shadowBlur = 4;
+    ctx.beginPath(); ctx.arc(fx, fy, 2, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  }
 }
 
 /* ========== 敌我河界 ========== */
@@ -1232,7 +1508,7 @@ function drawRiverBoundary() {
   const mapIdx = (G && G.mapIdx) || 0;
   ctx.save();
   // 保留地图底色，只叠加一层极淡水色，避免河界变成新的色块。
-  ctx.globalAlpha = mapIdx === 1 ? 0.16 : 0.10;
+  ctx.globalAlpha = mapIdx === 1 ? 0.10 : 0.06;
   const water = ctx.createLinearGradient(0, y0, 0, y0 + h);
   water.addColorStop(0, '#b9d2d0');
   water.addColorStop(0.45, '#e6efea');
@@ -1241,7 +1517,7 @@ function drawRiverBoundary() {
   ctx.fillStyle = water;
   ctx.fillRect(0, y0, W, h);
   // 两岸使用断续细线，和战场道路的虚线语言保持一致。
-  ctx.globalAlpha = 0.26;
+  ctx.globalAlpha = 0.16;
   ctx.strokeStyle = mt.pathCol;
   ctx.lineWidth = 1;
   ctx.setLineDash([10, 8]);
@@ -1249,7 +1525,7 @@ function drawRiverBoundary() {
   ctx.beginPath(); ctx.moveTo(0, y0 + h - 3); ctx.lineTo(W, y0 + h - 3); ctx.stroke();
   ctx.setLineDash([]);
   // 水纹保持小幅度和低透明度，避免压住中间提示信息。
-  ctx.globalAlpha = 0.18;
+  ctx.globalAlpha = 0.10;
   ctx.strokeStyle = mapIdx === 1 ? '#789eae' : '#8eafb0';
   for (let x = -24; x < W + 24; x += 54) {
     ctx.beginPath();
@@ -1376,8 +1652,7 @@ function drawAdou(S) {
       if (zhaoCell) {
         ctx.strokeStyle = 'rgba(28,126,214,0.3)'; ctx.lineWidth = 1.2; ctx.setLineDash([3, 5]);
         ctx.beginPath(); ctx.moveTo(zhaoCell.x, zhaoCell.y); ctx.lineTo(S.adou.x - 30, S.adou.y); ctx.stroke();
-        ctx.setLineDash([]);
-      }
+  ctx.setLineDash([]);
     }
     ctx.restore();
   }
@@ -1502,6 +1777,7 @@ function drawAdou(S) {
     drawShieldIcon(S.adou.x - shieldTotalW / 2 + i * 16, y + 32, '#1c7ed6');
   }
 }
+}
 
 
 /* 长坂独胆：走廊带 + 长坂桥 + 威胁绘制（全部以 G.mode==='escort' 门控，不影响其它模式） */
@@ -1605,19 +1881,24 @@ function drawGame() {
   /* ---- 地图识别层：分区刻度与地图专属地标 ---- */
   drawMapGuides(G.mapIdx);
   drawMapLandmark(G.mapIdx);
+  drawMapMechanicPulse();
 
   /* ---- 敌我河界：扩大中间分隔带，提示文字放在透明水面内 ---- */
   drawRiverBoundary();
 
   /* 赤壁火油标记先铺在地面层，棋盘卡片与单位保持主视觉。 */
   if (G.mode === 'fire' && typeof drawFire === 'function') drawFire();
+  drawTerrainCutaway(G.mapIdx);
 
   /* ---- Path (double-line, bug #1 fixed) ---- */
   if (G.mode !== 'raid' && G.mode !== 'puzzle' && G.mode !== 'escort' && G.mode !== 'siege') { drawPath(G.E); drawPath(G.P); }
   if (G.mode === 'siege' && G.siege) drawPath(G.P);   // 突击队沿 SIEGE_PATH 上行
 
   /* ---- 渲染分层：路径基底 → enemy格子 → player格子 → enemy兵 → player兵 → enemy阿斗 → player阿斗(最上层) ---- */
+  if (G.mode !== 'raid' && G.mode !== 'puzzle' && G.mode !== 'escort' && G.mode !== 'siege') drawFormationPlatforms(G.E);
+  drawFormationPlatforms(G.P);
   if (G.mode !== 'raid' && G.mode !== 'puzzle' && G.mode !== 'escort' && G.mode !== 'siege') { G.E.cells.forEach(c => drawCell(c, G.E, false)); }
+  drawUnitGrounding(G.E);
   G.P.cells.forEach((c, i) => {
     drawCell(c, G.P, drag && drag.area === 'board' && drag.from === i);
     if (drag && drag.hintType) {
@@ -1636,6 +1917,7 @@ function drawGame() {
       }
     }
   });
+  drawUnitGrounding(G.P);
   G.P.bar.forEach((s, i) => {
     drawBarSlot(s, drag && drag.area === 'bar' && drag.from === i);
     if (drag && drag.hintType) {
@@ -1659,8 +1941,10 @@ function drawGame() {
   if (G.mode !== 'raid' && G.mode !== 'puzzle' && G.mode !== 'escort') for (const m of G.E.mobs) if (m.hp > 0) drawMob(m);
   for (const m of G.P.mobs) if (m.hp > 0) drawMob(m);
 
-  // 敌方阿斗
-  if (G.mode !== 'raid' && G.mode !== 'puzzle' && G.mode !== 'escort' && G.mode !== 'siege') drawAdou(G.E);
+   // 敌方阿斗
+   if (G.mode !== 'raid' && G.mode !== 'puzzle' && G.mode !== 'escort' && G.mode !== 'siege') {
+     drawAdouStand(G.E); drawAdou(G.E);
+   }
 
   // 队伍状态 / 特殊标记（兵下层已经画了，这里只画阿斗扩展）
 
@@ -1675,8 +1959,10 @@ function drawGame() {
     ctx.fillRect(x0, 318, x1 - x0, 218); ctx.restore();
   }
 
-  /* Player Adou (over cards) */
-  drawAdou(G.P);
+   /* Player Adou (over cards) */
+    drawAdouFeedback(G.P);
+    drawAdouStand(G.P);
+   drawAdou(G.P);
 
   /* Hero respawn status */
   if (G.heroRespawns && G.heroRespawns.length) {
@@ -1700,14 +1986,17 @@ function drawGame() {
   if (G.mode === 'siege' && G.siege) drawSiege();
 
   /* 群雄演武：布阵阶段预览敌阵落点（开战后才真正生成） */
-  if (G.mode === 'puzzle' && G.puzzle && G.puzzle.prep && G.puzzle.cur) {
+   if (G.mode === 'puzzle' && G.puzzle && G.puzzle.prep && G.puzzle.cur) {
     for (const e of G.puzzle.cur.enemyFormation) {
       ctx.globalAlpha = 0.5;
       txt(e.mobId, e.x, e.y + 5, 16, '#c0392b', 'center', true);
-      hpBar(e.x - 11, e.y + 13, 22, 1, '#fa5252');
-      ctx.globalAlpha = 1;
+       hpBar(e.x - 11, e.y + 13, 22, 1, '#fa5252');
+       ctx.globalAlpha = 1;
     }
-  }
+   }
+
+   // 前景边缘层压在战场内容之后，形成近景边界，同时避开操作栏和单位中心。
+   drawMapForeground(G.mapIdx);
 
   /* 单位死亡溶解层（#5）：hp<=0 移除时由 dealDmg 推入 G.deaths；此处逐帧淡出+轻微放大，
      配合 dealDmg 内 fxDissolve 的溶解环/粒子，替代原"瞬间消失"，零模拟逻辑改动、零回归风险 */
@@ -1731,21 +2020,29 @@ function drawGame() {
     ctx.globalAlpha = 1;
   }
 
-  /* ---- Orders + Fate：透明河界信息，保留信息同时让敌我区域保持完整 ---- */
+  /* ---- Orders + Fate：独立信息层，避免裸文字压在棋盘和道路上 ---- */
   var hasOrders = G.orders && G.orders.length;
   var hasFate = G.P.fate.list && G.P.fate.list.length;
   if ((hasOrders || hasFate) && !G.banner) {
-    var bandY = 303, bandH = 17, bandX = 12, gap = 6;
+    var bandY = UI_LAYOUT.messageBand.y + 7, bandH = 28, bandX = 10, gap = 6;
     var chipW = (W - bandX * 2 - gap) / (hasOrders && hasFate ? 2 : 1);
     var chipIndex = 0;
     if (hasOrders) {
       const brief = G.orders.map(o => (o.done ? '✓' : '') + o.name + ' ' + o.value + '/' + o.need).join(' · ');
       const x = bandX + chipIndex++ * (chipW + gap);
-      txtFit('破阵 · ' + brief, x + chipW / 2, bandY + 13, 8, 'rgba(111,70,55,.82)', 'center', true, chipW - 10);
+      ctx.save();
+      ctx.fillStyle = 'rgba(255,250,240,.92)'; ctx.strokeStyle = 'rgba(166,120,72,.48)'; ctx.lineWidth = 1;
+      rr(x, bandY, chipW, bandH, 7); ctx.fill(); ctx.stroke();
+      txtFit('破阵 · ' + brief, x + chipW / 2, bandY + 18, 8, '#6f4637', 'center', true, chipW - 12);
+      ctx.restore();
     }
     if (hasFate) {
       const x = bandX + chipIndex++ * (chipW + gap);
-      txtFit('羁绊 · ' + G.P.fate.list.join('·'), x + chipW / 2, bandY + 13, 8, 'rgba(55,91,76,.86)', 'center', true, chipW - 10);
+      ctx.save();
+      ctx.fillStyle = 'rgba(242,250,246,.92)'; ctx.strokeStyle = 'rgba(78,130,105,.48)'; ctx.lineWidth = 1;
+      rr(x, bandY, chipW, bandH, 7); ctx.fill(); ctx.stroke();
+      txtFit('羁绊 · ' + G.P.fate.list.join('·'), x + chipW / 2, bandY + 18, 8, '#375b4c', 'center', true, chipW - 12);
+      ctx.restore();
     }
   }
 
@@ -1788,32 +2085,33 @@ function drawGame() {
 
   /* ---- Top bar (not affected by screen shake) ---- */
   if (G.shake > 0) G.shake = Math.max(0, G.shake - 0.6);
+  if (G.adouHitT > 0) G.adouHitT = Math.max(0, G.adouHitT - DT60);
   ctx.restore();
 
   const hudG = ctx.createLinearGradient(0, 0, 0, TOP);
   hudG.addColorStop(0, '#fffdf8'); hudG.addColorStop(1, '#f0e6d4');
   ctx.fillStyle = hudG; ctx.fillRect(0, 0, W, TOP);
-  ctx.fillStyle = '#c7a96b'; ctx.fillRect(0, TOP - 3, W, 3);
+  ctx.fillStyle = '#c7a96b'; ctx.fillRect(0, TOP - 2, W, 2);
   ctx.fillStyle = 'rgba(139,94,60,.08)'; ctx.fillRect(0, 0, W, 1);
   ctx.strokeStyle = 'rgba(139,94,60,.16)'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(144, 5); ctx.lineTo(144, 27); ctx.moveTo(236, 5); ctx.lineTo(236, 27); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(142, 5); ctx.lineTo(142, 27); ctx.moveTo(232, 5); ctx.lineTo(232, 27); ctx.stroke();
 
   /* Resource chips: left side remains stable while the center carries battle state. */
   if (G.mode !== 'puzzle') resChip('馒 ' + G.P.mantou, 6, 7, '#8b5e3c');
-  resChip('金 ' + SAVE.gold, 76, 7, '#b0801f');
+  resChip('金 ' + SAVE.gold, 82, 7, '#b0801f');
 
   /* Stage/wave info: fixed central plaque keeps text clear of controls at 375px. */
   const battleLabel = (G.mode ? G.modeLabel : (G.endless ? '无尽' : '第' + G.stage + '关'));
   const waveLabel = G.mode ? '' : '第' + G.wave + '波';
-  panel(148, 3, 84, 25, { bg: '#fffaf0', stroke: '#d8c29a', r: 8, blur: 2, offsetY: 1, depth: false });
-  txtFit(battleLabel, 190, 13, 9, '#8a7e6c', 'center', true, 72);
-  txtFit(waveLabel + (SAVE.invincible ? ' ·无敌' : ''), 190, 24, 10, '#343a40', 'center', true, 76);
+  panel(154, 3, 78, 25, { bg: '#fffaf0', stroke: '#d8c29a', r: 8, blur: 2, offsetY: 1, depth: false });
+  txtFit(battleLabel, 193, 13, 9, '#8a7e6c', 'center', true, 68);
+  txtFit(waveLabel + (SAVE.invincible ? ' ·无敌' : ''), 193, 24, 10, '#343a40', 'center', true, 70);
 
   /* Next wave preview */
   if (G.previewQ && G.previewQ.pool && G.previewQ.pool.length) {
     const p = G.previewQ;
     const parts = p.pool.map(x => x[0] + '×' + Math.round(p.per * x[1] / 100)).filter(s => !s.endsWith('×0'));
-    let s = '下波 ▸ ' + parts.join(' ') + (p.boss ? '  ☠BOSS' : '');
+    let s = '下波 ▸ ' + parts.join(' ') + (p.boss ? '  BOSS' : '');
     txt(s, 8, 44, 10, '#8a7e6c', 'left');
   }
   if (!G.mode && G.wave === 0 && G.betweenT > 0) {
@@ -1827,13 +2125,13 @@ function drawGame() {
 
   /* Mode status bars */
   if (G.mode === 'fire') {
-    txt('🔥 风：' + (G.wind === '东南风' ? '东南' : '西北') + ' · 水寨♥' + Math.ceil(Math.max(0, G.fire.stronghold)) + ' · 控火油×' + Math.floor(G.fire.oil), W / 2, 48, 11, '#bd4a31', 'center', true);
+    txt('风 · ' + (G.wind === '东南风' ? '东南' : '西北') + ' · 水寨♥' + Math.ceil(Math.max(0, G.fire.stronghold)) + ' · 控火油×' + Math.floor(G.fire.oil), W / 2, 48, 11, '#bd4a31', 'center', true);
   } else if (G.mode === 'escort') {
     const e = G.escort;
     if (!e.run) {
-      txt('🐎 布阵备战 ' + Math.ceil(Math.max(0, G.betweenT)) + 's · 拖守军入左右两翼', W / 2, 48, 11, '#2f7f9d', 'center', true);
+      txt('护送备战 ' + Math.ceil(Math.max(0, G.betweenT)) + 's · 拖守军入左右两翼', W / 2, 48, 11, '#2f7f9d', 'center', true);
     } else {
-      txt('🐎 护送进度 ' + Math.floor(e.progress) + '%', W / 2, 48, 11, '#2f7f9d', 'center', true);
+      txt('护送进度 ' + Math.floor(e.progress) + '%', W / 2, 48, 11, '#2f7f9d', 'center', true);
       ctx.fillStyle = '#d9e8ec'; ctx.fillRect(112, 53, 151, 4); ctx.fillStyle = '#2f7f9d'; ctx.fillRect(112, 53, 151 * e.progress / 100, 4);
       for (let i = 0; i < e.maxhp; i++) txt(i < e.hp ? '♥' : '♡', 152 + i * 11, 84, 11, i < e.hp ? '#e03131' : '#ced4da', 'center', true);
       // 拦截警示（在阿斗正下方而非顶部 HUD，避免与进度条/血心重叠）
@@ -1846,22 +2144,22 @@ function drawGame() {
         ctx.strokeStyle = '#495057'; ctx.lineWidth = 0.5; ctx.strokeRect(ax - 30, ay + 20, 60, 5);
         ctx.globalAlpha = 1;
         // 拦截图标和倒计时在阿斗下方更远处，不挡住标签牌
-        const icon = warnP > 0.7 ? '🚨' : warnP > 0.4 ? '⚠' : '⚡';
+        const icon = warnP > 0.7 ? '!' : warnP > 0.4 ? '!' : '·';
         txt(icon + '拦截 ' + e.blockTimer.toFixed(1) + 's', ax, ay + 36, 10, warnP > 0.6 ? '#e03131' : '#f59f00', 'center', true);
       }
     }
   } else if (G.mode === 'puzzle') {
     const pz = G.puzzle;
-    txt('♟ ' + (pz.cur ? pz.cur.name : '群雄演武') + ' · 第 ' + pz.attempt + '/' + pz.maxAttempts + ' 次', W / 2, 48, 11, '#b78324', 'center', true);
+    txt('群雄演武 · ' + (pz.cur ? pz.cur.name : '准备') + ' · 第 ' + pz.attempt + '/' + pz.maxAttempts + ' 次', W / 2, 48, 11, '#b78324', 'center', true);
     if (pz.cur && pz.prep) {
       txtFit('手动拖动布阵 · 已上阵单位可互换位置', W / 2, 62, 8, '#8a6d3b', 'center', true, W - 28);
       txtFit('目标：歼灭敌阵 · ' + puzzleStrategyText(pz.cur), W / 2, 74, 8, '#8a6d3b', 'center', true, W - 28);
     }
   } else if (G.mode === 'raid') {
-    txt('👑 讨伐剩余 ' + Math.ceil(Math.max(0, G.raid.limit)) + ' 秒', W / 2, 48, 11, '#8d3543', 'center', true);
+    txt('讨伐剩余 ' + Math.ceil(Math.max(0, G.raid.limit)) + ' 秒', W / 2, 48, 11, '#8d3543', 'center', true);
     drawRaidHud();
   } else if (G.mode === 'rogue') {
-    txt('⚔ 五虎试炼 · 第 ' + G.rogue.floor + '/' + G.rogue.maxFloor + ' 战 · 军略 ' + G.rogue.picks, W / 2, 48, 11, '#7250b8', 'center', true);
+    txt('五虎试炼 · 第 ' + G.rogue.floor + '/' + G.rogue.maxFloor + ' 战 · 军略 ' + G.rogue.picks, W / 2, 48, 11, '#7250b8', 'center', true);
   } else if (G.mode === 'siege') {
     const sg = G.siege, prog = Math.round((1 - sg.fort.hp / sg.fort.maxhp) * 100);
     txt('🏯 突破 ' + prog + '% · 敌垒♥' + Math.ceil(Math.max(0, sg.fort.hp))
@@ -1871,7 +2169,7 @@ function drawGame() {
   /* Right-side control buttons */
   btn(240, 4, 32, 24, '×' + G.speed, () => { G.speed = G.speed >= 4 ? 1 : G.speed + 1; }, { bg: '#495057', size: 11 });
   btn(273, 4, 32, 24, G.paused ? '▶' : 'Ⅱ', () => { G.paused = !G.paused; }, { bg: '#495057', size: 11 });
-  btn(306, 4, 32, 24, SAVE.mute ? '🔇' : '🔊', () => { SAVE.mute = !SAVE.mute; saveSave(); sfx('click'); if (typeof stopBgm === 'function') stopBgm(); },
+  btn(306, 4, 32, 24, SAVE.mute ? '静' : '声', () => { SAVE.mute = !SAVE.mute; saveSave(); sfx('click'); if (typeof stopBgm === 'function') stopBgm(); },
     { bg: SAVE.mute ? '#e03131' : '#2f9e44', size: 12 });
   btn(339, 4, 32, 24, '菜单', () => { goTo('menu'); }, { bg: '#868e96', size: 9 });
 
@@ -1902,6 +2200,12 @@ function drawGame() {
 
   /* Action bar */
   const ay = UI_LAYOUT.actionBar.y, ah = UI_LAYOUT.actionBar.h;
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,250,240,.96)';
+  ctx.fillRect(0, UI_LAYOUT.handRows[1] + CELL / 2 + 4, W, H - (UI_LAYOUT.handRows[1] + CELL / 2 + 4));
+  ctx.strokeStyle = 'rgba(139,94,60,.22)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, ay - 4); ctx.lineTo(W, ay - 4); ctx.stroke();
+  ctx.restore();
 
   /* Manual ultimate */
   if (SAVE.manualUlt && G.mode !== 'puzzle' && G.mode !== 'siege') {
@@ -1950,11 +2254,15 @@ function drawGame() {
 
   /* Recycle slot */
   const rc = RECYCLE;
+  ctx.save();
+  ctx.fillStyle = drag && drag.hintType === 'recycle' ? 'rgba(232,168,5,.18)' : 'rgba(255,255,255,.55)';
+  ctx.strokeStyle = drag && drag.hintType === 'recycle' ? '#e8a005' : 'rgba(134,142,150,.72)';
+  ctx.lineWidth = drag && drag.hintType === 'recycle' ? 2 : 1;
   rr(rc.x, rc.y, rc.w, rc.h, 6);
-  ctx.fillStyle = '#e9ecef'; ctx.fill();
-  ctx.setLineDash([4, 3]); ctx.strokeStyle = '#868e96'; ctx.stroke(); ctx.setLineDash([]);
-  txt('回收♻', rc.x + rc.w / 2, rc.y + rc.h / 2 + 4, 11, '#868e96', 'center', true);
-  txt('拖单位回收', rc.x + rc.w / 2, rc.y + rc.h - 3, 8, '#adb5bd', 'center');
+  ctx.fill(); ctx.setLineDash([4, 3]); ctx.stroke(); ctx.setLineDash([]);
+  ctx.restore();
+  txt('回收', rc.x + rc.w / 2, rc.y + 13, 10, drag && drag.hintType === 'recycle' ? '#a86100' : '#68727b', 'center', true);
+  txt(drag && drag.hintType === 'recycle' ? '松开回收' : '拖单位到此', rc.x + rc.w / 2, rc.y + 23, 8, '#8d969e', 'center');
 
   /* 群雄演武：布阵阶段给出「开战 / 选关」；自动战斗阶段仅观战，无额外按钮 */
   if (G.mode === 'puzzle' && G.puzzle && G.puzzle.prep) {
@@ -1998,17 +2306,21 @@ function drawGame() {
     ctx.globalAlpha = clamp(G.banner.t, 0, 1);
     const isTut = G.banner.t > 10;
     if (isTut) {
-       // 教程提示使用河界透明层，避免遮盖棋盘单位和路径。
-       const tx = 10, ty = 290, tw = W - 20, th = 24;
-      rr(tx, ty, tw, th, 12);
-      ctx.fillStyle = 'rgba(244,250,247,.30)'; ctx.fill();
-      ctx.strokeStyle = 'rgba(94,137,130,.32)'; ctx.lineWidth = 1; ctx.stroke();
-      txtFit(G.banner.txt, W / 2, ty + 16, 11, '#356f78', 'center', true, tw - 24);
+       // 教程提示固定在消息带内，避免遮盖棋盘单位和路径。
+       const tx = 10, ty = UI_LAYOUT.messageBand.y + 7, tw = W - 20, th = 28;
+       rr(tx, ty, tw, th, 12);
+       ctx.fillStyle = 'rgba(248,252,249,.94)'; ctx.fill();
+       ctx.strokeStyle = 'rgba(94,137,130,.58)'; ctx.lineWidth = 1; ctx.stroke();
+       txtFit(G.banner.txt, W / 2, ty + 18, 10, '#356f78', 'center', true, tw - 24);
     } else {
-      // 普通提示直接落在河界上，保持河水透明，避免出现红色信息框压缩敌我战区。
+      // 普通提示使用短时消息胶囊，保证事件反馈可读且不穿过棋盘。
       ctx.save();
       ctx.globalAlpha = clamp(G.banner.t, 0, 1);
-      txtFit(G.banner.txt, W / 2, 307, 12, '#4f4034', 'center', true, W - 58);
+      const bw = Math.min(W - 28, Math.max(150, G.banner.txt.length * 10 + 26));
+      const bx = (W - bw) / 2, by = UI_LAYOUT.messageBand.y + 8;
+      rr(bx, by, bw, 26, 10); ctx.fillStyle = 'rgba(255,252,245,.94)'; ctx.fill();
+      ctx.strokeStyle = 'rgba(139,94,60,.48)'; ctx.lineWidth = 1; ctx.stroke();
+      txtFit(G.banner.txt, W / 2, by + 17, 10, '#4f4034', 'center', true, bw - 18);
       ctx.restore();
     }
     ctx.globalAlpha = 1;
@@ -2085,7 +2397,7 @@ function drawGame() {
     });
   }
   if (G.chapterFire) {
-    for (const f of G.chapterFire) { ctx.globalAlpha=.22; ctx.fillStyle='#e8590c'; ctx.beginPath(); ctx.arc(f.x,f.y,26,0,7); ctx.fill(); ctx.globalAlpha=1; txt('🔥',f.x,f.y+6,16,'#e8590c','center'); }
+    for (const f of G.chapterFire) { ctx.globalAlpha=.22; ctx.fillStyle='#e8590c'; ctx.beginPath(); ctx.arc(f.x,f.y,26,0,7); ctx.fill(); ctx.globalAlpha=1; txt('火',f.x,f.y+6,13,'#e8590c','center',true); }
     txt('赤壁·'+G.wind, W/2, 48, 10, '#bd4a31', 'center', true);
   }
   if (G.chapterChoice) {

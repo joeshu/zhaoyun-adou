@@ -220,7 +220,7 @@ function btn(x, y, w, h, label, fn, opt = {}) {
 }
 // 资源小药丸 v3（更精致的胶囊：渐变+色点阴影+细描边）
 function resChip(label, x, y, dot) {
-  const cw = 64, ch = 18;
+  const cw = Math.max(64, Math.min(78, 28 + String(label).length * 7)), ch = 18;
   // 投影
   ctx.save();
   ctx.shadowColor = 'rgba(60,40,15,.08)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 1;
@@ -515,7 +515,7 @@ function drawMenu() {
 
   // 非核心规则与实验性功能收进实验室
   btn(30, 616, 210, 30, '设置 · 实验室', () => { goTo('lab'); }, { size: 11, grad: THEME.slate, r: 8 });
-  btn(246, 616, 99, 30, SAVE.mute ? '🔇 静音' : '🔊 有声', () => { SAVE.mute = !SAVE.mute; saveSave(); }, { size: 10, grad: SAVE.mute ? THEME.slate : THEME.pine, r: 8 });
+  btn(246, 616, 99, 30, SAVE.mute ? '静音' : '有声', () => { SAVE.mute = !SAVE.mute; saveSave(); }, { size: 10, grad: SAVE.mute ? THEME.slate : THEME.pine, r: 8 });
 }
 
 
@@ -546,18 +546,18 @@ function drawHelp() {
   screenHeader('玩法说明', '抽卡、合成、布阵与兵种克制', { seal: '策' });
   // 分组：每组首行为标题（带【】），其余为正文；空行/分组线作为视觉间距
   const groups = [
-    ['🎯【核心目标】守住阿斗（♥3），打完全部波次即通关；阿斗掉血归零则失败。'],
-    ['🎴【抽卡合成】',
+     ['【核心目标】守住阿斗（♥3），打完全部波次即通关；阿斗掉血归零则失败。'],
+     ['【抽卡合成】',
      '· 抽卡消耗馒头，得「将字」碎片；将字按正确顺序拖合成武将（赵+云=赵云）。',
      '· 碎片集齐可合成道具；十连有保底。'],
-    ['⚔️【布阵作战】',
+     ['【布阵作战】',
      '· 把武将/兵种从底部栏拖到棋盘才参战；点荒地花馒头开荒扩格。',
      '· 拖到回收站可换回馒头。',
      '· 兵种相克：盾嘲讽、甲减伤、枪破甲、骑克弩。'],
-    ['🔗【羁绊与装备】',
+     ['【羁绊与装备】',
      '· 桃园/五虎/父子等羁绊触发增益；专武在锻造页打造、武将装备页穿戴。',
      '· BOSS 关与章末关掉落材料，用于锻造。'],
-    ['⚙️【功能开关】',
+    ['【功能开关】',
      '· 菜单「兵种无敌」可开启（仅玩家作战单位免伤，阿斗仍会掉血）。',
      '· 通关 30 关解锁无尽模式，每 10 波轮换一名历史名将 BOSS。'],
   ];
@@ -1078,11 +1078,16 @@ function drawDaily() {
 
 /* ---------- 输入 ---------- */
 function boardAt(p) {
+  let hit = -1, best = Infinity;
   for (let i = 0; i < G.P.cells.length; i++) {
     const c = G.P.cells[i];
-    if (Math.abs(p.x - c.x) <= CELL / 2 && Math.abs(p.y - c.y) <= CELL / 2) return i;
+    const dx = p.x - c.x, dy = p.y - c.y;
+    if (Math.abs(dx) <= CELL / 2 + 4 && Math.abs(dy) <= CELL / 2 + 4) {
+      const d = dx * dx + dy * dy;
+      if (d < best) { best = d; hit = i; }
+    }
   }
-  return -1;
+  return hit;
 }
 function barAt(p) {
   for (let i = 0; i < G.P.bar.length; i++) {
@@ -1268,6 +1273,10 @@ function boot() {
   } });
   addEventListener('pointerup', ev => {
     onUp(pt(ev));
+    if (canvas.releasePointerCapture && ev.pointerId !== undefined && canvas.hasPointerCapture && canvas.hasPointerCapture(ev.pointerId)) canvas.releasePointerCapture(ev.pointerId);
+  });
+  addEventListener('pointercancel', ev => {
+    drag = null; scrollDrag = null; g_ptrDown = false; g_ptrHit = null;
     if (canvas.releasePointerCapture && ev.pointerId !== undefined && canvas.hasPointerCapture && canvas.hasPointerCapture(ev.pointerId)) canvas.releasePointerCapture(ev.pointerId);
   });
   canvas.addEventListener('wheel', ev => {
