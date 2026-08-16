@@ -1176,7 +1176,8 @@ function onDown(p) {
 function onUp(p) {
   g_ptrDown = false; g_ptrHit = null;                      // 抬起即清除按压态
   if (scrollDrag) { scrollDrag = null; return; }
-  if (G.mode === 'escort' && G.escort && G.escort.walkActive) {
+  if (!G) { drag = null; return; }
+  if (G && G.mode === 'escort' && G.escort && G.escort.walkActive) {
     G.escort.walkActive = false;
     G.escort.paused = false;   // 松开恢复前进
     return;
@@ -1210,8 +1211,8 @@ function loop(now) {
 function fit() {
   const dpr = devicePixelRatio || 1;
   scaleF = Math.min(innerWidth / W, innerHeight / H);
-  canvas.style.width = W * scaleF + 'px';
-  canvas.style.height = H * scaleF + 'px';
+  canvas.style.width = Math.floor(W * scaleF) + 'px';
+  canvas.style.height = Math.floor(H * scaleF) + 'px';
   canvas.width = W * scaleF * dpr;
   canvas.height = H * scaleF * dpr;
 }
@@ -1237,7 +1238,7 @@ function boot() {
   addEventListener('pointermove', ev => {
     const p = pt(ev);
     if (scrollDrag) { listScroll = clamp(scrollDrag.s0 + (scrollDrag.y0 - p.y), 0, listScrollMax); return; }
-    if (G.mode === 'escort' && G.escort && G.escort.walkActive) {
+    if (G && G.mode === 'escort' && G.escort && G.escort.walkActive) {
       G.escort.dragX = clamp(p.x, ESCORT_X_MIN, ESCORT_X_MAX);
       G.escort.paused = true;
       return;

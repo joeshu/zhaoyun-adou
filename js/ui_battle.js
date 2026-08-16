@@ -91,7 +91,7 @@ function paintMapBg(cx, w, h, mapIdx, intensity) {
 /* Static 2.5D terrain planes: low contrast so routes and units remain primary. */
 function paintTerrainDepth(cx, w, h, mapIdx, intensity) {
   var bold = intensity >= 1;
-  var alpha = bold ? 0.13 : 0.08;
+  var alpha = bold ? 0.08 : 0.045;
   cx.save();
   cx.globalAlpha = alpha;
   if (mapIdx === 0) {
@@ -101,7 +101,7 @@ function paintTerrainDepth(cx, w, h, mapIdx, intensity) {
   } else if (mapIdx === 1) {
     var water = cx.createLinearGradient(0, TOP, 0, h);
     water.addColorStop(0, '#315664'); water.addColorStop(.52, '#567f88'); water.addColorStop(1, '#294652');
-    cx.globalAlpha = bold ? 0.18 : 0.12; cx.fillStyle = water; cx.fillRect(0, TOP, w, h - TOP);
+    cx.globalAlpha = bold ? 0.11 : 0.07; cx.fillStyle = water; cx.fillRect(0, TOP, w, h - TOP);
     cx.globalAlpha = alpha * 1.5; cx.fillStyle = '#c9a15d';
     cx.fillRect(0, 286, w, 7); cx.fillRect(0, 470, w, 5);
   } else if (mapIdx === 2) {
@@ -170,7 +170,7 @@ function drawAmbient(mapIdx) {
     } else {                                         // 函谷关：崖壁微光呼吸（位移极小）
       a.x += Math.sin(_ambT * 0.5 + a.ph) * a.ax * DT60 * 0.3;
     }
-    var al = 0.10 + 0.07 * Math.sin(_ambT * 2 + a.ph);
+    var al = 0.045 + 0.035 * Math.sin(_ambT * 2 + a.ph);
     ctx.globalAlpha = Math.max(0.03, al);
     ctx.fillStyle = a.col;
     ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, 7); ctx.fill();
@@ -346,26 +346,29 @@ function drawMapForeground(mapIdx) {
 function drawTerrainCutaway(mapIdx) {
   var mt = MAP_THEMES[mapIdx] || MAP_THEMES[0];
   var topY = mapIdx === 1 ? 520 : 526;
-  var bottomY = 538;
+   var bottomY = 538;
   var face = mapIdx === 0 ? '#8e6b45' : mapIdx === 1 ? '#3f626d' : mapIdx === 2 ? '#676656' : '#343b42';
   var light = mapIdx === 0 ? '#c09a61' : mapIdx === 1 ? '#86aeb2' : mapIdx === 2 ? '#a69a76' : '#68717a';
   ctx.save();
-  ctx.globalAlpha = SAVE.mapSkin ? 0.24 : 0.16;
+   ctx.globalAlpha = SAVE.mapSkin ? 0.42 : 0.3;
   ctx.fillStyle = face;
   ctx.beginPath();
   ctx.moveTo(0, topY + 5); ctx.lineTo(W, topY - 2); ctx.lineTo(W, bottomY); ctx.lineTo(0, bottomY); ctx.closePath();
   ctx.fill();
-  ctx.globalAlpha = 0.45;
+   ctx.globalAlpha = 0.72;
   ctx.fillStyle = light;
   ctx.beginPath();
   ctx.moveTo(0, topY + 5); ctx.lineTo(W, topY - 2); ctx.lineTo(W, topY + 2); ctx.lineTo(0, topY + 9); ctx.closePath();
   ctx.fill();
-  ctx.globalAlpha = 0.22;
+   ctx.globalAlpha = 0.36;
   ctx.strokeStyle = mt.accentBold || mt.accent;
   ctx.lineWidth = 1;
-  for (var y = topY + 10; y < bottomY; y += 8) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y - 7); ctx.stroke();
-  }
+   for (var y = topY + 10; y < bottomY; y += 8) {
+     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y - 7); ctx.stroke();
+   }
+   ctx.globalAlpha = 0.55;
+   ctx.strokeStyle = light; ctx.lineWidth = 1.5;
+   ctx.beginPath(); ctx.moveTo(0, topY + 5); ctx.lineTo(W, topY - 2); ctx.stroke();
   ctx.restore();
 }
 
@@ -374,13 +377,13 @@ function drawAdouStand(S) {
   var x = S.adou.x, y = S.adou.y + 19;
   var mapIdx = (G && G.mapIdx) || 0;
   ctx.save();
-  ctx.globalAlpha = 0.2;
+   ctx.globalAlpha = 0.34;
   ctx.fillStyle = mapIdx === 1 ? '#7b9b9e' : mapIdx === 3 ? '#51585d' : '#8b6b3a';
   ctx.shadowColor = 'rgba(20,24,26,.5)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 4;
   ctx.beginPath(); ctx.ellipse(x, y, 42, 8, 0, 0, 7); ctx.fill();
   ctx.restore();
   ctx.save();
-  ctx.globalAlpha = 0.42; ctx.strokeStyle = mapIdx === 1 ? '#c8a35e' : '#b78c4e'; ctx.lineWidth = 1;
+   ctx.globalAlpha = 0.65; ctx.strokeStyle = mapIdx === 1 ? '#c8a35e' : '#b78c4e'; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.ellipse(x, y - 1, 35, 5, 0, 0, 7); ctx.stroke();
   ctx.restore();
 }
@@ -414,22 +417,41 @@ function drawFormationPlatforms(S) {
     var xs = groups[key];
     var minX = Math.min.apply(null, xs) - CELL / 2 - 5;
     var maxX = Math.max.apply(null, xs) + CELL / 2 + 5;
-    var cy = Number(key), top = cy - CELL / 2 - 3, depth = 8;
+    var cy = Number(key), top = cy - CELL / 2 - 4, depth = 12;
     var topCol = S.side > 0 ? mt.cellFill : mt.cellFillBold;
     var faceCol = S.side > 0 ? shade(mt.cellBorder, 0.72) : shade(mt.cellBorderBold, 0.68);
-    ctx.globalAlpha = SAVE.mapSkin ? 0.32 : 0.2;
+    ctx.globalAlpha = SAVE.mapSkin ? 0.7 : 0.56;
     ctx.fillStyle = faceCol;
     ctx.beginPath();
-    ctx.moveTo(minX, top + 5); ctx.lineTo(maxX, top + 5);
-    ctx.lineTo(maxX, top + CELL + depth); ctx.lineTo(minX, top + CELL + depth); ctx.closePath(); ctx.fill();
-    ctx.globalAlpha = SAVE.mapSkin ? 0.11 : 0.07;
+    ctx.moveTo(minX, top + 4); ctx.lineTo(maxX, top + 4);
+    ctx.lineTo(maxX - 4, top + CELL + depth); ctx.lineTo(minX + 4, top + CELL + depth); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = SAVE.mapSkin ? 0.38 : 0.28;
+    ctx.fillStyle = shade(faceCol, 0.78);
+    ctx.beginPath();
+    ctx.moveTo(minX, top + 4); ctx.lineTo(minX + 5, top + 8); ctx.lineTo(minX + 5, top + CELL + depth - 2); ctx.lineTo(minX + 1, top + CELL + depth); ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(maxX, top + 4); ctx.lineTo(maxX - 5, top + 8); ctx.lineTo(maxX - 5, top + CELL + depth - 2); ctx.lineTo(maxX - 1, top + CELL + depth); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = SAVE.mapSkin ? 0.34 : 0.24;
     ctx.fillStyle = topCol;
-    rr(minX, top, maxX - minX, CELL + 3, 8); ctx.fill();
-    ctx.globalAlpha = 0.3;
+    rr(minX, top, maxX - minX, CELL + 4, 8); ctx.fill();
+    ctx.globalAlpha = 0.86;
     ctx.strokeStyle = '#fffdf3'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(minX + 7, top + 2); ctx.lineTo(maxX - 7, top + 2); ctx.stroke();
-    ctx.strokeStyle = shade(faceCol, 0.75); ctx.globalAlpha = 0.38;
+    ctx.strokeStyle = shade(faceCol, 0.72); ctx.globalAlpha = 0.78;
+    ctx.beginPath(); ctx.moveTo(minX + 8, top + CELL + 3); ctx.lineTo(maxX - 8, top + CELL + 3); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(minX + 8, top + CELL + depth - 2); ctx.lineTo(maxX - 8, top + CELL + depth - 2); ctx.stroke();
+
+    // 格间立缝把连续平台拆成独立承重单元，增强横向透视节奏。
+    ctx.globalAlpha = 0.7;
+    ctx.strokeStyle = shade(faceCol, 0.58); ctx.lineWidth = 1;
+    xs.forEach(function(cellX) {
+      var seamX = cellX + CELL / 2 + 1;
+      if (seamX >= maxX - 4) return;
+      ctx.beginPath(); ctx.moveTo(seamX, top + CELL + 4); ctx.lineTo(seamX - 1, top + CELL + depth - 1); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,.28)';
+      ctx.beginPath(); ctx.moveTo(seamX + 1, top + CELL + 4); ctx.lineTo(seamX, top + CELL + depth - 1); ctx.stroke();
+      ctx.strokeStyle = shade(faceCol, 0.58);
+    });
   }
   ctx.restore();
 }
@@ -1282,9 +1304,9 @@ function drawCell(c, S, hide) {
   const x = c.x - CELL / 2, y = c.y - CELL / 2;
   rr(x, y, CELL, CELL, 6);
 
-  // 统一使用轻微落地阴影，整体厚度由连续阵位平台承担。
+  // 统一使用落地阴影，整体厚度由格子前沿和连续阵位平台共同承担。
   ctx.save();
-  ctx.globalAlpha = 0.12;
+  ctx.globalAlpha = 0.2;
   ctx.shadowColor = 'rgba(35, 43, 52, .38)';
   ctx.shadowBlur = 3;
   ctx.shadowOffsetY = 2;
@@ -1336,17 +1358,29 @@ function drawCell(c, S, hide) {
   }
 
   /* Open cell: celadon gradient fill */
+  // 每格增加独立前沿，单位移动时仍沿用原始中心坐标，视觉层独立于命中层。
+  ctx.save();
+  ctx.globalAlpha = 0.62;
+  ctx.fillStyle = shade(cFill, 0.66);
+  ctx.beginPath();
+  ctx.moveTo(x + 2, y + CELL - 4); ctx.lineTo(x + CELL - 2, y + CELL - 4);
+  ctx.lineTo(x + CELL - 2, y + CELL + 6); ctx.lineTo(x + 2, y + CELL + 6); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = shade(cFill, 0.78);
+  ctx.beginPath();
+  ctx.moveTo(x + CELL - 2, y + 4); ctx.lineTo(x + CELL + 4, y + 7);
+  ctx.lineTo(x + CELL + 4, y + CELL + 3); ctx.lineTo(x + CELL - 2, y + CELL - 4); ctx.closePath(); ctx.fill();
+  ctx.restore();
   var cg = ctx.createLinearGradient(x, y, x, y + CELL);
   cg.addColorStop(0, cFill); cg.addColorStop(1, shade(cFill, 0.94));
   ctx.fillStyle = cg; ctx.fill();
 
   // 阵位底沿和内高光形成卡槽的前后关系。
-  ctx.fillStyle = 'rgba(73, 83, 87, .14)';
-  rr(x + 3, y + CELL - 5, CELL - 6, 3, 1.5); ctx.fill();
+  ctx.fillStyle = 'rgba(73, 83, 87, .26)';
+  rr(x + 3, y + CELL - 5, CELL - 6, 4, 1.5); ctx.fill();
 
   // 卡槽前沿增加一道窄台阶，强化单位站在阵位上的感觉。
-  ctx.fillStyle = 'rgba(255,255,255,.22)';
-  rr(x + 4, y + CELL - 7, CELL - 8, 1.5, 0.75); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.36)';
+  rr(x + 4, y + CELL - 8, CELL - 8, 2, 0.75); ctx.fill();
 
   /* Top highlight strip (瓷面高光) */
   ctx.save();
@@ -1439,11 +1473,11 @@ function drawPath(S) {
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
 
   ctx.save();
-  ctx.globalAlpha = 0.16;
+  ctx.globalAlpha = 0.24;
   ctx.shadowColor = 'rgba(36, 45, 53, .55)';
   ctx.shadowBlur = 3;
   ctx.shadowOffsetY = 2;
-  ctx.strokeStyle = '#45515a'; ctx.lineWidth = 9;
+  ctx.strokeStyle = '#45515a'; ctx.lineWidth = 10;
   ctx.beginPath();
   S.path.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
   ctx.stroke();
@@ -1452,14 +1486,14 @@ function drawPath(S) {
   // 道路前侧厚度：宽暗底 + 上移窄面，让路径脱离背景平面。
   ctx.save();
   ctx.globalAlpha = 0.46;
-  ctx.strokeStyle = shade(outerCol, 0.62); ctx.lineWidth = 7;
+  ctx.strokeStyle = shade(outerCol, 0.62); ctx.lineWidth = 8;
   ctx.beginPath();
   S.path.forEach((p, i) => i ? ctx.lineTo(p[0], p[1] + 5) : ctx.moveTo(p[0], p[1] + 5));
   ctx.stroke();
   ctx.restore();
 
   /* Outer line: 5px map-themed color */
-  ctx.strokeStyle = outerCol; ctx.lineWidth = 5;
+  ctx.strokeStyle = outerCol; ctx.lineWidth = 6;
   ctx.beginPath();
   S.path.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
   ctx.stroke();
@@ -2114,7 +2148,7 @@ function drawGame() {
     let s = '下波 ▸ ' + parts.join(' ') + (p.boss ? '  BOSS' : '');
     txt(s, 8, 44, 10, '#8a7e6c', 'left');
   }
-  if (!G.mode && G.wave === 0 && G.betweenT > 0) {
+  if (!G.mode && G.wave === 0 && G.betweenT > 0 && !G.banner) {
     const plan = G.wavePlan || (typeof wavePlan === 'function' ? wavePlan(G.stage, G.endless) : null);
     if (plan) {
       const foes = plan.pool.map(x => x[0] + '×' + Math.round(plan.per * x[1] / 100)).join(' ');
@@ -2307,7 +2341,7 @@ function drawGame() {
     const isTut = G.banner.t > 10;
     if (isTut) {
        // 教程提示固定在消息带内，避免遮盖棋盘单位和路径。
-       const tx = 10, ty = UI_LAYOUT.messageBand.y + 7, tw = W - 20, th = 28;
+       const tw = Math.min(W - 28, 306), tx = (W - tw) / 2, ty = UI_LAYOUT.messageBand.y + 7, th = 28;
        rr(tx, ty, tw, th, 12);
        ctx.fillStyle = 'rgba(248,252,249,.94)'; ctx.fill();
        ctx.strokeStyle = 'rgba(94,137,130,.58)'; ctx.lineWidth = 1; ctx.stroke();
@@ -2316,7 +2350,7 @@ function drawGame() {
       // 普通提示使用短时消息胶囊，保证事件反馈可读且不穿过棋盘。
       ctx.save();
       ctx.globalAlpha = clamp(G.banner.t, 0, 1);
-      const bw = Math.min(W - 28, Math.max(150, G.banner.txt.length * 10 + 26));
+      const bw = Math.min(306, Math.max(150, G.banner.txt.length * 10 + 26));
       const bx = (W - bw) / 2, by = UI_LAYOUT.messageBand.y + 8;
       rr(bx, by, bw, 26, 10); ctx.fillStyle = 'rgba(255,252,245,.94)'; ctx.fill();
       ctx.strokeStyle = 'rgba(139,94,60,.48)'; ctx.lineWidth = 1; ctx.stroke();
@@ -2358,7 +2392,7 @@ function drawGame() {
 
   /* Overlay states: win / lose / paused / rogue choices / chapter */
   /* 神秘商人（官方版：主线/无尽每3波刷出，3选1，馒头结算，买后即离） */
-  if (G.merchant && G.merchant.offers && G.mode !== 'puzzle' && G.mode !== 'siege') {
+  if (G.merchant && G.merchant.offers && !G.chapterChoice && !G.rogueChoices && G.mode !== 'puzzle' && G.mode !== 'siege') {
     btns = [];                         // 模态层拦截底层战场与操作栏按钮
     ctx.fillStyle = 'rgba(26,24,35,.6)'; ctx.fillRect(0, 0, W, H);
     panel(34, 232, 307, 200, { bg: '#fffdf9', stroke: '#d9c8a0', r: 14, blur: 4 });
@@ -2373,6 +2407,7 @@ function drawGame() {
   }
   /* 反向攻城·战前编成面板（复用 rogueChoices overlay 范式）：3 预设选择（§7.2） */
   if (G.siege && G.siege.build) {
+    btns = [];
     ctx.fillStyle = 'rgba(26,24,35,.72)'; ctx.fillRect(0, 0, W, H);
     panel(24, 150, 327, 332, { bg: '#fffdf9', stroke: '#d9c8a0', r: 14 });
     txt('反向攻城 · 战前编成', W / 2, 184, 21, '#8a6d3b', 'center', true);
@@ -2386,7 +2421,8 @@ function drawGame() {
       btn(252, cy + 22, 70, 36, '选用', () => chooseSiegePreset(i), { size: 12, bg: '#8a6d3b' });
     });
   }
-  if (G.rogueChoices) {
+  if (G.rogueChoices && !G.chapterChoice && !(G.siege && G.siege.build)) {
+    btns = [];
     ctx.fillStyle = 'rgba(26,24,35,.72)'; ctx.fillRect(0, 0, W, H);
     panel(24, 210, 327, 190, { bg: '#fffdf9', stroke: '#dacdf0', r: 14 });
     txt('选择一条军略', W / 2, 244, 21, '#503b83', 'center', true);
@@ -2401,12 +2437,17 @@ function drawGame() {
     txt('赤壁·'+G.wind, W/2, 48, 10, '#bd4a31', 'center', true);
   }
   if (G.chapterChoice) {
-    ctx.fillStyle='rgba(32,28,20,.55)'; ctx.fillRect(0,0,W,H);
-    panel(30,250,315,145,{bg:'#fffdf9',stroke:'#e5c98b',r:14});
-    txt('流民求援',W/2,282,22,'#b78324','center',true);
-    txt('救援换取金币与护盾，或固守获得即时馒头',W/2,306,11,'#656d76','center');
-    btn(48,330,130,38,'救援 · -10馒',()=>chooseRefugee(true),{size:12,bg:'#318c4a'});
-    btn(197,330,130,38,'固守 · +15馒',()=>chooseRefugee(false),{size:12,bg:'#7250b8'});
+    // 章节决策是模态流程，清空底层按钮避免遮罩外误触战场操作。
+    btns = [];
+    ctx.fillStyle='rgba(32,28,20,.68)'; ctx.fillRect(0,0,W,H);
+    panel(30,236,315,190,{bg:'#fffdf9',stroke:'#e5c98b',r:14,blur:5});
+    txt('流民求援',W/2,270,22,'#a97818','center',true);
+    txt('选择一次支援方案，决定本波的资源节奏',W/2,294,11,'#656d76','center');
+    txt('救援：金币 +12 · 阿斗护盾 +1',113,316,9,'#318c4a','center',true);
+    txt('固守：馒头 +15',262,316,9,'#7250b8','center',true);
+    btn(48,328,130,44,'救援 · -10馒',()=>chooseRefugee(true),{size:12,bg:'#318c4a'});
+    btn(197,328,130,44,'固守 · +15馒',()=>chooseRefugee(false),{size:12,bg:'#7250b8'});
+    txt('两项选择都会继续当前战局',W/2,397,9,'#8a7e6c','center');
   }
   /* 群雄演武：关卡选择 overlay（choosing=true 时显示，覆盖在战场之上） */
   if (G.mode === 'puzzle' && G.puzzle && G.puzzle.choosing) {

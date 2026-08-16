@@ -70,7 +70,8 @@ function startWave() {
   if (G.endless && G.wave > SAVE.bestWave) { SAVE.bestWave = G.wave; saveSave(); }
   if (!G.mode && typeof chapterWaveEvent === 'function') chapterWaveEvent();
   // 神秘商人（官方版）：主线/无尽每 3 波刷出，3 选 1（馒头结算），持续到下一波
-  if (!G.mode && G.wave % 3 === 0 && typeof rollMerchant === 'function') G.merchant = rollMerchant();
+  // 章节决策优先于商人事件，避免同一帧出现双层模态弹窗。
+  if (!G.mode && !G.chapterChoice && G.wave % 3 === 0 && typeof rollMerchant === 'function') G.merchant = rollMerchant();
 }
 
 /* 难度曲线建模（Phase 2 #35）：BOSS 血量沿 200→2600 跨度的推荐曲线与可调杠杆。
