@@ -1107,7 +1107,7 @@ function onDown(p) {
     }
   }
   // 列表触屏滚动：点在裁剪区内且没命中按钮时，启动拖动滚动（仅菜单类屏幕，game 走单位拖拽）
-  if (listScrollMax > 0 && LIST_AREA && p.x >= LIST_AREA.x && p.x <= LIST_AREA.x + LIST_AREA.w && p.y >= LIST_AREA.y && p.y <= LIST_AREA.y + LIST_AREA.h) {
+  if (scr !== 'game' && listScrollMax > 0 && LIST_AREA && p.x >= LIST_AREA.x && p.x <= LIST_AREA.x + LIST_AREA.w && p.y >= LIST_AREA.y && p.y <= LIST_AREA.y + LIST_AREA.h) {
     scrollDrag = { y0: p.y, s0: listScroll };
     return;
   }
